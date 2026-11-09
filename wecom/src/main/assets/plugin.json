@@ -1,0 +1,38 @@
+{
+  "id": "io.github.whywood.deepdeep.plugin.wecom",
+  "version": "1.0.1",
+  "publisher": { "name": "milous" },
+  "apiLevel": 4,
+  "minHostVersion": "0.2.0",
+  "capabilities": ["files", "linux", "network", "ui"],
+  "entryClass": "io.github.whywood.deepdeep.plugin.wecom.WecomPlugin",
+  "name": {
+    "default": "企业微信",
+    "zh": "企业微信",
+    "en": "WeCom"
+  },
+  "summary": {
+    "default": "消息、邮件、文档、日程与待办",
+    "zh": "消息、邮件、文档、日程与待办",
+    "en": "Messages, mail, docs, calendar and to-dos"
+  },
+  "description": {
+    "default": "安装官方 wecom-cli 后扫码授权，操作企业微信的消息、邮件、文档、日程与待办。",
+    "zh": "安装官方 wecom-cli 后扫码授权，操作企业微信的消息、邮件、文档、日程与待办。",
+    "en": "Install the official wecom-cli, scan to authorize, then operate WeCom messages, mail, docs, calendar and to-dos."
+  },
+  "icon": "asset:icon.png",
+  "ui": {
+    "apiLevel": 1
+  },
+  "provides": {
+    "tools": [],
+    "skills": [
+      "deepdeep-wecom"
+    ],
+    "uiSlots": [],
+    "pages": [
+      "main"
+    ]
+  }
+}

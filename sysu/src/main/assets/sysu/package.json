@@ -1,0 +1,13 @@
+{
+  "name": "sysu",
+  "version": "3.3.2",
+  "description": "中山大学校园服务 CLI（教务 / 在线教学平台 / 统一认证）",
+  "type": "commonjs",
+  "bin": {
+    "sysu": "bin/sysu"
+  },
+  "scripts": {
+    "start": "node bin/sysu"
+  },
+  "dependencies": {}
+}

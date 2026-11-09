@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+LOCK_FILE="${TMPDIR:-/tmp}/deepdeep-build.lock"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  echo "[build] 另一个构建正在运行，等待中…" >&2
+  flock -w 3600 9 || { echo "[build] 等待构建锁超时（60 分钟）" >&2; exit 1; }
+fi
+
+exec ./gradlew \
+  --max-workers="${DEEPDEEP_GRADLE_WORKERS:-1}" \
+  -Dorg.gradle.jvmargs="${DEEPDEEP_GRADLE_JVMARGS:--Xmx1536m -XX:MaxMetaspaceSize=512m}" \
+  "$@"

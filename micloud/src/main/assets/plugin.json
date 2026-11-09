@@ -1,0 +1,47 @@
+{
+  "id": "io.github.whywood.deepdeep.plugin.micloud",
+  "version": "1.0.2",
+  "publisher": { "name": "milous" },
+  "apiLevel": 4,
+  "minHostVersion": "0.2.0",
+  "capabilities": [
+    "secrets"
+  ],
+  "entryClass": "io.github.whywood.deepdeep.plugin.micloud.MiCloudPlugin",
+  "name": {
+    "default": "小米云服务",
+    "zh": "小米云服务",
+    "en": "Xiaomi Cloud"
+  },
+  "summary": {
+    "default": "读取小米云服务中的笔记、待办、相册、短信、联系人与录音",
+    "zh": "读取小米云服务中的笔记、待办、相册、短信、联系人与录音",
+    "en": "Read notes, to-dos, photos, SMS, contacts and recordings from Xiaomi Cloud services"
+  },
+  "icon": "asset:icon.png",
+  "ui": {
+    "apiLevel": 1
+  },
+  "provides": {
+    "tools": [
+      "mi_cloud_account",
+      "mi_cloud_notes",
+      "mi_cloud_todo",
+      "mi_cloud_sms",
+      "mi_cloud_contacts",
+      "mi_cloud_gallery",
+      "mi_cloud_recordings"
+    ],
+    "skills": [
+      "deepdeep-micloud"
+    ],
+    "uiSlots": [],
+    "pages": [
+      "main"
+    ]
+  },
+  "description": {
+    "default": "连接小米账号后读取小米云服务中的笔记、待办、短信、联系人、相册与录音。首次使用需在插件页面完成小米账号登录。",
+    "zh": "连接小米账号后读取小米云服务中的笔记、待办、短信、联系人、相册与录音。首次使用需在插件页面完成小米账号登录。"
+  }
+}

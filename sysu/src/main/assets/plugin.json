@@ -1,0 +1,42 @@
+{
+  "id": "io.github.whywood.deepdeep.plugin.sysu",
+  "version": "1.0.0",
+  "publisher": { "name": "milous" },
+  "apiLevel": 4,
+  "minHostVersion": "0.2.0",
+  "capabilities": [
+    "files",
+    "linux",
+    "secrets"
+  ],
+  "entryClass": "io.github.whywood.deepdeep.plugin.sysu.SysuPlugin",
+  "name": {
+    "default": "中山大学 CLI",
+    "zh": "中山大学 CLI",
+    "en": "SYSU CLI"
+  },
+  "summary": {
+    "default": "教务、在线教学、体育场馆与网费",
+    "zh": "教务、在线教学、体育场馆与网费",
+    "en": "Academics, LMS, sports venues, and campus network"
+  },
+  "description": {
+    "default": "在 Linux 运行环境里使用 Node.js 版校园 CLI：课表、成绩、作业、课件下载、体育场馆预约、网费查询与续费。账号密码只在插件页使用，首次打开会自动安装。",
+    "zh": "在 Linux 运行环境里使用 Node.js 版校园 CLI：课表、成绩、作业、课件下载、体育场馆预约、网费查询与续费。账号密码只在插件页使用，首次打开会自动安装。",
+    "en": "Use the Node.js campus CLI inside the Linux runtime: timetable, grades, assignments, course files, sports venue booking, and campus network fees. Credentials are handled on the plugin page; the CLI installs itself on first use."
+  },
+  "icon": "asset:icon.png",
+  "ui": {
+    "apiLevel": 1
+  },
+  "provides": {
+    "tools": [],
+    "skills": [
+      "deepdeep-sysu"
+    ],
+    "uiSlots": [],
+    "pages": [
+      "main"
+    ]
+  }
+}
