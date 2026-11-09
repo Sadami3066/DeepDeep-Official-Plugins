@@ -55,6 +55,8 @@ internal object SysuCli {
 
     fun cleanupCommand(): String = "rm -rf $INSTALL_DIR $BIN_PATH"
 
+    fun purgeCommand(): String = "rm -rf $CONFIG_DIR"
+
     fun writeFileCommand(path: String, base64: String): String =
         "mkdir -p ${path.substringBeforeLast('/')} && printf %s '$base64' | base64 -d > $path"
 

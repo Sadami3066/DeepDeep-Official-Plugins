@@ -34,7 +34,10 @@ class SysuPlugin : DeepDeepPlugin {
         val linux = linuxOrNull(host)
         if (linux != null && linux.available) {
             runCatching {
-                linux.exec(SysuCli.logoutCommand() + " && " + SysuCli.cleanupCommand(), timeoutMs = WRITE_TIMEOUT_MS)
+                linux.exec(
+                    listOf(SysuCli.logoutCommand(), SysuCli.cleanupCommand(), SysuCli.purgeCommand()).joinToString("; "),
+                    timeoutMs = WRITE_TIMEOUT_MS,
+                )
             }
         }
         SysuStatusStore.clear(host)

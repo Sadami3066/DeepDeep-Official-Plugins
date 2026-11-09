@@ -2,7 +2,6 @@ import java.io.File
 import java.nio.charset.StandardCharsets
 import java.security.KeyFactory
 import java.security.KeyPair
-import java.security.KeyPairGenerator
 import java.security.MessageDigest
 import java.security.PublicKey
 import java.security.Signature
@@ -75,12 +74,12 @@ val signPlugin = tasks.register("signPlugin") {
     description = "Signs the .ddp with an Ed25519 key and writes META-INF/plugin-signature.json."
     dependsOn(assemblePlugin)
     inputs.file(unsignedBundle)
-    inputs.files(signingPrivateKeyFile, signingPublicKeyFile)
+    inputs.files(signingPrivateKeyFile, signingPublicKeyFile).optional()
     outputs.file(signedBundle)
     doLast {
         val source = unsignedBundle.get().asFile
         check(source.isFile) { "missing ${source.absolutePath}; run assemblePlugin first" }
-        val keyPair = loadOrCreateEd25519KeyPair(signingKeyFile.asFile)
+        val keyPair = loadEd25519KeyPair(signingKeyFile.asFile)
         val keyId = ed25519KeyId(keyPair.public)
         val digest = canonicalEntryDigest(source)
         val signature = Signature.getInstance("Ed25519").run {
@@ -128,35 +127,17 @@ private val FIXED_ENTRY_TIME = 315532800000L
 private val DEX_ENTRY = Regex("classes[0-9]*\\.dex")
 private val NATIVE_ENTRY = Regex("lib/[^/]+/.+")
 
-private fun loadOrCreateEd25519KeyPair(base: File): KeyPair {
+private fun loadEd25519KeyPair(base: File): KeyPair {
     val privateFile = File(base.parentFile, base.name + SIGNING_FILE_SUFFIX_PRIVATE)
     val publicFile = File(base.parentFile, base.name + SIGNING_FILE_SUFFIX_PUBLIC)
-    if (privateFile.isFile && publicFile.isFile) {
-        val factory = KeyFactory.getInstance("Ed25519")
-        val privateKey = factory.generatePrivate(PKCS8EncodedKeySpec(decodePem(privateFile.readText())))
-        val publicKey = factory.generatePublic(X509EncodedKeySpec(decodePem(publicFile.readText())))
-        return KeyPair(publicKey, privateKey)
+    check(privateFile.isFile && publicFile.isFile) {
+        "missing signing key: ${privateFile.absolutePath} or ${publicFile.absolutePath}; " +
+            "official signing keys are not distributed with this repository, restore them from the maintainer backup"
     }
-    check(!privateFile.exists() && !publicFile.exists()) {
-        "only one of ${privateFile.name}/${publicFile.name} exists; restore the other or delete both to regenerate"
-    }
-    privateFile.parentFile.mkdirs()
-    val keyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
-    privateFile.writeText(encodePem("PRIVATE KEY", keyPair.private.encoded))
-    publicFile.writeText(encodePem("PUBLIC KEY", keyPair.public.encoded))
-    privateFile.setReadable(false, false)
-    privateFile.setReadable(true, true)
-    privateFile.setWritable(false, false)
-    privateFile.setWritable(true, true)
-    privateFile.setExecutable(false, false)
-    logger.lifecycle("Generated a new plugin signing key at ${privateFile.absolutePath}")
-    logger.lifecycle("Keep the .pem private: anyone holding it can publish updates as this publisher.")
-    return keyPair
-}
-
-private fun encodePem(type: String, bytes: ByteArray): String {
-    val body = Base64.getMimeEncoder(64, "\n".toByteArray(StandardCharsets.US_ASCII)).encodeToString(bytes)
-    return "-----BEGIN $type-----\n$body\n-----END $type-----\n"
+    val factory = KeyFactory.getInstance("Ed25519")
+    val privateKey = factory.generatePrivate(PKCS8EncodedKeySpec(decodePem(privateFile.readText())))
+    val publicKey = factory.generatePublic(X509EncodedKeySpec(decodePem(publicFile.readText())))
+    return KeyPair(publicKey, privateKey)
 }
 
 private fun decodePem(text: String): ByteArray {
