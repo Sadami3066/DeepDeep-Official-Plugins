@@ -34,6 +34,7 @@ sysu gym mine                  # 我的预约
 sysu netpay                    # 校园网服务状态与到期日
 sysu netpay orders             # 网费订单
 sysu netpay renew              # 续费：默认 dry-run，--yes 建未付款单
+sysu netpay login [--code N]   # 会话失效且要 MFA 时
 
 sysu sso <站点地址>            # 用统一认证换任意站点的登录态
 ```

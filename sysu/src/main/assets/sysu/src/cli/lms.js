@@ -147,7 +147,16 @@ async function main(argvIn = []) {
     const list = await lms.collectFiles(lmsc, opts.id);
     if (opts.json) return console.log(JSON.stringify(list, null, 2));
     if (!list.length) return console.log('这门课没有可下载的文件');
-    for (const f of list) console.log(`  ${C.dim(`[${f.mod}]`)} ${cut(f.name, 46)}\n        ${C.dim(f.url)}`);
+    const groups = new Map();
+    for (const f of list) {
+      const key = f.mod === 'folder' ? f.name : `[${f.mod}] ${f.name}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(f);
+    }
+    for (const [key, files] of groups) {
+      console.log(`  ${C.dim(key)}`);
+      for (const f of files) console.log(`    ${cut(f.file || f.name, 48)}\n      ${C.dim(f.url)}`);
+    }
     console.log(C.dim(`\n共 ${list.length} 个  ·  sysu lms get ${opts.id} 全部下载`));
     return undefined;
   }
@@ -159,7 +168,7 @@ async function main(argvIn = []) {
     const list = opts.only ? all.filter((f) => f.name.includes(opts.only) || f.url.includes(encodeURIComponent(opts.only))) : all;
     if (!list.length) return console.log('没有匹配的文件');
     if (opts.dryRun) {
-      for (const f of list) console.log(`  ${f.name}`);
+      for (const f of list) console.log(`  ${f.file || f.name}`);
       return console.log(C.dim(`\n共 ${list.length} 个（--dry-run 未下载）`));
     }
     const dir = opts.out || require('node:path').join(downloadDir(), `lms-${opts.id}`);
@@ -167,7 +176,7 @@ async function main(argvIn = []) {
     let ok = 0;
     let bytes = 0;
     for (const f of list) {
-      process.stdout.write(`  ${cut(f.name, 40)} … `);
+      process.stdout.write(`  ${cut(f.file || f.name, 40)} … `);
       try {
         const r = await lms.download(lmsc, f.url, dir, { referer: `${lms.BASE}/course/view.php?id=${opts.id}` });
         ok += 1;

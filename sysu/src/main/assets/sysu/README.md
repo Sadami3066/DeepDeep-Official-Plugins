@@ -47,7 +47,7 @@ sysu login --code 1234 # 输入企业微信收到的 4 位码，接着完成
 sysu login --force     # 已登录时强制重来
 ```
 
-登录分三层：`sysu login`（身份/TGC，全校通用）→ `sysu gym login`、`sysu lms login`（换本站 token，只有有独立令牌的站点才需要）→ 业务命令。教务没有独立令牌，所以没有 `sysu jwxt login`。
+登录分三层：`sysu login`（身份/TGC，全校通用）→ 站点 token（`sysu gym` 会自动换，`sysu lms` 首次要一次 MFA）→ 业务命令。教务没有独立令牌，所以没有 `sysu jwxt login`。
 
 验证码中断也不怕：第一次执行会把 CAS 会话写进 `~/.config/sysu/jwxt/mfa.json`（0600，10 分钟有效），
 拿到码后用 `--code` 续上，不用重新输密码。插件页的登录卡片读的就是这个文件。
@@ -87,7 +87,7 @@ sysu jwxt ta                   # 助教信息
 sysu jwxt leave                # 请假记录与审批状态
 ```
 
-`sysu jwxt --help` 看全部选项，任何命令加 `--json` 出结构化数据。
+`sysu jwxt --help` 看全部选项；`gym` 子命令支持 `--json`。
 
 ## 在线教学平台（`sysu lms`）
 
@@ -109,7 +109,7 @@ sysu lms login [--code N]   # 只重建 LMS 会话（要 MFA 时加 --code）
 
 ```sh
 sysu gym                    # 账户 + 校区
-sysu gym types              # 51 个场馆类型  ·  --campus 南校园
+sysu gym types              # 场馆类型  ·  --campus 南校园
 sysu gym venues 乒乓球       # 某类型的场地
 sysu gym slots 乒乓球 --days 2   # 超出预约窗口会自动收窄
 sysu gym slots 羽毛球 --date 2026-11-10
@@ -117,12 +117,14 @@ sysu gym mine               # 我的预约（默认 30 天）
 sysu gym book --type 乒乓球 --venue 场地2 --date 2026-11-10 --start 08:00 --end 09:00
                             # 下单（默认 dry-run，--yes 才提交）
 sysu gym cancel "#RB-XXXX"    # 取消预约（积分原路退回，--yes 免确认）
-sysu gym login --code 1234  # token 过期且要 MFA 时
+sysu gym login [--code 1234] # token 过期且要 MFA 时；--force 强制刷新
 ```
 
 **零外部依赖**：gym 前面的雷池 WAF 用 SHA1 工作量证明挑战，CLI 内部自动解，纯 Node 就能过，不需要浏览器或任何二进制。
 
 登录是三层：`sysu login` 拿 TGC → `sysu gym` 用 TGC 换本站 OAuth token（1 小时，自动续）→ 业务命令调 `/api/*`。
+
+`gym slots --json` 会给出 `fee.CreditFee`、`venues[].shortName` 和 `slots[].available`；文本里的「余N」是剩余容量，费用按身份和时段自动选。
 
 ## 网费（`sysu netpay`）
 

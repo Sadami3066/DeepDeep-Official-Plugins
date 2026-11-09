@@ -73,6 +73,7 @@ internal object SysuContent {
         - 服务状态/到期：`sysu netpay`
         - 订单：`sysu netpay orders`
         - 续费：`sysu netpay renew`（默认 dry-run，`--yes` 只生成未付款订单和支付页，不代付）
+        - 会话失效且要 MFA：`sysu netpay login --code <4 位>`
 
         ## 通用换票（sysu sso）
 

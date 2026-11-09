@@ -112,6 +112,8 @@ const strip = (html) =>
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&ndash;/g, '–')
+    .replace(/&mdash;/g, '—')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -203,6 +205,14 @@ async function contents(lms, courseid) {
 
 // ── 文件 ────────────────────────────────────────────────────────
 // 资源页可能直接 303 到 pluginfile.php，也可能是个文件夹页面（里面一堆链接）。
+function fileNameFromUrl(url) {
+  try {
+    return decodeURIComponent(new URL(url).pathname.split('/').pop() || '');
+  } catch {
+    return '';
+  }
+}
+
 async function collectFiles(lms, courseid) {
   const sections = await contents(lms, courseid);
   const files = new Map();
@@ -216,7 +226,7 @@ async function collectFiles(lms, courseid) {
         continue;
       }
       const add = (u, name) => {
-        if (!files.has(u)) files.set(u, { name: name || m.name, mod: m.mod, url: u });
+        if (!files.has(u)) files.set(u, { name: name || m.name, mod: m.mod, url: u, file: fileNameFromUrl(u) });
       };
       if (res.headers.location) add(new URL(res.headers.location, m.url).toString());
       const re = /href="([^"]*pluginfile\.php[^"]*)"/gi;

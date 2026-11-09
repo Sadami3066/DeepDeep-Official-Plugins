@@ -120,7 +120,10 @@ async function showVenues(input, opts) {
       console.log('');
     }
   }
-  if (opts.json) console.log(JSON.stringify({ ok: types.every((t) => !t.error), types }, null, 2));
+  if (opts.json) {
+    const errors = types.filter((t) => t.error).map((t) => ({ id: t.id, name: t.name, error: t.error }));
+    console.log(JSON.stringify({ ok: types.some((t) => !t.error), types, ...(errors.length ? { errors } : {}) }, null, 2));
+  }
 }
 
 async function showSlots(input, opts) {
@@ -147,7 +150,6 @@ async function showSlots(input, opts) {
 
     const feeList = await gym.fees(t.Identity, opts).catch(() => []);
     const fee = pickFee(feeList, profile, '08:00');
-    const notice = noticeOf(t);
     const short = shortNames(data.map((v) => v.VenueName));
     const venues = [];
 
@@ -159,6 +161,7 @@ async function showSlots(input, opts) {
       if (slots.length) venues.push({ id: v.VenueId, name: v.VenueName, shortName: short[i], slots });
     }
 
+    const notice = venues.length ? '' : noticeOf(t);
     types.push({ id: t.Identity, name: t.Name, window: { start, end }, fee, notice, venues });
 
     if (!opts.json) {
@@ -182,7 +185,10 @@ async function showSlots(input, opts) {
     }
   }
 
-  if (opts.json) console.log(JSON.stringify({ ok: types.every((t) => !t.error), types }, null, 2));
+  if (opts.json) {
+    const errors = types.filter((t) => t.error).map((t) => ({ id: t.id, name: t.name, error: t.error }));
+    console.log(JSON.stringify({ ok: types.some((t) => !t.error), types, ...(errors.length ? { errors } : {}) }, null, 2));
+  }
 }
 
 async function showMine(opts) {
@@ -274,7 +280,11 @@ async function run(argvIn = []) {
       console.log(`DRY-RUN  ${t.Name} · ${opts.date} ${opts.start}-${opts.end}${feeText(fee) ? ' · ' + feeText(fee) : ''}`);
       return console.log(dim('加 --yes 提交'));
     }
-    if (r.result?.Code === 200) return console.log(`✓ 已预订 ${r.result.Result || ''}`.trim());
+    if (r.result?.Code === 200) {
+      const result = r.result.Result;
+      const label = typeof result === 'string' ? result : result?.BookingId || result?.Id || '';
+      return console.log(label ? `✓ 已预订 ${label}` : '✓ 已预订');
+    }
     return console.log(JSON.stringify(r.result, null, 2));
   }
   if (cmd === 'cancel') {

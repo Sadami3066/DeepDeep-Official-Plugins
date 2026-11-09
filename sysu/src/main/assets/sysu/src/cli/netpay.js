@@ -11,7 +11,7 @@ sysu netpay orders        订单记录（--num N，默认 10）
 sysu netpay renew         续费 1 个月（默认 dry-run，--yes 建单）
                           --months N 续 N 个月 · --out 支付页路径
 sysu netpay cancel <单号>  取消未付款订单
-sysu netpay login         重新登录（会话坏了时）
+sysu netpay login [--code N] 重新登录（会话坏了时）
 
 数据来自 netpay.sysu.edu.cn；登录复用 sysu login 的 CAS 身份。
 名下没有网络服务时，服务列表会显示“无”。`;
@@ -23,6 +23,12 @@ async function main(argvIn = []) {
   if (ni >= 0) {
     opts.num = Number(argv[ni + 1]);
     argv.splice(ni, 2);
+  }
+  const ci = argv.indexOf('--code');
+  if (ci >= 0) {
+    opts.code = argv[ci + 1];
+    argv.splice(ci, 2);
+    if (!/^\d{4,8}$/.test(String(opts.code || ''))) throw new Error('--code 要跟 4~8 位数字');
   }
   for (const f of ['--json', '--yes']) {
     const i = argv.indexOf(f);
@@ -37,8 +43,9 @@ async function main(argvIn = []) {
   const cmd = argv[0] || 'info';
 
   if (cmd === 'login') {
-    await netpay.login();
-    console.log('已重新登录 netpay');
+    await netpay.login({ code: opts.code });
+    if (opts.json) return console.log(JSON.stringify({ ok: true }, null, 2));
+    console.log('✓ 网费已登录');
     return undefined;
   }
 
@@ -64,8 +71,10 @@ async function main(argvIn = []) {
     if (!svc.id) return console.log('服务没有可续费 ID（可能还没进续费窗口）');
     const months = Number(opts.months || 1);
     const money = Number(opts.money || 30) * months;
-    console.log(`${svc.service}  到期 ${svc.expire}  续 ${months} 个月  ${money} 元`);
+    const payload = { ok: true, service: svc.service, expire: svc.expire, months, money, dryRun: !opts.yes };
     if (!opts.yes) {
+      if (opts.json) return console.log(JSON.stringify(payload, null, 2));
+      console.log(`${svc.service}  到期 ${svc.expire}  续 ${months} 个月  ${money} 元`);
       console.log(dim('\nDRY-RUN：确认后加 --yes 建单（只生成未付款订单）'));
       return undefined;
     }
@@ -76,6 +85,8 @@ async function main(argvIn = []) {
       r.inputs.map(([k, v]) => `<input type="hidden" name="${k}" value="${String(v).replace(/"/g, '&quot;')}">`).join('') +
       `</form><script>document.getElementById('f').submit()</script>`;
     fs.writeFileSync(file, form);
+    if (opts.json) return console.log(JSON.stringify({ ...payload, dryRun: false, payPage: file }, null, 2));
+    console.log(`${svc.service}  到期 ${svc.expire}  续 ${months} 个月  ${money} 元`);
     console.log(`订单已生成（未付款），支付页：${file}`);
     console.log(dim('用 Chrome 打开它即可付款；不付会自动关闭。'));
     return undefined;

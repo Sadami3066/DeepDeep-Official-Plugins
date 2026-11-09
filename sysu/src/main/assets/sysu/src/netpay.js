@@ -33,8 +33,8 @@ function jarFrom(data) {
   return jar;
 }
 
-async function login() {
-  const { jar } = await sso.login(SERVICE, { label: '网费' });
+async function login({ code } = {}) {
+  const { jar } = await sso.login(SERVICE, { label: '网费', code });
   save(jar);
   return jar;
 }
