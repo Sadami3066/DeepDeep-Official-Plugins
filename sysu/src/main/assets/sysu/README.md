@@ -111,7 +111,7 @@ sysu lms login [--code N]   # 只重建 LMS 会话（要 MFA 时加 --code）
 sysu gym                    # 账户 + 校区
 sysu gym types              # 51 个场馆类型  ·  --campus 南校园
 sysu gym venues 乒乓球       # 某类型的场地
-sysu gym slots 乒乓球 --days 2
+sysu gym slots 乒乓球 --days 2   # 超出预约窗口会自动收窄
 sysu gym slots 羽毛球 --date 2026-11-10
 sysu gym mine               # 我的预约（默认 30 天）
 sysu gym book --type 乒乓球 --venue 场地2 --date 2026-11-10 --start 08:00 --end 09:00

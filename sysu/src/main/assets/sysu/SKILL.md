@@ -28,7 +28,7 @@ sysu lms get <id>              # 下载全部到 /storage/emulated/0/Download/lm
 sysu lms whoami                # 当前 LMS 账号
 
 sysu gym                       # 体育场馆：账户 / 类型 / 时段 / 我的预约
-sysu gym slots 乒乓球 --days 2  # 空位（括号里是剩余容量）
+sysu gym slots 乒乓球 --days 2  # 空位（括号是剩余容量；超出窗口会自动收窄）
 sysu gym mine                  # 我的预约
 
 sysu netpay                    # 校园网服务状态与到期日

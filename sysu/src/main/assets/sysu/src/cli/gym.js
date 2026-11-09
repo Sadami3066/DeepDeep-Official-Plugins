@@ -21,6 +21,8 @@ sysu gym token            看当前 token 状态
 const today = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 const addDays = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
 const timeShort = (s) => String(s || '').slice(0, 5);
+const maxAdvance = (type) => type?.BookingRules?.[0]?.MaxAdvanceBookingDays ?? 2;
+const windowEnd = (type, start) => addDays(start, maxAdvance(type));
 
 async function campusMap(opts) {
   const list = await gym.campuses(opts);
@@ -69,10 +71,20 @@ async function showSlots(input, opts) {
   const list = await resolveType(input, opts);
   if (!list.length) return console.log('没匹配到场馆类型');
   const start = opts.date || today();
-  const end = opts.date ? opts.date : addDays(start, Math.max(0, opts.days - 1));
   for (const t of list) {
-    const data = await gym.slots(t.Identity, start, end, opts);
-    console.log(bold(`${t.Name}  ${start} ~ ${end}`));
+    const days = opts.daysSet ? opts.days : maxAdvance(t) + 1;
+    const asked = opts.date ? opts.date : addDays(start, Math.max(0, days - 1));
+    const limit = windowEnd(t, start);
+    const end = asked > limit ? limit : asked;
+    let data;
+    try {
+      data = await gym.slots(t.Identity, start, end, opts);
+    } catch (err) {
+      console.log(`${bold(t.Name)}  ${red('查询失败')} ${dim(err.message.slice(0, 60))}`);
+      continue;
+    }
+    const note = asked > limit ? dim(`（只能提前 ${maxAdvance(t)} 天，已收窄）`) : '';
+    console.log(bold(`${t.Name}  ${start} ~ ${end}`) + (note ? '  ' + note : ''));
     let any = false;
     for (const v of data) {
       const open = (v.Timeslots || []).filter((s) => s.AvailableCapacity > 0);
@@ -113,6 +125,7 @@ async function main(argvIn = []) {
     argv.splice(i, 2);
   };
   takeValue('--days');
+  opts.daysSet = argvIn.includes('--days');
   takeValue('--campus');
   takeValue('--date');
   takeValue('--code');
@@ -142,6 +155,11 @@ async function main(argvIn = []) {
     }
     const [t] = await resolveType(opts.type, {});
     if (!t) throw new Error('没找到场馆类型：' + opts.type);
+    const first = today();
+    const last = windowEnd(t, first);
+    if (opts.date < first || opts.date > last) {
+      throw new Error(`该场地只能提前 ${maxAdvance(t)} 天预约（${first} ~ ${last}），${opts.date} 不在窗口内`);
+    }
     const vs = await gym.venues(t.Identity, {});
     const v = vs.find((x) => x.Identity === opts.venue) || vs.find((x) => x.Name.includes(opts.venue));
     if (!v) throw new Error(`类型「${t.Name}」里没有场地：${opts.venue}`);
