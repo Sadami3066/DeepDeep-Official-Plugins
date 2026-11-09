@@ -6,7 +6,7 @@ DeepDeep 官方维护的外部插件源码仓库：把飞书、企业微信、�
 
 ## 概览
 
-DeepDeep 是一个运行在 Android 上的个人智能体。插件用 Kotlin 实现宿主契约 `plugin-api`，在 App 进程内加载，通过工具、技能、提示词和自绘页面扩展助手能力；插件只从 `.ddp` 安装，每个插件是一个独立的 Android application 模块。
+DeepDeep 是一个运行在 Android 上的个人智能体（[应用仓库](https://github.com/Sadami3066/DeepDeep)）。插件用 Kotlin 实现宿主契约 `plugin-api`，在 App 进程内加载，通过工具、技能、提示词和自绘页面扩展助手能力；插件只从 `.ddp` 安装，每个插件是一个独立的 Android application 模块。
 
 本仓库包含四个官方插件，发布者为 `milous`：
 
@@ -136,4 +136,4 @@ chmod 600 keys/plugin-signing.pem
 - 本项目为个人维护的第三方集成，与飞书、腾讯、小米、中山大学及其关联公司无隶属或背书关系。
 - 问题、建议与使用反馈请提交到 [GitHub Issues](https://github.com/Sadami3066/DeepDeep-Official-Plugins/issues)。涉及签名私钥、凭据或安全漏洞的内容请不要公开，先通过 GitHub 私下联系维护者。
 - 项目按现状提供，尽力维护，不承诺服务可用性、响应时间或第三方接口的持续可用。
-- 相关仓库：DeepDeep 应用（暂未开源） · [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) · [DeepDeep-Plugins](https://github.com/Sadami3066/DeepDeep-Plugins)
+- 相关仓库：[DeepDeep 应用](https://github.com/Sadami3066/DeepDeep) · [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) · [DeepDeep-Plugins](https://github.com/Sadami3066/DeepDeep-Plugins)

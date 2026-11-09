@@ -6,7 +6,7 @@ The official external-plugin source repository maintained by the DeepDeep projec
 
 ## Overview
 
-DeepDeep is a personal AI agent on Android. Plugins implement the host contract `plugin-api` in Kotlin, load inside the App process, and extend the agent with tools, skills, prompt sections and self-drawn pages. Plugins are installed only from `.ddp` files, and every plugin is a separate Android application module.
+DeepDeep is a personal AI agent on Android ([app repository](https://github.com/Sadami3066/DeepDeep)). Plugins implement the host contract `plugin-api` in Kotlin, load inside the App process, and extend the agent with tools, skills, prompt sections and self-drawn pages. Plugins are installed only from `.ddp` files, and every plugin is a separate Android application module.
 
 This repository contains four official plugins, published by `milous`:
 
@@ -136,4 +136,4 @@ The source code and documentation in this repository are licensed under [Apache-
 - This is a third-party integration maintained by an individual, with no affiliation or endorsement from Feishu, Tencent, Xiaomi, Sun Yat-sen University or their affiliates.
 - Please report problems, suggestions and feedback via [GitHub Issues](https://github.com/Sadami3066/DeepDeep-Official-Plugins/issues). Do not post signing private keys, credentials or security vulnerabilities publicly; contact the maintainer privately on GitHub first.
 - The project is provided as-is and maintained on a best-effort basis, with no guarantee of service availability, response time or continued availability of third-party APIs.
-- Related repositories: DeepDeep app (not open source yet) · [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) · [DeepDeep-Plugins](https://github.com/Sadami3066/DeepDeep-Plugins)
+- Related repositories: [DeepDeep app](https://github.com/Sadami3066/DeepDeep) · [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) · [DeepDeep-Plugins](https://github.com/Sadami3066/DeepDeep-Plugins)
