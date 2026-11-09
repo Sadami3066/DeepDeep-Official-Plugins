@@ -120,7 +120,7 @@ async function showVenues(input, opts) {
       console.log('');
     }
   }
-  if (opts.json) console.log(JSON.stringify({ ok: true, types }, null, 2));
+  if (opts.json) console.log(JSON.stringify({ ok: types.every((t) => !t.error), types }, null, 2));
 }
 
 async function showSlots(input, opts) {
@@ -182,7 +182,7 @@ async function showSlots(input, opts) {
     }
   }
 
-  if (opts.json) console.log(JSON.stringify({ ok: true, types }, null, 2));
+  if (opts.json) console.log(JSON.stringify({ ok: types.every((t) => !t.error), types }, null, 2));
 }
 
 async function showMine(opts) {
@@ -263,6 +263,11 @@ async function run(argvIn = []) {
     );
 
     if (opts.json) {
+      if (!dryRun && Number(r.result?.Code) !== 200) {
+        console.log(JSON.stringify({ ok: false, error: { message: r.result?.Result || '预约失败', raw: r.result } }, null, 2));
+        process.exitCode = 1;
+        return undefined;
+      }
       return console.log(JSON.stringify({ ok: true, dryRun, charge, ...(dryRun ? { payload: r.payload } : { result: r.result }) }, null, 2));
     }
     if (dryRun) {
