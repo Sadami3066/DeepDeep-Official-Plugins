@@ -41,7 +41,7 @@ internal object SysuContent {
 
         # 中山大学 CLI（sysu）
 
-        在 bash 中运行 `sysu <站点> <命令>`；默认排版文本，加 `--json` 出结构化数据。
+        在 bash 中运行 `sysu <站点> <命令>`；默认排版文本，`gym` 子命令支持 `--json`。
 
         ## 教务（sysu jwxt）
 
@@ -62,10 +62,11 @@ internal object SysuContent {
         ## 体育场馆（sysu gym）
 
         - 账户/校区：`sysu gym`；类型：`sysu gym types`；场地：`sysu gym venues <关键字>`
-        - 空位：`sysu gym slots <关键字> --days 2`
+        - 空位：`sysu gym slots <关键字> --days 2`（`--json` 解析 `types[].fee.CreditFee`、`venues[].shortName`、`slots[].available`）
         - 我的预约：`sysu gym mine`
         - 预约：`sysu gym book --type ... --venue ... --date ... --start ... --end ...`
-          **默认 dry-run，必须用户确认后才加 `--yes`**；取消：`sysu gym cancel <预约号> --yes`
+          默认按用户身份与时段选价，`--charge` 仅覆盖；**默认 dry-run，必须用户确认后才加 `--yes`**
+        - 取消：`sysu gym cancel <预约号> --yes`；无空位时的「公告：…」来自场馆描述，不是保证
 
         ## 网费（sysu netpay）
 
@@ -79,8 +80,10 @@ internal object SysuContent {
 
         ## 登录
 
+        `sysu login` 成功即统一认证已登录，场馆 token 会自动获取，不需要单独 `gym login`。
         会话失效会自动续期；真失效时让用户打开 DeepDeep 的「中山大学 CLI」插件页点「重新登录」：
         页面会向企业微信发送 4 位验证码并提示输入。账号密码也只在插件页填写，不要在对话里索要。
+        验证码错误时 CAS 可能写「NetID 或验证码错误」，但账号密码已通过；`--send-code` 会发新码。
 
         ## 要记住的
 

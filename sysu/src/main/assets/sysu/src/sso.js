@@ -11,6 +11,7 @@ const os = require('node:os');
 const path = require('node:path');
 const readline = require('node:readline/promises');
 const http = require('./http');
+const session = require('./session');
 
 const CAS = 'https://cas.sysu.edu.cn/esc-sso';
 const CONFIG_DIR = path.join(os.homedir(), '.config/sysu');
@@ -32,12 +33,12 @@ function writeJson(file, data) {
   fs.chmodSync(file, 0o600);
 }
 
-// TGC 从哪来：环境变量 > 新的统一会话文件 > 旧 jwxt 的会话文件
+// TGC 由统一会话文件持有；环境变量优先，方便临时覆盖。
 function tgc() {
   if (process.env.SYSU_TGC) return process.env.SYSU_TGC;
-  const t = readJson(path.join(CONFIG_DIR, 'session.json'))?.tgc;
+  const t = session.tgc();
   if (t) return t;
-  throw new Error('没有 TGC。先登录一次：sysu login');
+  throw new Error('统一认证未登录：sysu login');
 }
 
 const hasTgc = () => {

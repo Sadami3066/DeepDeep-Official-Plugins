@@ -219,6 +219,9 @@ const venues = (typeId, o) => withApi((t) => api(`/api/venue/type/${typeId}`, { 
 const slots = (typeId, start, end, o) =>
   withApi((t) => api(`/api/venue/available-slots/range?venueTypeId=${typeId}&start=${start}&end=${end}`, { token: t }), o);
 
+const fees = (typeId, o) =>
+  withApi((t) => api(`/api/venuetype/${typeId}/feetemplates`, { token: t }), o);
+
 function bookings({ days = 30, waiting = false } = {}, o) {
   const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
   const end = new Date(Date.now() + 8 * 3600e3 + days * 864e5).toISOString().slice(0, 10);
@@ -303,6 +306,8 @@ module.exports = {
   sportTypes,
   venues,
   slots,
+  fees,
+  readToken,
   bookings,
   book,
   cancel,

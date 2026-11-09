@@ -18,6 +18,8 @@ function read() {
   }
 }
 
+const tgc = () => read()?.tgc || '';
+
 function save({ cookies, tgc, tgcAt }) {
   const prev = read() || {};
   const data = {
@@ -84,4 +86,4 @@ async function ensureLogin() {
   throw new Error('会话已失效。重新登录：sysu login');
 }
 
-module.exports = { SESSION_PATH, JWXT, SERVICE, read, save, cookieHeader, renew, ensureLogin, isLoggedIn };
+module.exports = { SESSION_PATH, JWXT, SERVICE, read, save, tgc, cookieHeader, renew, ensureLogin, isLoggedIn };

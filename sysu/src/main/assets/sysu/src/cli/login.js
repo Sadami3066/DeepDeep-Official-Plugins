@@ -42,7 +42,7 @@ async function main(argvIn = []) {
 
   const already = !force && !code && (await session.isLoggedIn());
   if (already) {
-    if (!json) console.log('已经登录了（加 --force 可强制重新登录）');
+    if (!json) console.log('已登录');
   } else {
     await login({ code: code || undefined, sendCode });
   }
@@ -70,8 +70,10 @@ async function main(argvIn = []) {
   if (json) {
     return console.log(JSON.stringify({ ok: status.jwxt, needMfa: false, ...status }, null, 2));
   }
-  if (!already) console.log(status.jwxt ? '  ✓ 教务系统就绪' : red('  ✗ 教务系统没通'));
-  if (status.lms) console.log('  ✓ 在线教学平台就绪');
+  if (!already) console.log('  ✓ 统一认证已登录');
+  if (status.jwxt) console.log('  ✓ 教务系统');
+  else console.log(dim('  · 教务系统：未连接'));
+  if (status.lms) console.log('  ✓ 在线教学');
   else console.log(dim(`  · 在线教学平台：${status.lmsNote}`));
 }
 

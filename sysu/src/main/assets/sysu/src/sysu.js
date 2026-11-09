@@ -55,7 +55,7 @@ ${rows.join('\n')}
   sysu netpay            校园网服务与网费订单
   sysu sso <地址>        换任意站点的登录态
 
-加 --json 出结构化数据。`);
+gym 子命令加 --json 出结构化数据。`);
 }
 
 function main(argvIn = []) {

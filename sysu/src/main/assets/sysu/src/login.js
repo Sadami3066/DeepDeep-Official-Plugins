@@ -232,7 +232,15 @@ async function login({ code: given, sendCode: onlySend } = {}) {
     console.log('  ✓ 不需要验证码');
     return finishLogin(next);
   }
-  const finalNext = await submitCode(cred, mfaParams(mfa), given);
+  let finalNext;
+  try {
+    finalNext = await submitCode(cred, mfaParams(mfa), given);
+  } catch (err) {
+    if (/验证码|二次验证|msgCode|NetID/.test(err.message)) {
+      throw new Error(`${err.message}（账号密码已通过）`);
+    }
+    throw err;
+  }
   return finishLogin(finalNext);
 }
 

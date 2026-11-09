@@ -22,7 +22,7 @@ dependencies {
 |---|---|---|
 | `feishu` | 飞书 | 1.0.1 |
 | `wecom` | 企业微信 | 1.0.1 |
-| `sysu` | 中山大学 CLI | 1.1.0 |
+| `sysu` | 中山大学 CLI | 1.2.0 |
 | `micloud` | 小米云服务 | 1.0.2 |
 
 版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准，`publisher.name` 固定为 `milous`。
