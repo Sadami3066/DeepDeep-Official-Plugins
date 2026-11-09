@@ -10,11 +10,6 @@ if [[ -z "${ANDROID_HOME:-}" && -f local.properties ]]; then
   fi
 fi
 
-(
-  cd ../app
-  ./scripts/gradlew-locked :design:publishToMavenLocal :plugin-api:publishToMavenLocal
-)
-
 ./scripts/gradlew-locked \
   :feishu:verifyPlugin \
   :wecom:verifyPlugin \
