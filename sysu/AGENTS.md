@@ -8,7 +8,7 @@
 
 | 文件 | 职责 |
 |---|---|
-| `src/main/assets/plugin.json` | 清单：id/version/apiLevel=4/capabilities/entryClass/provides（skills `deepdeep-sysu`、page `main`、publisher `milous`） |
+| `src/main/assets/plugin.json` | 清单：id/version/apiLevel=5/capabilities/entryClass/provides（skills `deepdeep-sysu`、page `main`、publisher `milous`） |
 | `src/main/assets/sysu/**` | Node.js 校园 CLI（bin 与 src），安装时从 `host.assetsDir` 拷入 proot |
 | `src/main/kotlin/.../SysuCli.kt` | 安装路径、Node 检查、登录/查询命令与输出解析 |
 | `src/main/kotlin/.../SysuStatus.kt` | `dataDir/status.json`：安装状态、登录账号 |

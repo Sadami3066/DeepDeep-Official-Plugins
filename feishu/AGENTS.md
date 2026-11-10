@@ -7,7 +7,7 @@ DeepDeep 官方飞书插件，打成外部 `.ddp`：无工具，靠技能与提�
 | 文件 | 职责 |
 |---|---|
 | `build.gradle.kts` | application 模块配置（namespace/applicationId/versionName/Compose）；打包签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
-| `src/main/assets/plugin.json` | 清单：id/version/apiLevel=4/capabilities/minHostVersion/entryClass/icon/provides（skills `deepdeep-feishu`、pages `main`；页面内容直接挂在 `PluginPage.content`，不需要槽位） |
+| `src/main/assets/plugin.json` | 清单：id/version/apiLevel=5/capabilities/minHostVersion/entryClass/icon/provides（skills `deepdeep-feishu`、pages `main`；页面内容直接挂在 `PluginPage.content`，不需要槽位） |
 | `src/main/assets/icon.png` | 清单 `icon: asset:icon.png` 引用的飞书图标 |
 | `src/main/kotlin/.../FeishuPlugin.kt` | 入口：availability/onEnable/skills/promptSections/ui/uninstall 与提示词正文 |
 | `.../FeishuRuntime.kt` | 页面动作：状态刷新、CLI 安装/更新、device-code 登录/重新授权/退出；动作在 `host.scope` 后台执行并写回页面状态 |

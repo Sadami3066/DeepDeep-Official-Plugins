@@ -17,7 +17,7 @@ This repository contains four official plugins, published by `milous`:
 | `sysu` | SYSU CLI | 1.2.2 | Run the Node.js `sysu` CLI inside the Linux environment: timetable, grades, assignments, course files, venue booking, campus network fees and SSO tickets | Students and staff at Sun Yat-sen University |
 | `micloud` | Xiaomi Cloud | 1.0.2 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
 
-Versions follow `version` in each module's `src/main/assets/plugin.json`. All four manifests declare `apiLevel` 4 and `minHostVersion` 0.2.0, so DeepDeep 0.2.0 or newer is required. Runtime dependencies: Feishu uses `lark-cli` 1.0.98, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.4.2; Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page.
+Versions follow `version` in each module's `src/main/assets/plugin.json`. All four manifests declare `apiLevel` 5 and `minHostVersion` 0.2.0, so DeepDeep 0.2.0 or newer is required. Runtime dependencies: Feishu uses `lark-cli` 1.0.98, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.4.2; Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page.
 
 ## What's in the repository
 

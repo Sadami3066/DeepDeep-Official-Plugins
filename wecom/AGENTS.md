@@ -6,7 +6,7 @@
 
 | 文件 | 职责 |
 |---|---|
-| `src/main/assets/plugin.json` | 清单：id/version/apiLevel=4/capabilities/entryClass/provides（skills `deepdeep-wecom`、page `main`） |
+| `src/main/assets/plugin.json` | 清单：id/version/apiLevel=5/capabilities/entryClass/provides（skills `deepdeep-wecom`、page `main`） |
 | `src/main/kotlin/.../WecomCli.kt` | CLI 常量、双下载源、sha256、版本/授权/二维码解析、解包/安装/回滚/卸载命令 |
 | `src/main/kotlin/.../WecomStatus.kt` | `dataDir/wecom-status.json`：CLI 版本、授权、Bot ID |
 | `src/main/kotlin/.../WecomPlugin.kt` | `DeepDeepPlugin` 入口：availability / uninstall / skills / promptSections / ui |

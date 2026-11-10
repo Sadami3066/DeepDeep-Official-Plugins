@@ -17,7 +17,7 @@ DeepDeep 是一个运行在 Android 上的个人智能体（[应用仓库](https
 | `sysu` | 中山大学 CLI | 1.2.2 | 在 Linux 环境运行 Node.js 版 `sysu` CLI：课表、成绩、作业、课件、场馆预约、网费与统一认证换票 | 中山大学在校师生 |
 | `micloud` | 小米云服务 | 1.0.2 | 登录小米账号后读取笔记、待办、短信、联系人、相册与录音 | 使用小米云服务的用户 |
 
-版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。四个插件的清单均为 `apiLevel` 4、`minHostVersion` 0.2.0，需要 DeepDeep 0.2.0 或更高版本。运行时依赖：飞书使用 `lark-cli` 1.0.98，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.4.2；小米云服务没有 CLI，通过插件页内 WebView 登录。
+版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。四个插件的清单均为 `apiLevel` 5、`minHostVersion` 0.2.0，需要 DeepDeep 0.2.0 或更高版本。运行时依赖：飞书使用 `lark-cli` 1.0.98，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.4.2；小米云服务没有 CLI，通过插件页内 WebView 登录。
 
 ## 仓库里有什么
 

@@ -7,7 +7,7 @@ DeepDeep 官方小米云插件，打成外部 `.ddp`：WebView 登录 i.mi.com �
 | 文件 | 职责 |
 |---|---|
 | `build.gradle.kts` | application 模块配置（namespace/applicationId/versionName/Compose）；打包签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
-| `src/main/assets/plugin.json` | 清单：id/version/apiLevel=4/capabilities/minHostVersion/entryClass/icon/provides（7 个工具、skills `deepdeep-micloud`、pages `main`；页面内容直接挂在 `PluginPage.content`，不需要槽位） |
+| `src/main/assets/plugin.json` | 清单：id/version/apiLevel=5/capabilities/minHostVersion/entryClass/icon/provides（7 个工具、skills `deepdeep-micloud`、pages `main`；页面内容直接挂在 `PluginPage.content`，不需要槽位） |
 | `src/main/assets/icon.png` | 清单 `icon: asset:icon.png` 引用的小米图标 |
 | `src/main/kotlin/.../MiCloudPlugin.kt` | 入口：availability/uninstall/onEnable/onDisable/skills/promptSections/contributions/ui；`MiCloudContent` 持有各组件与登录态缓存 |
 | `.../MiCloudPage.kt` | 插件页面 Compose：登录状态与账号、登录/重新登录/退出/刷新登录状态、能力开关、内嵌 WebView 登录 |
