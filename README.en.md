@@ -2,33 +2,34 @@
 
 English | [简体中文](README.md)
 
-The official external-plugin source repository maintained by the DeepDeep project. It brings Feishu, WeCom, SYSU campus services and Xiaomi Cloud into DeepDeep, packaged as Ed25519-signed `.ddp` plugin bundles.
+The official external-plugin source repository maintained by the DeepDeep project. It brings Feishu, WeCom, SYSU campus services, WeChat export and Xiaomi Cloud into DeepDeep, packaged as Ed25519-signed `.ddp` plugin bundles.
 
 ## Overview
 
 DeepDeep is a personal AI agent on Android ([app repository](https://github.com/Sadami3066/DeepDeep)). Plugins implement the host contract `plugin-api` in Kotlin, load inside the App process, and extend the agent with tools, skills, prompt sections and self-drawn pages. Plugins are installed only from `.ddp` files, and every plugin is a separate Android application module.
 
-This repository contains four official plugins, published by `milous`:
+This repository contains five official plugins, published by `milous`:
 
 | Module | Plugin | Version | What it does | For |
 |---|---|---|---|---|
-| `feishu` | Feishu | 1.0.1 | Read and write messages, calendar, docs, drive, mail and tasks through the official `lark-cli` | Office users who work in Feishu every day |
-| `wecom` | WeCom | 1.0.1 | Operate messages, mail, docs, schedules and to-dos through the official `wecom-cli` | Teams that use WeCom |
-| `sysu` | SYSU CLI | 1.2.2 | Run the Node.js `sysu` CLI inside the Linux environment: timetable, grades, assignments, course files, venue booking, campus network fees and SSO tickets | Students and staff at Sun Yat-sen University |
-| `micloud` | Xiaomi Cloud | 1.0.2 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
+| `feishu` | Feishu | 1.0.2 | Read and write messages, calendar, docs, drive, mail and tasks through the official `lark-cli` | Office users who work in Feishu every day |
+| `wecom` | WeCom | 1.0.2 | Operate messages, mail, docs, schedules and to-dos through the official `wecom-cli` | Teams that use WeCom |
+| `sysu` | SYSU CLI | 1.2.3 | Run the Node.js `sysu` CLI inside the Linux environment: timetable, grades, assignments, course files, venue booking, campus network fees and SSO tickets | Students and staff at Sun Yat-sen University |
+| `wechat` | WeChat Export | 0.2.1 | Sync and decrypt the local WeChat database, export complete chat records for a date range and let the agent summarize | Users who need a complete WeChat export |
+| `micloud` | Xiaomi Cloud | 1.0.3 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
 
-Versions follow `version` in each module's `src/main/assets/plugin.json`. All four manifests declare `apiLevel` 5 and `minHostVersion` 0.2.0, so DeepDeep 0.2.0 or newer is required. Runtime dependencies: Feishu uses `lark-cli` 1.0.98, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.4.2; Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page.
+Versions follow `version` in each module's `src/main/assets/plugin.json`. All five manifests declare `apiLevel` 5 and `minHostVersion` 0.2.0, so DeepDeep 0.2.0 or newer is required. Runtime dependencies: Feishu uses `lark-cli` 1.0.98, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.4.2; WeChat Export bundles its own `wechat` CLI and needs Root plus local WeChat data; Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page.
 
 ## What's in the repository
 
 | Path | Description |
 |---|---|
-| `feishu/`, `wecom/`, `sysu/`, `micloud/` | The four plugin modules: Kotlin sources, `src/main/assets/plugin.json` manifests, icons and pages |
+| `feishu/`, `wecom/`, `sysu/`, `wechat/`, `micloud/` | The five plugin modules: Kotlin sources, `src/main/assets/plugin.json` manifests, icons and pages |
 | `gradle/plugin-bundle.gradle.kts` | Shared packaging script providing the `assemblePlugin`, `signPlugin` and `verifyPlugin` tasks |
 | `settings.gradle.kts` | Module list and repositories; dependencies come from `io.github.sadami3066.deepdeep:plugin-api:0.7.0` on `https://sadami3066.github.io/deepdeep-maven` (which brings in `design:0.6.0` via `api()`), Google and Maven Central |
 | `gradle/wrapper/`, `gradlew` | Gradle 9.8.2 wrapper; no local Gradle installation needed |
 | `scripts/gradlew-locked` | Serialized Gradle wrapper: flock build lock, single worker by default, capped JVM memory to avoid OOM on small machines |
-| `scripts/check.sh` | Builds, signs and verifies all four plugins |
+| `scripts/check.sh` | Builds, signs and verifies all five plugins |
 | `keys/` | Local signing-key directory; key files are not committed (`.gitignore` ignores `keys/*.pem` and `keys/*.pub`) |
 
 All modules share the same compile settings: `compileSdk`/`targetSdk` 36, `minSdk` 29, Java 17. The repository stores only sources and packaging scripts — no private keys and no signed artifacts; `.ddp` bundles are produced at build time.

@@ -1,0 +1,41 @@
+{
+  "id": "io.github.whywood.deepdeep.plugin.wechat",
+  "version": "0.2.1",
+  "publisher": {
+    "name": "milous"
+  },
+  "apiLevel": 5,
+  "minHostVersion": "0.2.0",
+  "capabilities": [
+    "linux"
+  ],
+  "entryClass": "io.github.whywood.deepdeep.plugin.wechat.WechatPlugin",
+  "name": {
+    "default": "微信导出",
+    "zh": "微信导出",
+    "en": "WeChat Export"
+  },
+  "summary": {
+    "default": "按日期范围导出完整微信记录，交给 Agent 总结",
+    "zh": "按日期范围导出完整微信记录，交给 Agent 总结",
+    "en": "Export complete WeChat records for a date range and let the agent summarize"
+  },
+  "description": {
+    "default": "在 Linux 运行环境里同步、解密微信本地数据库，按日期范围导出完整聊天记录。CLI 只做数据清洗和导出，不做筛选、TopK 或摘要；公众号、文件传输助手、服务通知和支付记录都会保留。需要把系统访问切到 Root。",
+    "zh": "在 Linux 运行环境里同步、解密微信本地数据库，按日期范围导出完整聊天记录。CLI 只做数据清洗和导出，不做筛选、TopK 或摘要；公众号、文件传输助手、服务通知和支付记录都会保留。需要把系统访问切到 Root。",
+    "en": "Sync and decrypt the local WeChat database inside the Linux runtime, then export complete chat records for a date range. The CLI only formats and exports; it does not filter, rank, or summarize. Official accounts, file transfer, service notices, and payments are retained. Set system access to Root."
+  },
+  "ui": {
+    "apiLevel": 1
+  },
+  "provides": {
+    "tools": [],
+    "skills": [
+      "deepdeep-wechat"
+    ],
+    "uiSlots": [],
+    "pages": [
+      "main"
+    ]
+  }
+}

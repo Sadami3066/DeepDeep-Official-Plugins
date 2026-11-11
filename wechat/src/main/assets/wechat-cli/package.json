@@ -1,0 +1,16 @@
+{
+  "name": "wechat-cli",
+  "version": "0.2.0",
+  "description": "WeChat complete chat export CLI: snapshot, decrypt, normalize, export by range.",
+  "type": "module",
+  "bin": {
+    "wechat": "bin/wechat.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  },
+  "license": "MIT"
+}

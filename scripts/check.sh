@@ -14,4 +14,5 @@ fi
   :feishu:verifyPlugin \
   :wecom:verifyPlugin \
   :sysu:verifyPlugin \
+  :wechat:verifyPlugin \
   :micloud:verifyPlugin \
