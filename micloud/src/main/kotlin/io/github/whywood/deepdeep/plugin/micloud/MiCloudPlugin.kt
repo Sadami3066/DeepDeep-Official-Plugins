@@ -65,7 +65,7 @@ internal class MiCloudContent(private val host: PluginHost) {
     fun isSignedIn(): Boolean = isSignedIn(lastStatus)
 
     fun tools(): List<PluginTool> =
-        if (isSignedIn()) miCloudTools(client, preferences, writer, downloadDir) else emptyList()
+        miCloudTools(client, preferences, writer, downloadDir)
 
     suspend fun resolveStatus(force: Boolean = false): MiCloudSessionView {
         val view = session.status(force)
