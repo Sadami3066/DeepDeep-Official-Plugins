@@ -1,11 +1,11 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.sysu",
-  "version": "1.2.4",
+  "version": "2.0.0",
   "publisher": {
     "name": "milous"
   },
-  "apiLevel": 5,
-  "minHostVersion": "1.0.1",
+  "apiLevel": 6,
+  "minHostVersion": "1.0.4",
   "capabilities": [
     "files",
     "linux",
@@ -29,7 +29,7 @@
   },
   "icon": "asset:icon.png",
   "ui": {
-    "apiLevel": 1
+    "apiLevel": 2
   },
   "provides": {
     "tools": [],

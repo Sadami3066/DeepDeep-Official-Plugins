@@ -2,7 +2,6 @@ package io.github.whywood.deepdeep.plugin.sysu
 
 import android.os.Build
 import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
-import io.github.whywood.deepdeep.plugin.api.IconRef
 import io.github.whywood.deepdeep.plugin.api.LinuxService
 import io.github.whywood.deepdeep.plugin.api.LocalizedText
 import io.github.whywood.deepdeep.plugin.api.PluginAvailability
@@ -12,17 +11,24 @@ import io.github.whywood.deepdeep.plugin.api.PluginSkill
 import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
 import io.github.whywood.deepdeep.plugin.api.PromptSection
 import io.github.whywood.deepdeep.plugin.api.SlotBinding
+import io.github.whywood.deepdeep.plugin.api.assetIcon
+import io.github.whywood.deepdeep.plugin.api.available
+import io.github.whywood.deepdeep.plugin.api.localizedText
+import io.github.whywood.deepdeep.plugin.api.pluginPage
+import io.github.whywood.deepdeep.plugin.api.pluginSkill
+import io.github.whywood.deepdeep.plugin.api.promptSection
+import io.github.whywood.deepdeep.plugin.api.unavailable
 import java.io.File
 
 class SysuPlugin : DeepDeepPlugin {
     override suspend fun availability(host: PluginHost): PluginAvailability {
         if (SUPPORTED_ABI !in Build.SUPPORTED_ABIS) {
-            return PluginAvailability.Unavailable(host.text(TEXT_UNAVAILABLE_DEVICE))
+            return unavailable(host.text(TEXT_UNAVAILABLE_DEVICE))
         }
         if (!linuxAvailable(host)) {
-            return PluginAvailability.Unavailable(host.text(TEXT_UNAVAILABLE_LINUX))
+            return unavailable(host.text(TEXT_UNAVAILABLE_LINUX))
         }
-        return PluginAvailability.Available
+        return available()
     }
 
     override suspend fun onEnable(host: PluginHost) {
@@ -44,7 +50,7 @@ class SysuPlugin : DeepDeepPlugin {
     }
 
     override fun skills(host: PluginHost): List<PluginSkill> =
-        listOf(PluginSkill(SysuCli.SKILL_ID, SysuContent.skillMarkdown()))
+        listOf(pluginSkill(SysuCli.SKILL_ID, SysuContent.skillMarkdown()))
 
     override fun promptSections(host: PluginHost): List<PromptSection> {
         val stored = SysuStatusStore.read(host)
@@ -55,17 +61,17 @@ class SysuPlugin : DeepDeepPlugin {
             account = stored?.account,
             loggedIn = stored?.loggedIn == true,
         )
-        return listOf(PromptSection(SECTION_ID, SysuContent.promptBody(status), PROMPT_PRIORITY))
+        return listOf(promptSection(SECTION_ID, SysuContent.promptBody(status), PROMPT_PRIORITY))
     }
 
     override fun ui(host: PluginHost): PluginUiContributions = object : PluginUiContributions {
         override val bindings: List<SlotBinding> = emptyList()
 
         override val pages: List<PluginPage> = listOf(
-            PluginPage(
+            pluginPage(
                 id = PAGE_ID,
                 title = TEXT_PAGE_TITLE,
-                icon = IconRef.Asset(ICON_ASSET),
+                icon = assetIcon(ICON_ASSET),
                 content = { SysuPage(this@SysuPlugin, host) },
             ),
         )
@@ -304,4 +310,4 @@ class SysuPlugin : DeepDeepPlugin {
 internal class SysuException(message: String) : Exception(message)
 
 internal fun literal(zh: String, en: String): LocalizedText =
-    LocalizedText.Literal(mapOf("default" to zh, "zh" to zh, "en" to en))
+    localizedText(mapOf("default" to zh, "zh" to zh, "en" to en))
