@@ -1,12 +1,13 @@
 package io.github.whywood.deepdeep.plugin.micloud
 
 import io.github.whywood.deepdeep.plugin.api.PluginTool
+import io.github.whywood.deepdeep.plugin.api.pluginTool
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-internal fun smsTool(client: MiCloudReadApi): PluginTool = PluginTool(
+internal fun smsTool(client: MiCloudReadApi): PluginTool = pluginTool(
     name = "mi_cloud_sms",
     label = "mi_cloud_sms",
     description = "List recent SMS threads (optionally with call records) from Xiaomi Cloud. Read-only.",

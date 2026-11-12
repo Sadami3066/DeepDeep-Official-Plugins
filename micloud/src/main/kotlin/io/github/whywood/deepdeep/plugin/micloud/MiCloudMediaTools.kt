@@ -1,13 +1,15 @@
 package io.github.whywood.deepdeep.plugin.micloud
 
 import io.github.whywood.deepdeep.plugin.api.PluginTool
+import io.github.whywood.deepdeep.plugin.api.pluginTool
+import io.github.whywood.deepdeep.plugin.api.textResult
 import java.io.File
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-internal fun galleryTool(client: MiCloudReadApi): PluginTool = PluginTool(
+internal fun galleryTool(client: MiCloudReadApi): PluginTool = pluginTool(
     name = "mi_cloud_gallery",
     label = "mi_cloud_gallery",
     description = "List Xiaomi Cloud gallery photos/videos or albums. Read-only.",
@@ -49,7 +51,7 @@ internal fun galleryTool(client: MiCloudReadApi): PluginTool = PluginTool(
 internal fun recordingsTool(
     client: MiCloudReadApi,
     downloadDir: File,
-): PluginTool = PluginTool(
+): PluginTool = pluginTool(
     name = "mi_cloud_recordings",
     label = "mi_cloud_recordings",
     description = "List or download call recordings stored in Xiaomi Cloud. Downloads are saved into the plugin data directory.",

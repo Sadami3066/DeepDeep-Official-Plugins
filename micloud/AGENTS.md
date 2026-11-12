@@ -7,7 +7,7 @@ DeepDeep 官方小米云插件，打成外部 `.ddp`：WebView 登录 i.mi.com �
 | 文件 | 职责 |
 |---|---|
 | `build.gradle.kts` | application 模块配置（namespace/applicationId/versionName/Compose）；打包签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
-| `src/main/assets/plugin.json` | 清单：id/version/apiLevel=5/capabilities/minHostVersion/entryClass/icon/provides（7 个工具、skills `deepdeep-micloud`、pages `main`；页面内容直接挂在 `PluginPage.content`，不需要槽位） |
+| `src/main/assets/plugin.json` | 清单：id/version/apiLevel=6/`ui.apiLevel`=2/minHostVersion/capabilities/entryClass/icon/provides（7 个工具、skills `deepdeep-micloud`、pages `main`；页面内容直接挂在 `PluginPage.content`，不需要槽位） |
 | `src/main/assets/icon.png` | 清单 `icon: asset:icon.png` 引用的小米图标 |
 | `src/main/kotlin/.../MiCloudPlugin.kt` | 入口：availability/uninstall/onEnable/onDisable/skills/promptSections/contributions/ui；`MiCloudContent` 持有各组件与登录态缓存 |
 | `.../MiCloudPage.kt` | 插件页面 Compose：登录状态与账号、登录/重新登录/退出/刷新登录状态、能力开关、内嵌 WebView 登录 |
@@ -34,4 +34,4 @@ DeepDeep 官方小米云插件，打成外部 `.ddp`：WebView 登录 i.mi.com �
 - 工具按登录态与能力开关双重门控：只有登录有效（VERIFIED/UNVERIFIED）才注册 `mi_cloud_*` 工具，未登录/登录失效时不注入；登录、退出、登录失效都会调用 `host.requestContributionsRefresh()` 重新物化，启动时异步探测完成后的登录态变化也会触发一次刷新。能力开关再决定具体注册哪些工具；笔记/待办的开关同时打开读写，写操作前 agent 必须先向用户确认，删除/批量改不可逆。
 - 录音下载落到 `host.dataDir/recordings`，工具返回绝对路径；相册只列不下载。
 - 短信、联系人、录音、相册只按开关和用户要求读取；401/403 统一标记会话过期并提示到插件页面重新登录，不要重试刷接口。
-- 所有用户可见文案走 `LocalizedText.Literal`（default/zh/en），不引用宿主资源；页面不注册 Activity，登录 WebView 只存在于插件页面。
+- 所有用户可见文案走 `localizedText(...)`（default/zh/en），不引用宿主资源；页面不注册 Activity，登录 WebView 只存在于插件页面。

@@ -52,6 +52,7 @@ import io.github.whywood.deepdeep.design.DdType
 import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.LocalizedText
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.localizedText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -534,4 +535,4 @@ internal object MiCloudTexts {
 }
 
 private fun literal(zh: String, en: String): LocalizedText =
-    LocalizedText.Literal(mapOf("default" to zh, "zh" to zh, "en" to en))
+    localizedText(mapOf("default" to zh, "zh" to zh, "en" to en))

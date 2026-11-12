@@ -3,7 +3,6 @@ package io.github.whywood.deepdeep.plugin.micloud
 import android.webkit.CookieManager
 import io.github.whywood.deepdeep.plugin.api.Contributions
 import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
-import io.github.whywood.deepdeep.plugin.api.IconRef
 import io.github.whywood.deepdeep.plugin.api.PluginAvailability
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.PluginPage
@@ -12,6 +11,12 @@ import io.github.whywood.deepdeep.plugin.api.PluginTool
 import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
 import io.github.whywood.deepdeep.plugin.api.PromptSection
 import io.github.whywood.deepdeep.plugin.api.SlotBinding
+import io.github.whywood.deepdeep.plugin.api.assetIcon
+import io.github.whywood.deepdeep.plugin.api.available
+import io.github.whywood.deepdeep.plugin.api.contributions
+import io.github.whywood.deepdeep.plugin.api.pluginPage
+import io.github.whywood.deepdeep.plugin.api.pluginSkill
+import io.github.whywood.deepdeep.plugin.api.promptSection
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
@@ -155,7 +160,7 @@ class MiCloudPlugin : DeepDeepPlugin {
 
     override suspend fun availability(host: PluginHost): PluginAvailability {
         content(host)
-        return PluginAvailability.Available
+        return available()
     }
 
     override suspend fun uninstall(host: PluginHost) {
@@ -175,14 +180,14 @@ class MiCloudPlugin : DeepDeepPlugin {
     }
 
     override fun skills(host: PluginHost): List<PluginSkill> = listOf(
-        PluginSkill(id = SKILL_ID, markdown = SKILL_MARKDOWN),
+        pluginSkill(id = SKILL_ID, markdown = SKILL_MARKDOWN),
     )
 
     override fun promptSections(host: PluginHost): List<PromptSection> {
         val content = content(host)
         content.refreshStatusIfStale(host.scope)
         return listOf(
-            PromptSection(
+            promptSection(
                 id = PROMPT_ID,
                 body = miCloudPromptBody(content.lastStatus, content.preferences.snapshot()),
             ),
@@ -190,7 +195,7 @@ class MiCloudPlugin : DeepDeepPlugin {
     }
 
     override fun contributions(host: PluginHost): Contributions =
-        Contributions(tools = content(host).tools())
+        contributions(tools = content(host).tools())
 
     override fun ui(host: PluginHost): PluginUiContributions {
         val content = content(host)
@@ -198,10 +203,10 @@ class MiCloudPlugin : DeepDeepPlugin {
             override val bindings: List<SlotBinding> = emptyList()
 
             override val pages: List<PluginPage> = listOf(
-                PluginPage(
+                pluginPage(
                     id = PAGE_ID,
                     title = MiCloudTexts.pageTitle,
-                    icon = IconRef.Asset(ICON_ASSET),
+                    icon = assetIcon(ICON_ASSET),
                     content = { MiCloudPage(host = host, content = content) },
                 ),
             )

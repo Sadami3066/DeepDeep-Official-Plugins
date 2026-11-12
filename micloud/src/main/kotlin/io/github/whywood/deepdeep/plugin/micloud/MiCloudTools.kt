@@ -1,7 +1,8 @@
 package io.github.whywood.deepdeep.plugin.micloud
 
 import io.github.whywood.deepdeep.plugin.api.PluginTool
-import io.github.whywood.deepdeep.plugin.api.PluginToolResult
+import io.github.whywood.deepdeep.plugin.api.pluginTool
+import io.github.whywood.deepdeep.plugin.api.textResult
 import java.io.File
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -50,7 +51,7 @@ private fun capabilityGated(
     tool: PluginTool,
     settings: MiCloudSettings,
     feature: MiCloudFeature,
-): PluginTool = PluginTool(
+): PluginTool = pluginTool(
     name = tool.name,
     label = tool.label,
     description = tool.description,
@@ -59,7 +60,7 @@ private fun capabilityGated(
     promptGuidelines = tool.promptGuidelines,
 ) { call ->
     if (!settings.capabilities.value.readEnabled(feature)) {
-        PluginToolResult.Text(
+        textResult(
             text = "capability is not enabled: open the Xiaomi Cloud plugin page and enable ${feature.name.lowercase()} first",
             isError = true,
         )
@@ -68,7 +69,7 @@ private fun capabilityGated(
     }
 }
 
-private fun accountTool(client: MiCloudReadApi): PluginTool = PluginTool(
+private fun accountTool(client: MiCloudReadApi): PluginTool = pluginTool(
     name = "mi_cloud_account",
     label = "mi_cloud_account",
     description = "Read the signed-in Xiaomi Cloud account profile or storage quota. Read-only.",

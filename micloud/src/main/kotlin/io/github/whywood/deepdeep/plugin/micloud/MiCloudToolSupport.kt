@@ -1,6 +1,7 @@
 package io.github.whywood.deepdeep.plugin.micloud
 
 import io.github.whywood.deepdeep.plugin.api.PluginToolResult
+import io.github.whywood.deepdeep.plugin.api.textResult
 import java.io.File
 import java.io.IOException
 import java.net.URLEncoder
@@ -69,9 +70,6 @@ internal suspend fun miCloudToolResult(block: suspend () -> PluginToolResult): P
 } catch (error: Exception) {
     textResult(TOOL_REQUEST_FAILED + (error.message ?: error.javaClass.simpleName), isError = true)
 }
-
-internal fun textResult(text: String, isError: Boolean = false): PluginToolResult =
-    PluginToolResult.Text(text, isError = isError)
 
 internal fun now(): Long = System.currentTimeMillis()
 

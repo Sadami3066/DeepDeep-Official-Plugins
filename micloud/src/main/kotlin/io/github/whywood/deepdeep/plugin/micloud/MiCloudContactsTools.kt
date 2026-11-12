@@ -1,13 +1,14 @@
 package io.github.whywood.deepdeep.plugin.micloud
 
 import io.github.whywood.deepdeep.plugin.api.PluginTool
+import io.github.whywood.deepdeep.plugin.api.pluginTool
 import java.util.Locale
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.put
 
-internal fun contactsTool(client: MiCloudReadApi): PluginTool = PluginTool(
+internal fun contactsTool(client: MiCloudReadApi): PluginTool = pluginTool(
     name = "mi_cloud_contacts",
     label = "mi_cloud_contacts",
     description = "List or search contacts in Xiaomi Cloud. Read-only.",

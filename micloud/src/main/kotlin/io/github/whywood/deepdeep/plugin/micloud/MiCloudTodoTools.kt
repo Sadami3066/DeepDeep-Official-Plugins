@@ -1,6 +1,7 @@
 package io.github.whywood.deepdeep.plugin.micloud
 
 import io.github.whywood.deepdeep.plugin.api.PluginTool
+import io.github.whywood.deepdeep.plugin.api.pluginTool
 import java.io.IOException
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -18,7 +19,7 @@ internal fun todoTool(
     client: MiCloudReadApi,
     settings: MiCloudSettings,
     writer: MiCloudWriteApi,
-): PluginTool = PluginTool(
+): PluginTool = pluginTool(
     name = "mi_cloud_todo",
     label = "mi_cloud_todo",
     description = "List, create, update or delete to-do items in Xiaomi Cloud. Reads and writes the user's own to-do list; writes are only allowed when the to-do write switch is on.",

@@ -1,6 +1,8 @@
 package io.github.whywood.deepdeep.plugin.micloud
 
 import io.github.whywood.deepdeep.plugin.api.PluginTool
+import io.github.whywood.deepdeep.plugin.api.pluginTool
+import io.github.whywood.deepdeep.plugin.api.textResult
 import java.io.IOException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -17,7 +19,7 @@ internal fun notesTool(
     client: MiCloudReadApi,
     settings: MiCloudSettings,
     writer: MiCloudWriteApi,
-): PluginTool = PluginTool(
+): PluginTool = pluginTool(
     name = "mi_cloud_notes",
     label = "mi_cloud_notes",
     description = "List, read, create, update or delete notes in Xiaomi Cloud. Reads and writes the user's own notes; writes are only allowed when the notes write switch is on.",
