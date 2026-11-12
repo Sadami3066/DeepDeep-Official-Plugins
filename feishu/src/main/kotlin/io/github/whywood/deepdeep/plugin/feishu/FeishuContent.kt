@@ -1,9 +1,10 @@
 package io.github.whywood.deepdeep.plugin.feishu
 
 import io.github.whywood.deepdeep.plugin.api.LocalizedText
+import io.github.whywood.deepdeep.plugin.api.localizedText
 
 internal fun literal(zh: String, en: String, default: String = zh): LocalizedText =
-    LocalizedText.Literal(mapOf("default" to default, "zh" to zh, "en" to en))
+    localizedText(mapOf("default" to default, "zh" to zh, "en" to en))
 
 internal const val FEISHU_VERSION = "1.0.98"
 internal const val FEISHU_SKILL_ID = "deepdeep-feishu"

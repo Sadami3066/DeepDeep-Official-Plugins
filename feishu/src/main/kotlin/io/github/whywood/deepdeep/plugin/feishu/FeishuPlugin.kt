@@ -1,7 +1,6 @@
 package io.github.whywood.deepdeep.plugin.feishu
 
 import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
-import io.github.whywood.deepdeep.plugin.api.IconRef
 import io.github.whywood.deepdeep.plugin.api.PluginAvailability
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.PluginPage
@@ -9,6 +8,12 @@ import io.github.whywood.deepdeep.plugin.api.PluginSkill
 import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
 import io.github.whywood.deepdeep.plugin.api.PromptSection
 import io.github.whywood.deepdeep.plugin.api.SlotBinding
+import io.github.whywood.deepdeep.plugin.api.assetIcon
+import io.github.whywood.deepdeep.plugin.api.available
+import io.github.whywood.deepdeep.plugin.api.pluginPage
+import io.github.whywood.deepdeep.plugin.api.pluginSkill
+import io.github.whywood.deepdeep.plugin.api.promptSection
+import io.github.whywood.deepdeep.plugin.api.unavailable
 import java.io.File
 import kotlinx.coroutines.launch
 
@@ -18,9 +23,9 @@ class FeishuPlugin : DeepDeepPlugin {
     override suspend fun availability(host: PluginHost): PluginAvailability {
         val linux = runCatching { host.linux() }.getOrNull()
         return if (linux != null && linux.available) {
-            PluginAvailability.Available
+            available()
         } else {
-            PluginAvailability.Unavailable(host.text(UNAVAILABLE_LINUX))
+            unavailable(host.text(UNAVAILABLE_LINUX))
         }
     }
 
@@ -41,24 +46,24 @@ class FeishuPlugin : DeepDeepPlugin {
     }
 
     override fun skills(host: PluginHost): List<PluginSkill> = listOf(
-        PluginSkill(
+        pluginSkill(
             id = FEISHU_SKILL_ID,
             markdown = SKILL_MARKDOWN.replace("<download-directory>", downloadDirectory(host)),
         ),
     )
 
     override fun promptSections(host: PluginHost): List<PromptSection> = listOf(
-        PromptSection(FEISHU_SECTION_ID, promptBody(host)),
+        promptSection(FEISHU_SECTION_ID, promptBody(host)),
     )
 
     override fun ui(host: PluginHost): PluginUiContributions = object : PluginUiContributions {
         override val bindings: List<SlotBinding> = emptyList()
 
         override val pages: List<PluginPage> = listOf(
-            PluginPage(
+            pluginPage(
                 id = FEISHU_PAGE_ID,
                 title = literal("飞书", "Feishu"),
-                icon = IconRef.Asset(FEISHU_ICON_ASSET),
+                icon = assetIcon(FEISHU_ICON_ASSET),
                 content = { FeishuPage(host = host, runtime = runtime) },
             ),
         )

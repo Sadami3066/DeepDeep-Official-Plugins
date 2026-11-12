@@ -7,7 +7,7 @@ DeepDeep 官方飞书插件，打成外部 `.ddp`：无工具，靠技能与提�
 | 文件 | 职责 |
 |---|---|
 | `build.gradle.kts` | application 模块配置（namespace/applicationId/versionName/Compose）；打包签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
-| `src/main/assets/plugin.json` | 清单：id/version/apiLevel=5/capabilities/minHostVersion/entryClass/icon/provides（skills `deepdeep-feishu`、pages `main`；页面内容直接挂在 `PluginPage.content`，不需要槽位） |
+| `src/main/assets/plugin.json` | 清单：id/version/apiLevel=6/`ui.apiLevel`=2/minHostVersion/capabilities/entryClass/icon/provides（skills `deepdeep-feishu`、pages `main`；页面内容直接挂在 `PluginPage.content`，不需要槽位） |
 | `src/main/assets/icon.png` | 清单 `icon: asset:icon.png` 引用的飞书图标 |
 | `src/main/kotlin/.../FeishuPlugin.kt` | 入口：availability/onEnable/skills/promptSections/ui/uninstall 与提示词正文 |
 | `.../FeishuRuntime.kt` | 页面动作：状态刷新、CLI 安装/更新、device-code 登录/重新授权/退出；动作在 `host.scope` 后台执行并写回页面状态 |
@@ -21,5 +21,5 @@ DeepDeep 官方飞书插件，打成外部 `.ddp`：无工具，靠技能与提�
 - 构建：在仓库根执行 `./scripts/gradlew-locked :feishu:verifyPlugin`，产物 `feishu/build/plugin/feishu.ddp`。
 - `lark-cli` 来自 npm 镜像或 GitHub release（v1.0.98，sha256 固定），经 `host.network().download` 下载后由 `host.linux()` 在 proot 内解包、校验版本并安装到 `/usr/local/bin/lark-cli`；`/data` 已 bind 进 proot，`host.dataDir` 下的暂存目录与状态文件可直接被 Linux 访问。
 - 连接沿用旧 device-code 流程：`config init --new` 输出创建应用链接，`auth login --no-wait` 输出授权链接，`auth login --device-code` 轮询完成；页面展示链接与「打开浏览器」按钮。
-- 无宿主资源：页面文案全部 `LocalizedText.Literal`（zh/en），图标走 `asset:`。
+- 无宿主资源：页面文案全部 `localizedText(...)`（zh/en），图标走 `asset:`。
 - 卸载时删除 CLI 与 `~/.lark-cli`、`~/.local/share/lark-cli`，并清空 `state.json`。

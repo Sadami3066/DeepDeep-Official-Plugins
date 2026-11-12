@@ -1,6 +1,6 @@
 package io.github.whywood.deepdeep.plugin.feishu
 
-import io.github.whywood.deepdeep.plugin.api.LinuxChunk
+import io.github.whywood.deepdeep.plugin.api.LinuxChunkKind
 import io.github.whywood.deepdeep.plugin.api.LinuxService
 import io.github.whywood.deepdeep.plugin.api.LocalizedText
 import io.github.whywood.deepdeep.plugin.api.NetworkService
@@ -231,11 +231,12 @@ internal class FeishuRuntime {
         var found: String? = null
         var exitCode: Int? = null
         linux.stream(FeishuCli.configInitCommand()).collect { chunk ->
-            when (chunk) {
-                is LinuxChunk.Stdout -> {
-                    if (tail.length < 2000) tail.append(chunk.text).append('\n')
+            when (chunk.kind) {
+                LinuxChunkKind.STDOUT -> {
+                    val text = chunk.text.orEmpty()
+                    if (tail.length < 2000) tail.append(text).append('\n')
                     if (found == null) {
-                        val url = FeishuCli.parseConfigInitUrl(chunk.text)
+                        val url = FeishuCli.parseConfigInitUrl(text)
                         if (url != null) {
                             found = url
                             pageState.update { it.copy(stage = STAGE_CREATE_APP, authUrl = url) }
@@ -243,8 +244,8 @@ internal class FeishuRuntime {
                     }
                 }
 
-                is LinuxChunk.Exit -> exitCode = chunk.exitCode
-                is LinuxChunk.Stderr -> Unit
+                LinuxChunkKind.EXIT -> exitCode = chunk.exitCode
+                else -> Unit
             }
         }
         pageState.update { it.copy(authUrl = null) }
