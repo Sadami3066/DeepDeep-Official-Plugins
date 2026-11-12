@@ -12,13 +12,13 @@ This repository contains five official plugins, published by `milous`:
 
 | Module | Plugin | Version | What it does | For |
 |---|---|---|---|---|
-| `feishu` | Feishu | 1.0.3 | Read and write messages, calendar, docs, drive, mail and tasks through the official `lark-cli` | Office users who work in Feishu every day |
-| `wecom` | WeCom | 1.0.3 | Operate messages, mail, docs, schedules and to-dos through the official `wecom-cli` | Teams that use WeCom |
-| `sysu` | SYSU CLI | 1.2.4 | Run the Node.js `sysu` CLI inside the Linux environment: timetable, grades, assignments, course files, venue booking, campus network fees and SSO tickets | Students and staff at Sun Yat-sen University |
-| `wechat` | WeChat Export | 0.2.2 | Sync and decrypt the local WeChat database, export complete chat records for a date range and let the agent summarize | Users who need a complete WeChat export |
-| `micloud` | Xiaomi Cloud | 1.0.4 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
+| `feishu` | Feishu | 2.0.0 | Read and write messages, calendar, docs, drive, mail and tasks through the official `lark-cli` | Office users who work in Feishu every day |
+| `wecom` | WeCom | 2.0.0 | Operate messages, mail, docs, schedules and to-dos through the official `wecom-cli` | Teams that use WeCom |
+| `sysu` | SYSU CLI | 2.0.0 | Run the Node.js `sysu` CLI inside the Linux environment: timetable, grades, assignments, course files, venue booking, campus network fees and SSO tickets | Students and staff at Sun Yat-sen University |
+| `wechat` | WeChat Export | 0.3.0 | Sync and decrypt the local WeChat database, export complete chat records for a date range and let the agent summarize | Users who need a complete WeChat export |
+| `micloud` | Xiaomi Cloud | 2.0.0 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
 
-Versions follow `version` in each module's `src/main/assets/plugin.json`. All five manifests declare `apiLevel` 5 with `minHostVersion` 1.0.1 (they require DeepDeep 1.0.1+) and are built against the current `plugin-api` release. Runtime dependencies: Feishu uses `lark-cli` 1.0.98, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.4.2; WeChat Export bundles its own `wechat` CLI and needs Root plus local WeChat data; Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page.
+Versions follow `version` in each module's `src/main/assets/plugin.json`. All five manifests declare `apiLevel` 6 with `minHostVersion` 1.0.4 (they require DeepDeep 1.0.4+) and are built against the current `plugin-api` release. Runtime dependencies: Feishu uses `lark-cli` 1.0.98, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.4.2; WeChat Export bundles its own `wechat` CLI and needs Root plus local WeChat data; Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page.
 
 ## What's in the repository
 
@@ -98,7 +98,7 @@ The task chain is `assemblePlugin → signPlugin → verifyPlugin`:
 
 ### Install from the plugin market
 
-Search and install from DeepDeep's "Plugins → Market". Market entry versions match this repository, and artifacts are published in the GitHub Releases of [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) (releases are named `plugins-YYYYMMDD`, assets look like `feishu-1.0.3.ddp`). Each entry records the official `keyId` as `publisherKeyId`.
+Search and install from DeepDeep's "Plugins → Market". Market entry versions match this repository, and artifacts are published in the GitHub Releases of [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) (releases are named `plugins-YYYYMMDD`, assets look like `feishu-2.0.0.ddp`). Each entry records the official `keyId` as `publisherKeyId`.
 
 ### Import a .ddp manually
 
