@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.micloud"
         minSdk = 29
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.2"
+        versionCode = 3
+        versionName = "1.0.4"
     }
 
     compileOptions {
@@ -38,7 +38,7 @@ kotlin {
 }
 
 dependencies {
-    compileOnly("io.github.sadami3066.deepdeep:plugin-api:0.8.0")
+    compileOnly("io.github.sadami3066.deepdeep:plugin-api:0.8.1")
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     compileOnly(platform("androidx.compose:compose-bom:2026.03.00"))

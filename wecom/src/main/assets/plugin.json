@@ -1,11 +1,11 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.wecom",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": {
     "name": "milous"
   },
   "apiLevel": 5,
-  "minHostVersion": "0.2.0",
+  "minHostVersion": "1.0.1",
   "capabilities": [
     "files",
     "linux",

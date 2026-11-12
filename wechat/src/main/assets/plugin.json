@@ -1,11 +1,11 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.wechat",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "publisher": {
     "name": "milous"
   },
   "apiLevel": 5,
-  "minHostVersion": "0.2.0",
+  "minHostVersion": "1.0.1",
   "capabilities": [
     "linux"
   ],

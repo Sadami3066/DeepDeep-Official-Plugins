@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.sysu"
         minSdk = 29
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.2.2"
+        versionCode = 6
+        versionName = "1.2.4"
     }
 
     compileOptions {
@@ -38,7 +38,7 @@ kotlin {
 }
 
 dependencies {
-    compileOnly("io.github.sadami3066.deepdeep:plugin-api:0.8.0")
+    compileOnly("io.github.sadami3066.deepdeep:plugin-api:0.8.1")
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     compileOnly(platform("androidx.compose:compose-bom:2026.03.00"))
