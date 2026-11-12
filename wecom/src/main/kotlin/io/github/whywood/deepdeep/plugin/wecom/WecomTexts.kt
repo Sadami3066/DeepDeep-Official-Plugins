@@ -1,6 +1,7 @@
 package io.github.whywood.deepdeep.plugin.wecom
 
 import io.github.whywood.deepdeep.plugin.api.LocalizedText
+import io.github.whywood.deepdeep.plugin.api.localizedText
 
 internal object WecomTexts {
     val pageTitle = literal("企业微信", "WeCom")
@@ -52,5 +53,5 @@ internal object WecomTexts {
     val statusError = literal("状态检测失败：%s", "Status check failed: %s")
 
     private fun literal(zh: String, en: String): LocalizedText =
-        LocalizedText.Literal(mapOf("default" to zh, "zh" to zh, "en" to en))
+        localizedText(mapOf("default" to zh, "zh" to zh, "en" to en))
 }

@@ -35,7 +35,7 @@ import io.github.whywood.deepdeep.design.DdSectionLabel
 import io.github.whywood.deepdeep.design.DdTextAction
 import io.github.whywood.deepdeep.design.DdType
 import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.LinuxChunk
+import io.github.whywood.deepdeep.plugin.api.LinuxChunkKind
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
@@ -215,7 +215,7 @@ internal class WecomPageController(private val host: PluginHost) {
         val pageUrl = AtomicReference<String?>(null)
         val outputTail = StringBuilder()
         var timedOut = false
-        var exitCode = 0
+        var exitCode: Int? = null
         try {
             val file = WecomCli.qrFile(
                 host.files().workspaceDir ?: throw IllegalStateException(host.text(WecomTexts.errorWorkspace)),
@@ -235,16 +235,17 @@ internal class WecomPageController(private val host: PluginHost) {
                 try {
                     val completed = withTimeoutOrNull(INIT_TIMEOUT_MS) {
                         host.linux().stream(WecomCli.authInitCommand(file)).collect { chunk ->
-                            when (chunk) {
-                                is LinuxChunk.Stdout -> {
-                                    appendTail(outputTail, chunk.text)
-                                    publishQrUrl(pageUrl, chunk.text, file)
+                            when (chunk.kind) {
+                                LinuxChunkKind.STDOUT -> {
+                                    appendTail(outputTail, chunk.text.orEmpty())
+                                    publishQrUrl(pageUrl, chunk.text.orEmpty(), file)
                                 }
-                                is LinuxChunk.Stderr -> {
-                                    appendTail(outputTail, chunk.text)
-                                    publishQrUrl(pageUrl, chunk.text, file)
+                                LinuxChunkKind.STDERR -> {
+                                    appendTail(outputTail, chunk.text.orEmpty())
+                                    publishQrUrl(pageUrl, chunk.text.orEmpty(), file)
                                 }
-                                is LinuxChunk.Exit -> exitCode = chunk.exitCode
+                                LinuxChunkKind.EXIT -> exitCode = chunk.exitCode
+                                else -> Unit
                             }
                         }
                     }
@@ -262,7 +263,7 @@ internal class WecomPageController(private val host: PluginHost) {
             when {
                 timedOut -> throw IllegalStateException(host.text(WecomTexts.errorTimeout))
                 exitCode != 0 -> throw IllegalStateException(
-                    host.text(WecomTexts.errorAuth, failureDetail(outputTail, exitCode)),
+                    host.text(WecomTexts.errorAuth, failureDetail(outputTail, exitCode ?: -1)),
                 )
             }
             refresh()

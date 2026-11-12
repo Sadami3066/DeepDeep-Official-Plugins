@@ -1,7 +1,6 @@
 package io.github.whywood.deepdeep.plugin.wecom
 
 import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
-import io.github.whywood.deepdeep.plugin.api.IconRef
 import io.github.whywood.deepdeep.plugin.api.PluginAvailability
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.PluginPage
@@ -9,6 +8,12 @@ import io.github.whywood.deepdeep.plugin.api.PluginSkill
 import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
 import io.github.whywood.deepdeep.plugin.api.PromptSection
 import io.github.whywood.deepdeep.plugin.api.SlotBinding
+import io.github.whywood.deepdeep.plugin.api.assetIcon
+import io.github.whywood.deepdeep.plugin.api.available
+import io.github.whywood.deepdeep.plugin.api.pluginPage
+import io.github.whywood.deepdeep.plugin.api.pluginSkill
+import io.github.whywood.deepdeep.plugin.api.promptSection
+import io.github.whywood.deepdeep.plugin.api.unavailable
 import java.io.File
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -16,9 +21,9 @@ import kotlinx.coroutines.withContext
 class WecomPlugin : DeepDeepPlugin {
     override suspend fun availability(host: PluginHost): PluginAvailability =
         if (linuxAvailable(host)) {
-            PluginAvailability.Available
+            available()
         } else {
-            PluginAvailability.Unavailable(host.text(WecomTexts.unavailableLinux))
+            unavailable(host.text(WecomTexts.unavailableLinux))
         }
 
     override suspend fun uninstall(host: PluginHost) {
@@ -37,21 +42,21 @@ class WecomPlugin : DeepDeepPlugin {
     override fun skills(host: PluginHost): List<PluginSkill> {
         val workspace = runCatching { host.files().workspaceDir }.getOrNull() ?: host.dataDir.absolutePath
         val markdown = SKILL_MARKDOWN.replace(DOWNLOAD_DIRECTORY_PLACEHOLDER, File(workspace, "tmp").absolutePath)
-        return listOf(PluginSkill(SKILL_ID, markdown))
+        return listOf(pluginSkill(SKILL_ID, markdown))
     }
 
     override fun promptSections(host: PluginHost): List<PromptSection> = listOf(
-        PromptSection(SECTION_ID, promptBody(WecomStatusStore(host).read())),
+        promptSection(SECTION_ID, promptBody(WecomStatusStore(host).read())),
     )
 
     override fun ui(host: PluginHost): PluginUiContributions = object : PluginUiContributions {
         override val bindings: List<SlotBinding> = emptyList()
 
         override val pages: List<PluginPage> = listOf(
-            PluginPage(
+            pluginPage(
                 id = PAGE_ID,
                 title = WecomTexts.pageTitle,
-                icon = IconRef.Asset(ICON_ASSET),
+                icon = assetIcon(ICON_ASSET),
                 content = { WecomPage(host) },
             ),
         )
