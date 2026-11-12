@@ -18,7 +18,7 @@ DeepDeep 是一个运行在 Android 上的个人智能体（[应用仓库](https
 | `wechat` | 微信导出 | 0.2.1 | 同步并解密微信本地数据库，按日期范围导出完整聊天记录，交给 Agent 总结 | 需要完整导出微信记录的用户 |
 | `micloud` | 小米云服务 | 1.0.3 | 登录小米账号后读取笔记、待办、短信、联系人、相册与录音 | 使用小米云服务的用户 |
 
-版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。五个插件的清单均为 `apiLevel` 5、`minHostVersion` 0.2.0，需要 DeepDeep 0.2.0 或更高版本。运行时依赖：飞书使用 `lark-cli` 1.0.98，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.4.2；微信导出插件自带 `wechat` CLI，需要 Root 和微信本地数据；小米云服务没有 CLI，通过插件页内 WebView 登录。
+版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。五个插件的清单均为 `apiLevel` 5（需要支持 API level 5 的 DeepDeep 版本），并使用 `plugin-api` 0.8.0 构建。运行时依赖：飞书使用 `lark-cli` 1.0.98，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.4.2；微信导出插件自带 `wechat` CLI，需要 Root 和微信本地数据；小米云服务没有 CLI，通过插件页内 WebView 登录。
 
 ## 仓库里有什么
 
@@ -26,7 +26,7 @@ DeepDeep 是一个运行在 Android 上的个人智能体（[应用仓库](https
 |---|---|
 | `feishu/`、`wecom/`、`sysu/`、`wechat/`、`micloud/` | 五个插件模块：Kotlin 源码、`src/main/assets/plugin.json` 清单、图标与页面 |
 | `gradle/plugin-bundle.gradle.kts` | 共享打包脚本，提供 `assemblePlugin`、`signPlugin`、`verifyPlugin` 三个任务 |
-| `settings.gradle.kts` | 模块列表与仓库配置；依赖来自 `https://sadami3066.github.io/deepdeep-maven` 的 `io.github.sadami3066.deepdeep:plugin-api:0.7.0`（通过 `api()` 传递 `design:0.6.0`）、Google 与 Maven Central |
+| `settings.gradle.kts` | 模块列表与仓库配置；依赖来自 `https://sadami3066.github.io/deepdeep-maven` 的 `io.github.sadami3066.deepdeep:plugin-api:0.8.0`（通过 `api()` 传递 `design:0.6.0`）、Google 与 Maven Central |
 | `gradle/wrapper/`、`gradlew` | Gradle 9.8.2 wrapper，无需本机预装 Gradle |
 | `scripts/gradlew-locked` | 串行 Gradle 包装：flock 构建锁、默认单 worker、限制 JVM 内存，避免小内存机器并发构建 OOM |
 | `scripts/check.sh` | 构建、签名并验签全部五个插件 |
@@ -98,7 +98,7 @@ chmod 600 keys/plugin-signing.pem
 
 ### 从插件市场安装
 
-在 DeepDeep 的「插件 → 市场」中搜索并安装。市场条目版本与本仓库一致，制品发布在 [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) 的 GitHub Releases 中（Release 名形如 `plugins-YYYYMMDD`，资产名形如 `feishu-1.0.1.ddp`），条目记录的 `publisherKeyId` 为官方 `keyId`。
+在 DeepDeep 的「插件 → 市场」中搜索并安装。市场条目版本与本仓库一致，制品发布在 [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) 的 GitHub Releases 中（Release 名形如 `plugins-YYYYMMDD`，资产名形如 `feishu-1.0.2.ddp`），条目记录的 `publisherKeyId` 为官方 `keyId`。
 
 ### 手动导入 .ddp
 

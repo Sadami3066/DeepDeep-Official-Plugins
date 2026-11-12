@@ -18,7 +18,7 @@ This repository contains five official plugins, published by `milous`:
 | `wechat` | WeChat Export | 0.2.1 | Sync and decrypt the local WeChat database, export complete chat records for a date range and let the agent summarize | Users who need a complete WeChat export |
 | `micloud` | Xiaomi Cloud | 1.0.3 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
 
-Versions follow `version` in each module's `src/main/assets/plugin.json`. All five manifests declare `apiLevel` 5 and `minHostVersion` 0.2.0, so DeepDeep 0.2.0 or newer is required. Runtime dependencies: Feishu uses `lark-cli` 1.0.98, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.4.2; WeChat Export bundles its own `wechat` CLI and needs Root plus local WeChat data; Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page.
+Versions follow `version` in each module's `src/main/assets/plugin.json`. All five manifests declare `apiLevel` 5 (they require a DeepDeep build that supports API level 5) and are built against `plugin-api` 0.8.0. Runtime dependencies: Feishu uses `lark-cli` 1.0.98, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.4.2; WeChat Export bundles its own `wechat` CLI and needs Root plus local WeChat data; Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page.
 
 ## What's in the repository
 
@@ -26,7 +26,7 @@ Versions follow `version` in each module's `src/main/assets/plugin.json`. All fi
 |---|---|
 | `feishu/`, `wecom/`, `sysu/`, `wechat/`, `micloud/` | The five plugin modules: Kotlin sources, `src/main/assets/plugin.json` manifests, icons and pages |
 | `gradle/plugin-bundle.gradle.kts` | Shared packaging script providing the `assemblePlugin`, `signPlugin` and `verifyPlugin` tasks |
-| `settings.gradle.kts` | Module list and repositories; dependencies come from `io.github.sadami3066.deepdeep:plugin-api:0.7.0` on `https://sadami3066.github.io/deepdeep-maven` (which brings in `design:0.6.0` via `api()`), Google and Maven Central |
+| `settings.gradle.kts` | Module list and repositories; dependencies come from `io.github.sadami3066.deepdeep:plugin-api:0.8.0` on `https://sadami3066.github.io/deepdeep-maven` (which brings in `design:0.6.0` via `api()`), Google and Maven Central |
 | `gradle/wrapper/`, `gradlew` | Gradle 9.8.2 wrapper; no local Gradle installation needed |
 | `scripts/gradlew-locked` | Serialized Gradle wrapper: flock build lock, single worker by default, capped JVM memory to avoid OOM on small machines |
 | `scripts/check.sh` | Builds, signs and verifies all five plugins |
@@ -98,7 +98,7 @@ The task chain is `assemblePlugin → signPlugin → verifyPlugin`:
 
 ### Install from the plugin market
 
-Search and install from DeepDeep's "Plugins → Market". Market entry versions match this repository, and artifacts are published in the GitHub Releases of [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) (releases are named `plugins-YYYYMMDD`, assets look like `feishu-1.0.1.ddp`). Each entry records the official `keyId` as `publisherKeyId`.
+Search and install from DeepDeep's "Plugins → Market". Market entry versions match this repository, and artifacts are published in the GitHub Releases of [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) (releases are named `plugins-YYYYMMDD`, assets look like `feishu-1.0.2.ddp`). Each entry records the official `keyId` as `publisherKeyId`.
 
 ### Import a .ddp manually
 
