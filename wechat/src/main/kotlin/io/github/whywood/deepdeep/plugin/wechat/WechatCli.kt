@@ -1,6 +1,7 @@
 package io.github.whywood.deepdeep.plugin.wechat
 
 import io.github.whywood.deepdeep.plugin.api.LocalizedText
+import io.github.whywood.deepdeep.plugin.api.localizedText
 
 internal object WechatCli {
     const val VERSION = "0.2.0"
@@ -113,4 +114,4 @@ internal data class WechatRawStatus(
 )
 
 internal fun literal(zh: String, en: String): LocalizedText =
-    LocalizedText.Literal(mapOf("default" to zh, "zh" to zh, "en" to en))
+    localizedText(mapOf("default" to zh, "zh" to zh, "en" to en))

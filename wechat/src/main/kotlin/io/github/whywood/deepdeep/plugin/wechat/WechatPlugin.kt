@@ -10,6 +10,11 @@ import io.github.whywood.deepdeep.plugin.api.PluginSkill
 import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
 import io.github.whywood.deepdeep.plugin.api.PromptSection
 import io.github.whywood.deepdeep.plugin.api.SlotBinding
+import io.github.whywood.deepdeep.plugin.api.available
+import io.github.whywood.deepdeep.plugin.api.pluginPage
+import io.github.whywood.deepdeep.plugin.api.pluginSkill
+import io.github.whywood.deepdeep.plugin.api.promptSection
+import io.github.whywood.deepdeep.plugin.api.unavailable
 import java.io.File
 
 class WechatPlugin : DeepDeepPlugin {
@@ -18,19 +23,19 @@ class WechatPlugin : DeepDeepPlugin {
 
     override suspend fun availability(host: PluginHost): PluginAvailability {
         if (SUPPORTED_ABI !in Build.SUPPORTED_ABIS) {
-            return PluginAvailability.Unavailable(host.text(TEXT_UNAVAILABLE_DEVICE))
+            return unavailable(host.text(TEXT_UNAVAILABLE_DEVICE))
         }
         val linux = linuxOrNull(host)
         if (linux == null || !linux.available) {
-            return PluginAvailability.Unavailable(host.text(TEXT_UNAVAILABLE_LINUX))
+            return unavailable(host.text(TEXT_UNAVAILABLE_LINUX))
         }
         val sourceReadable = runCatching {
             linux.exec(WechatCli.sourceReadableCommand(), timeoutMs = SOURCE_CHECK_TIMEOUT_MS).exitCode == 0
         }.getOrDefault(false)
         if (!sourceReadable) {
-            return PluginAvailability.Unavailable(host.text(TEXT_UNAVAILABLE_SOURCE))
+            return unavailable(host.text(TEXT_UNAVAILABLE_SOURCE))
         }
-        return PluginAvailability.Available
+        return available()
     }
 
     override suspend fun onEnable(host: PluginHost) {
@@ -44,18 +49,18 @@ class WechatPlugin : DeepDeepPlugin {
     }
 
     override fun skills(host: PluginHost): List<PluginSkill> =
-        listOf(PluginSkill(WechatCli.SKILL_ID, WechatContent.skillMarkdown()))
+        listOf(pluginSkill(WechatCli.SKILL_ID, WechatContent.skillMarkdown()))
 
     override fun promptSections(host: PluginHost): List<PromptSection> {
         val status = lastStatus
-        return listOf(PromptSection(SECTION_ID, WechatContent.promptBody(status), PROMPT_PRIORITY))
+        return listOf(promptSection(SECTION_ID, WechatContent.promptBody(status), PROMPT_PRIORITY))
     }
 
     override fun ui(host: PluginHost): PluginUiContributions = object : PluginUiContributions {
         override val bindings: List<SlotBinding> = emptyList()
 
         override val pages: List<PluginPage> = listOf(
-            PluginPage(
+            pluginPage(
                 id = PAGE_ID,
                 title = TEXT_PAGE_TITLE,
                 content = { WechatPage(this@WechatPlugin, host) },
