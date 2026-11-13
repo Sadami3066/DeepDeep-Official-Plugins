@@ -52,6 +52,37 @@ internal object WecomTexts {
     val errorLogout = literal("退出登录失败：%s", "Sign-out failed: %s")
     val statusError = literal("状态检测失败：%s", "Status check failed: %s")
 
+    val statusLoading = literal(
+        "企业微信插件状态尚未加载完成，请让用户打开插件页查看。",
+        "The WeCom plugin status is not loaded yet; ask the user to open the plugin page.",
+    )
+
+    val confirmLogoutTitle = literal("退出企业微信登录？", "Sign out of WeCom?")
+    val confirmLogoutBody = literal(
+        "退出后需要重新扫码授权才能继续使用企业微信能力。",
+        "You will need to scan and authorize again to use WeCom.",
+    )
+    val confirmLogoutOk = literal("退出登录", "Sign out")
+    val confirmReauthTitle = literal("重新授权企业微信？", "Reauthorize WeCom?")
+    val confirmReauthBody = literal(
+        "当前授权会切换到新的企业微信账号。",
+        "The current authorization will switch to a new WeCom account.",
+    )
+    val confirmReauthOk = literal("重新授权", "Reauthorize")
+    val confirmCancel = literal("取消", "Cancel")
+
+    val snackbarConnected = literal("企业微信已连接", "WeCom connected")
+    val snackbarLoggedOut = literal("已退出企业微信登录", "Signed out of WeCom")
+
+    const val NOTIFY_CLI_ID = "wecom-cli"
+    const val ACTION_OPEN_PAGE = "open-page"
+    val actionOpenPage = literal("打开插件页", "Open plugin page")
+    val notifyTitle = literal("企业微信 CLI 已就绪", "WeCom CLI is ready")
+    val notifyBody = literal(
+        "CLI 安装完成，打开插件页扫码连接企业微信。",
+        "The CLI is installed. Open the plugin page to scan and connect WeCom.",
+    )
+
     private fun literal(zh: String, en: String): LocalizedText =
         localizedText(mapOf("default" to zh, "zh" to zh, "en" to en))
 }

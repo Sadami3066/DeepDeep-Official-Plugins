@@ -3,8 +3,10 @@ package io.github.whywood.deepdeep.plugin.micloud
 import android.webkit.CookieManager
 import io.github.whywood.deepdeep.plugin.api.Contributions
 import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
+import io.github.whywood.deepdeep.plugin.api.NotificationActionEvent
 import io.github.whywood.deepdeep.plugin.api.PluginAvailability
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.PluginHooks
 import io.github.whywood.deepdeep.plugin.api.PluginPage
 import io.github.whywood.deepdeep.plugin.api.PluginSkill
 import io.github.whywood.deepdeep.plugin.api.PluginTool
@@ -14,6 +16,8 @@ import io.github.whywood.deepdeep.plugin.api.SlotBinding
 import io.github.whywood.deepdeep.plugin.api.assetIcon
 import io.github.whywood.deepdeep.plugin.api.available
 import io.github.whywood.deepdeep.plugin.api.contributions
+import io.github.whywood.deepdeep.plugin.api.notificationAction
+import io.github.whywood.deepdeep.plugin.api.pluginNotificationWithActions
 import io.github.whywood.deepdeep.plugin.api.pluginPage
 import io.github.whywood.deepdeep.plugin.api.pluginSkill
 import io.github.whywood.deepdeep.plugin.api.promptSection
@@ -27,7 +31,11 @@ import kotlinx.coroutines.launch
 internal class MiCloudContent(private val host: PluginHost) {
     private val dataDir: File = host.dataDir
 
-    val preferences = MiCloudPreferences(File(dataDir, "capabilities.json"))
+    val preferences = MiCloudPreferences(host)
+
+    suspend fun ensureLoaded() {
+        preferences.ensureLoaded()
+    }
 
     val cookieStore = MiCloudCookieStore(host.secrets())
 
@@ -105,7 +113,23 @@ internal class MiCloudContent(private val host: PluginHost) {
         status = session.cached()
         runCatching { CookieManager.getInstance().flush() }
         host.requestContributionsRefresh()
+        notifySignedIn()
         return profile
+    }
+
+    private fun notifySignedIn() {
+        runCatching {
+            host.notifications().notifyChecked(
+                pluginNotificationWithActions(
+                    id = MiCloudTexts.NOTIFY_SIGNED_IN_ID,
+                    title = host.text(MiCloudTexts.notifySignedInTitle),
+                    body = host.text(MiCloudTexts.notifySignedInBody),
+                    actions = listOf(
+                        notificationAction(MiCloudTexts.ACTION_OPEN_PAGE, host.text(MiCloudTexts.actionOpenPage)),
+                    ),
+                ),
+            )
+        }
     }
 
     suspend fun logout() {
@@ -159,16 +183,20 @@ class MiCloudPlugin : DeepDeepPlugin {
         }
 
     override suspend fun availability(host: PluginHost): PluginAvailability {
-        content(host)
+        val content = content(host)
+        content.ensureLoaded()
         return available()
     }
 
     override suspend fun uninstall(host: PluginHost) {
         content(host).clear()
+        runCatching { host.settings().clear() }
     }
 
     override suspend fun onEnable(host: PluginHost) {
-        content(host).refreshStatusIfStale(host.scope)
+        val content = content(host)
+        content.ensureLoaded()
+        content.refreshStatusIfStale(host.scope)
     }
 
     override suspend fun onDisable(host: PluginHost) {
@@ -194,8 +222,14 @@ class MiCloudPlugin : DeepDeepPlugin {
         )
     }
 
-    override fun contributions(host: PluginHost): Contributions =
-        contributions(tools = content(host).tools())
+    override fun contributions(host: PluginHost): Contributions = contributions(
+        tools = content(host).tools(),
+        hooks = object : PluginHooks {
+            override suspend fun notificationAction(event: NotificationActionEvent) {
+                if (event.actionId == MiCloudTexts.ACTION_OPEN_PAGE) host.ui().openPage(PAGE_ID)
+            }
+        },
+    )
 
     override fun ui(host: PluginHost): PluginUiContributions {
         val content = content(host)

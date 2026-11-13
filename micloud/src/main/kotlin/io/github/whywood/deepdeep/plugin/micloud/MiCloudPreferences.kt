@@ -1,18 +1,18 @@
 package io.github.whywood.deepdeep.plugin.micloud
 
+import io.github.whywood.deepdeep.plugin.api.PluginHost
 import java.io.File
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
 internal enum class MiCloudFeature {
@@ -108,21 +108,36 @@ internal interface MiCloudSettings {
     suspend fun clear()
 }
 
-internal class MiCloudPreferences(private val file: File) : MiCloudSettings {
+internal class MiCloudPreferences(private val host: PluginHost) : MiCloudSettings {
     private val mutex = Mutex()
-    private val mutable = MutableStateFlow(loadCapabilities(file))
+    private val mutable = MutableStateFlow(MiCloudCapabilities())
+
+    @Volatile
+    private var loaded = false
 
     override val capabilities: StateFlow<MiCloudCapabilities> = mutable.asStateFlow()
 
+    suspend fun ensureLoaded() {
+        if (loaded) return
+        mutex.withLock {
+            if (loaded) return
+            mutable.value = readStored()
+            loaded = true
+        }
+    }
+
     override suspend fun setRead(feature: MiCloudFeature, enabled: Boolean) {
+        ensureLoaded()
         update { current -> current.withRead(feature, enabled) }
     }
 
     override suspend fun setWrite(feature: MiCloudFeature, enabled: Boolean) {
+        ensureLoaded()
         update { current -> current.withWrite(feature, enabled) }
     }
 
     override suspend fun setFeature(feature: MiCloudFeature, enabled: Boolean) {
+        ensureLoaded()
         update { current ->
             if (feature.writable) {
                 if (enabled) {
@@ -137,9 +152,10 @@ internal class MiCloudPreferences(private val file: File) : MiCloudSettings {
     }
 
     override suspend fun clear() {
+        ensureLoaded()
         mutex.withLock {
             mutable.value = MiCloudCapabilities()
-            withContext(Dispatchers.IO) { runCatching { persist(MiCloudCapabilities()) } }
+            persist(MiCloudCapabilities())
         }
     }
 
@@ -149,51 +165,58 @@ internal class MiCloudPreferences(private val file: File) : MiCloudSettings {
             val next = transform(current)
             if (next == current) return
             mutable.value = next
-            withContext(Dispatchers.IO) { runCatching { persist(next) } }
+            persist(next)
         }
     }
 
-    private fun persist(capabilities: MiCloudCapabilities) {
-        file.parentFile?.mkdirs()
-        val payload = buildJsonObject {
-            put("notesRead", capabilities.notesRead)
-            put("notesWrite", capabilities.notesWrite)
-            put("todosRead", capabilities.todosRead)
-            put("todosWrite", capabilities.todosWrite)
-            put("smsRead", capabilities.smsRead)
-            put("contactsRead", capabilities.contactsRead)
-            put("galleryRead", capabilities.galleryRead)
-            put("recordingsRead", capabilities.recordingsRead)
-            put("accountRead", capabilities.accountRead)
-        }.toString()
-        val temp = File(file.parentFile, "${file.name}.tmp")
-        temp.writeText(payload)
-        if (!temp.renameTo(file)) {
-            temp.copyTo(file, overwrite = true)
-            temp.delete()
-        }
+    private suspend fun readStored(): MiCloudCapabilities {
+        val stored = runCatching { host.settings().getJson(KEY) }.getOrNull()
+        if (stored != null) return runCatching { decode(stored) }.getOrDefault(MiCloudCapabilities())
+        val legacy = File(host.dataDir, LEGACY_FILE)
+        if (!legacy.isFile) return MiCloudCapabilities()
+        val migrated = runCatching {
+            decode(Json.parseToJsonElement(legacy.readText()).jsonObject)
+        }.getOrDefault(MiCloudCapabilities())
+        persist(migrated)
+        runCatching { legacy.delete() }
+        return migrated
     }
-}
 
-private fun loadCapabilities(file: File): MiCloudCapabilities {
-    val raw = runCatching { file.takeIf { it.isFile }?.readText() }.getOrNull()
-        ?.takeIf { it.isNotBlank() }
-        ?: return MiCloudCapabilities()
-    val obj = runCatching { Json.parseToJsonElement(raw) as? JsonObject }.getOrNull() ?: return MiCloudCapabilities()
-    fun flag(key: String): Boolean =
-        (obj[key] as? JsonPrimitive)?.contentOrNull?.toBooleanStrictOrNull() ?: false
+    private suspend fun persist(capabilities: MiCloudCapabilities) {
+        runCatching { host.settings().putJson(KEY, encode(capabilities)) }
+    }
 
-    val notes = flag("notesRead") || flag("notesWrite")
-    val todos = flag("todosRead") || flag("todosWrite")
-    return MiCloudCapabilities(
-        notesRead = notes,
-        notesWrite = notes,
-        todosRead = todos,
-        todosWrite = todos,
-        smsRead = flag("smsRead"),
-        contactsRead = flag("contactsRead"),
-        galleryRead = flag("galleryRead"),
-        recordingsRead = flag("recordingsRead"),
-        accountRead = flag("accountRead"),
-    )
+    private fun encode(capabilities: MiCloudCapabilities): JsonObject = buildJsonObject {
+        put("notesRead", capabilities.notesRead)
+        put("notesWrite", capabilities.notesWrite)
+        put("todosRead", capabilities.todosRead)
+        put("todosWrite", capabilities.todosWrite)
+        put("smsRead", capabilities.smsRead)
+        put("contactsRead", capabilities.contactsRead)
+        put("galleryRead", capabilities.galleryRead)
+        put("recordingsRead", capabilities.recordingsRead)
+        put("accountRead", capabilities.accountRead)
+    }
+
+    private fun decode(obj: JsonObject): MiCloudCapabilities {
+        fun flag(key: String): Boolean = (obj[key] as? JsonPrimitive)?.booleanOrNull ?: false
+        val notes = flag("notesRead") || flag("notesWrite")
+        val todos = flag("todosRead") || flag("todosWrite")
+        return MiCloudCapabilities(
+            notesRead = notes,
+            notesWrite = notes,
+            todosRead = todos,
+            todosWrite = todos,
+            smsRead = flag("smsRead"),
+            contactsRead = flag("contactsRead"),
+            galleryRead = flag("galleryRead"),
+            recordingsRead = flag("recordingsRead"),
+            accountRead = flag("accountRead"),
+        )
+    }
+
+    private companion object {
+        const val KEY = "capabilities"
+        const val LEGACY_FILE = "capabilities.json"
+    }
 }

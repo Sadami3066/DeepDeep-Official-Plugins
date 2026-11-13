@@ -16,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -27,11 +28,13 @@ import io.github.whywood.deepdeep.design.DdTextAction
 import io.github.whywood.deepdeep.design.DdType
 import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.uiConfirmRequest
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun FeishuPage(host: PluginHost, runtime: FeishuRuntime) {
     val state by runtime.pageState.collectAsState()
-    val initial = remember { runtime.snapshot(host) }
+    val initial = remember { runtime.currentSnapshot() }
     val linuxAvailable = runCatching { host.linux().available }.getOrDefault(false)
     LaunchedEffect(Unit) {
         if (runtime.pageState.value.operation == FeishuOperation.NONE) {
@@ -236,6 +239,7 @@ private fun AuthActions(
     snapshot: FeishuSnapshot,
 ) {
     val colors = deepDeepColors()
+    val scope = rememberCoroutineScope()
     val busy = state.operation != FeishuOperation.NONE
     if (snapshot.connected) {
         Row(
@@ -253,13 +257,38 @@ private fun AuthActions(
             }
             DdTextAction(
                 text = host.text(literal("重新授权", "Reauthorize")),
-                onClick = { runtime.startConnect(host) },
+                onClick = {
+                    scope.launch {
+                        val confirmed = host.ui().confirm(
+                            uiConfirmRequest(
+                                title = host.text(CONFIRM_REAUTH_TITLE),
+                                message = host.text(CONFIRM_REAUTH_BODY),
+                                confirmLabel = host.text(CONFIRM_REAUTH_OK),
+                                cancelLabel = host.text(CONFIRM_CANCEL),
+                            ),
+                        )
+                        if (confirmed) runtime.startConnect(host)
+                    }
+                },
                 enabled = !busy,
             )
             Spacer(Modifier.width(24.dp))
             DdTextAction(
                 text = host.text(literal("退出登录", "Sign out")),
-                onClick = { runtime.startLogout(host) },
+                onClick = {
+                    scope.launch {
+                        val confirmed = host.ui().confirm(
+                            uiConfirmRequest(
+                                title = host.text(CONFIRM_LOGOUT_TITLE),
+                                message = host.text(CONFIRM_LOGOUT_BODY),
+                                confirmLabel = host.text(CONFIRM_LOGOUT_OK),
+                                cancelLabel = host.text(CONFIRM_CANCEL),
+                                destructive = true,
+                            ),
+                        )
+                        if (confirmed) runtime.startLogout(host)
+                    }
+                },
                 color = colors.danger,
                 enabled = !busy,
             )

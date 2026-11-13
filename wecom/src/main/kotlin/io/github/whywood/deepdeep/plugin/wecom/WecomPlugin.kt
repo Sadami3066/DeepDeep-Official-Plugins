@@ -1,8 +1,11 @@
 package io.github.whywood.deepdeep.plugin.wecom
 
+import io.github.whywood.deepdeep.plugin.api.Contributions
 import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
+import io.github.whywood.deepdeep.plugin.api.NotificationActionEvent
 import io.github.whywood.deepdeep.plugin.api.PluginAvailability
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.PluginHooks
 import io.github.whywood.deepdeep.plugin.api.PluginPage
 import io.github.whywood.deepdeep.plugin.api.PluginSkill
 import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
@@ -10,6 +13,7 @@ import io.github.whywood.deepdeep.plugin.api.PromptSection
 import io.github.whywood.deepdeep.plugin.api.SlotBinding
 import io.github.whywood.deepdeep.plugin.api.assetIcon
 import io.github.whywood.deepdeep.plugin.api.available
+import io.github.whywood.deepdeep.plugin.api.contributions
 import io.github.whywood.deepdeep.plugin.api.pluginPage
 import io.github.whywood.deepdeep.plugin.api.pluginSkill
 import io.github.whywood.deepdeep.plugin.api.promptSection
@@ -19,12 +23,23 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
 class WecomPlugin : DeepDeepPlugin {
+    @Volatile
+    private var lastStatus: WecomStatus? = null
+
+    internal fun updateStatus(status: WecomStatus) {
+        lastStatus = status
+    }
+
     override suspend fun availability(host: PluginHost): PluginAvailability =
         if (linuxAvailable(host)) {
             available()
         } else {
             unavailable(host.text(WecomTexts.unavailableLinux))
         }
+
+    override suspend fun onEnable(host: PluginHost) {
+        lastStatus = WecomStatusStore(host).read()
+    }
 
     override suspend fun uninstall(host: PluginHost) {
         if (linuxAvailable(host)) {
@@ -39,6 +54,14 @@ class WecomPlugin : DeepDeepPlugin {
         runCatching { host.files().delete(CLI_STAGING_DIR) }
     }
 
+    override fun contributions(host: PluginHost): Contributions = contributions(
+        hooks = object : PluginHooks {
+            override suspend fun notificationAction(event: NotificationActionEvent) {
+                if (event.actionId == WecomTexts.ACTION_OPEN_PAGE) host.ui().openPage(PAGE_ID)
+            }
+        },
+    )
+
     override fun skills(host: PluginHost): List<PluginSkill> {
         val workspace = runCatching { host.files().workspaceDir }.getOrNull() ?: host.dataDir.absolutePath
         val markdown = SKILL_MARKDOWN.replace(DOWNLOAD_DIRECTORY_PLACEHOLDER, File(workspace, "tmp").absolutePath)
@@ -46,7 +69,7 @@ class WecomPlugin : DeepDeepPlugin {
     }
 
     override fun promptSections(host: PluginHost): List<PromptSection> = listOf(
-        promptSection(SECTION_ID, promptBody(WecomStatusStore(host).read())),
+        promptSection(SECTION_ID, lastStatus?.let(::promptBody) ?: host.text(WecomTexts.statusLoading)),
     )
 
     override fun ui(host: PluginHost): PluginUiContributions = object : PluginUiContributions {
@@ -57,7 +80,7 @@ class WecomPlugin : DeepDeepPlugin {
                 id = PAGE_ID,
                 title = WecomTexts.pageTitle,
                 icon = assetIcon(ICON_ASSET),
-                content = { WecomPage(host) },
+                content = { WecomPage(this@WecomPlugin, host) },
             ),
         )
     }

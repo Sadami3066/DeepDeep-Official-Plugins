@@ -1,11 +1,13 @@
 package io.github.whywood.deepdeep.plugin.sysu
 
-import android.os.Build
+import io.github.whywood.deepdeep.plugin.api.Contributions
 import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
 import io.github.whywood.deepdeep.plugin.api.LinuxService
 import io.github.whywood.deepdeep.plugin.api.LocalizedText
+import io.github.whywood.deepdeep.plugin.api.NotificationActionEvent
 import io.github.whywood.deepdeep.plugin.api.PluginAvailability
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.PluginHooks
 import io.github.whywood.deepdeep.plugin.api.PluginPage
 import io.github.whywood.deepdeep.plugin.api.PluginSkill
 import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
@@ -13,7 +15,10 @@ import io.github.whywood.deepdeep.plugin.api.PromptSection
 import io.github.whywood.deepdeep.plugin.api.SlotBinding
 import io.github.whywood.deepdeep.plugin.api.assetIcon
 import io.github.whywood.deepdeep.plugin.api.available
+import io.github.whywood.deepdeep.plugin.api.contributions
 import io.github.whywood.deepdeep.plugin.api.localizedText
+import io.github.whywood.deepdeep.plugin.api.notificationAction
+import io.github.whywood.deepdeep.plugin.api.pluginNotificationWithActions
 import io.github.whywood.deepdeep.plugin.api.pluginPage
 import io.github.whywood.deepdeep.plugin.api.pluginSkill
 import io.github.whywood.deepdeep.plugin.api.promptSection
@@ -21,8 +26,12 @@ import io.github.whywood.deepdeep.plugin.api.unavailable
 import java.io.File
 
 class SysuPlugin : DeepDeepPlugin {
+    @Volatile
+    private var lastStored: SysuStoredStatus? = null
+
     override suspend fun availability(host: PluginHost): PluginAvailability {
-        if (SUPPORTED_ABI !in Build.SUPPORTED_ABIS) {
+        val abis = runCatching { host.device().info.abis }.getOrDefault(emptyList())
+        if (SUPPORTED_ABI !in abis) {
             return unavailable(host.text(TEXT_UNAVAILABLE_DEVICE))
         }
         if (!linuxAvailable(host)) {
@@ -47,13 +56,22 @@ class SysuPlugin : DeepDeepPlugin {
             }
         }
         SysuStatusStore.clear(host)
+        runCatching { host.settings().clear() }
     }
+
+    override fun contributions(host: PluginHost): Contributions = contributions(
+        hooks = object : PluginHooks {
+            override suspend fun notificationAction(event: NotificationActionEvent) {
+                if (event.actionId == ACTION_OPEN_PAGE) host.ui().openPage(PAGE_ID)
+            }
+        },
+    )
 
     override fun skills(host: PluginHost): List<PluginSkill> =
         listOf(pluginSkill(SysuCli.SKILL_ID, SysuContent.skillMarkdown()))
 
     override fun promptSections(host: PluginHost): List<PromptSection> {
-        val stored = SysuStatusStore.read(host)
+        val stored = lastStored
         val status = SysuStatus(
             linuxAvailable = linuxAvailable(host),
             nodeVersion = stored?.nodeVersion,
@@ -80,7 +98,7 @@ class SysuPlugin : DeepDeepPlugin {
     internal suspend fun loadStatus(host: PluginHost): SysuStatus {
         if (!linuxAvailable(host)) return SysuStatus(linuxAvailable = false)
         val linux = linuxOrNull(host) ?: return SysuStatus(linuxAvailable = false)
-        val recorded = SysuStatusStore.read(host)
+        val recorded = lastStored ?: SysuStatusStore.read(host).also { lastStored = it }
         val output = runCatching {
             linux.exec(SysuCli.statusCommand(), timeoutMs = STATUS_TIMEOUT_MS)
         }.getOrNull()?.stdout.orEmpty()
@@ -97,7 +115,7 @@ class SysuPlugin : DeepDeepPlugin {
             account = SysuCli.netId(raw.credentials) ?: savedNetId,
             loggedIn = SysuCli.isLoggedIn(raw.session),
         )
-        SysuStatusStore.write(
+        recordStored(
             host,
             SysuStoredStatus(
                 installedVersion = status.installedVersion,
@@ -129,8 +147,8 @@ class SysuPlugin : DeepDeepPlugin {
         if (changed) {
             runCatching { linux.exec(SysuCli.logoutCommand(), timeoutMs = WRITE_TIMEOUT_MS) }
         }
-        val stored = SysuStatusStore.read(host)
-        SysuStatusStore.write(
+        val stored = lastStored
+        recordStored(
             host,
             SysuStoredStatus(
                 installedVersion = stored?.installedVersion,
@@ -175,6 +193,7 @@ class SysuPlugin : DeepDeepPlugin {
                 )
             }
             recordInstall(host, version, nodeVersion)
+            notifyInstalled(host)
             return version
         } catch (error: Exception) {
             runCatching { linux.exec(SysuCli.cleanupCommand(), timeoutMs = WRITE_TIMEOUT_MS) }
@@ -192,6 +211,7 @@ class SysuPlugin : DeepDeepPlugin {
         if (result.exitCode != 0) throw loginError(host, output)
         if (SysuCli.needsCode(output)) return true
         if (!SysuCli.loginSucceeded(output)) throw loginError(host, output)
+        notifySignedIn(host)
         return false
     }
 
@@ -204,6 +224,7 @@ class SysuPlugin : DeepDeepPlugin {
         if (result.timedOut) throw SysuException(host.text(TEXT_ERROR_LOGIN_TIMEOUT))
         if (result.exitCode != 0) throw loginError(host, output)
         if (!loadStatus(host).loggedIn) throw loginError(host, output)
+        notifySignedIn(host)
     }
 
     internal suspend fun logout(host: PluginHost) {
@@ -214,15 +235,20 @@ class SysuPlugin : DeepDeepPlugin {
                 host.text(TEXT_ERROR_LOGOUT, SysuCli.cleanOutput(result.stdout).takeLast(ERROR_TAIL)),
             )
         }
-        val stored = SysuStatusStore.read(host)
+        val stored = lastStored
         if (stored != null) {
-            SysuStatusStore.write(host, stored.copy(loggedIn = false, checkedAt = System.currentTimeMillis()))
+            recordStored(host, stored.copy(loggedIn = false, checkedAt = System.currentTimeMillis()))
         }
     }
 
+    private suspend fun recordStored(host: PluginHost, stored: SysuStoredStatus) {
+        lastStored = stored
+        SysuStatusStore.write(host, stored)
+    }
+
     private suspend fun recordInstall(host: PluginHost, version: String, nodeVersion: String) {
-        val stored = SysuStatusStore.read(host)
-        SysuStatusStore.write(
+        val stored = lastStored
+        recordStored(
             host,
             SysuStoredStatus(
                 installedVersion = version,
@@ -232,6 +258,27 @@ class SysuPlugin : DeepDeepPlugin {
                 checkedAt = System.currentTimeMillis(),
             ),
         )
+    }
+
+    private fun notifyInstalled(host: PluginHost) {
+        notify(host, NOTIFY_CLI_ID, TEXT_NOTIFY_INSTALL_TITLE, TEXT_NOTIFY_INSTALL_BODY)
+    }
+
+    private fun notifySignedIn(host: PluginHost) {
+        notify(host, NOTIFY_SIGNED_IN_ID, TEXT_NOTIFY_SIGNED_IN_TITLE, TEXT_NOTIFY_SIGNED_IN_BODY)
+    }
+
+    private fun notify(host: PluginHost, id: String, title: LocalizedText, body: LocalizedText) {
+        runCatching {
+            host.notifications().notifyChecked(
+                pluginNotificationWithActions(
+                    id = id,
+                    title = host.text(title),
+                    body = host.text(body),
+                    actions = listOf(notificationAction(ACTION_OPEN_PAGE, host.text(TEXT_ACTION_OPEN_PAGE))),
+                ),
+            )
+        }
     }
 
     private fun linuxAvailable(host: PluginHost): Boolean =
@@ -304,6 +351,22 @@ class SysuPlugin : DeepDeepPlugin {
         val TEXT_ERROR_LOGOUT = literal("退出登录失败：%1\$s", "Sign-out failed: %1\$s")
         val TEXT_ERROR_CODE_FORMAT = literal("请输入 4 位数字验证码", "Enter the 4-digit verification code")
         val TEXT_PAGE_TITLE = literal("中山大学 CLI", "SYSU CLI")
+
+        const val ACTION_OPEN_PAGE = "open-page"
+        const val NOTIFY_CLI_ID = "sysu-cli"
+        const val NOTIFY_SIGNED_IN_ID = "sysu-signed-in"
+
+        val TEXT_ACTION_OPEN_PAGE = literal("打开插件页", "Open plugin page")
+        val TEXT_NOTIFY_INSTALL_TITLE = literal("校园 CLI 已安装", "Campus CLI installed")
+        val TEXT_NOTIFY_INSTALL_BODY = literal(
+            "中山大学 CLI 已就绪，打开插件页完成登录。",
+            "The SYSU CLI is ready. Open the plugin page to sign in.",
+        )
+        val TEXT_NOTIFY_SIGNED_IN_TITLE = literal("已登录中山大学", "Signed in to SYSU")
+        val TEXT_NOTIFY_SIGNED_IN_BODY = literal(
+            "课表、成绩、作业与场馆查询可以直接让 Agent 执行。",
+            "Timetable, grades, assignments and venue queries are ready for the agent.",
+        )
     }
 }
 

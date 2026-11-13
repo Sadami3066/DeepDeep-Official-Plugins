@@ -1,16 +1,22 @@
 package io.github.whywood.deepdeep.plugin.wechat
 
-import android.os.Build
+import io.github.whywood.deepdeep.plugin.api.Contributions
 import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
 import io.github.whywood.deepdeep.plugin.api.LinuxService
+import io.github.whywood.deepdeep.plugin.api.LocalizedText
+import io.github.whywood.deepdeep.plugin.api.NotificationActionEvent
 import io.github.whywood.deepdeep.plugin.api.PluginAvailability
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.PluginHooks
 import io.github.whywood.deepdeep.plugin.api.PluginPage
 import io.github.whywood.deepdeep.plugin.api.PluginSkill
 import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
 import io.github.whywood.deepdeep.plugin.api.PromptSection
 import io.github.whywood.deepdeep.plugin.api.SlotBinding
 import io.github.whywood.deepdeep.plugin.api.available
+import io.github.whywood.deepdeep.plugin.api.contributions
+import io.github.whywood.deepdeep.plugin.api.notificationAction
+import io.github.whywood.deepdeep.plugin.api.pluginNotificationWithActions
 import io.github.whywood.deepdeep.plugin.api.pluginPage
 import io.github.whywood.deepdeep.plugin.api.pluginSkill
 import io.github.whywood.deepdeep.plugin.api.promptSection
@@ -22,7 +28,8 @@ class WechatPlugin : DeepDeepPlugin {
     private var lastStatus: WechatStatus? = null
 
     override suspend fun availability(host: PluginHost): PluginAvailability {
-        if (SUPPORTED_ABI !in Build.SUPPORTED_ABIS) {
+        val abis = runCatching { host.device().info.abis }.getOrDefault(emptyList())
+        if (SUPPORTED_ABI !in abis) {
             return unavailable(host.text(TEXT_UNAVAILABLE_DEVICE))
         }
         val linux = linuxOrNull(host)
@@ -46,7 +53,16 @@ class WechatPlugin : DeepDeepPlugin {
         val linux = linuxOrNull(host) ?: return
         if (!linux.available) return
         runCatching { linux.exec(WechatCli.cleanupCommand(), timeoutMs = WRITE_TIMEOUT_MS) }
+        WechatSettingsStore(host).clear()
     }
+
+    override fun contributions(host: PluginHost): Contributions = contributions(
+        hooks = object : PluginHooks {
+            override suspend fun notificationAction(event: NotificationActionEvent) {
+                if (event.actionId == ACTION_OPEN_PAGE) host.ui().openPage(PAGE_ID)
+            }
+        },
+    )
 
     override fun skills(host: PluginHost): List<PluginSkill> =
         listOf(pluginSkill(WechatCli.SKILL_ID, WechatContent.skillMarkdown()))
@@ -114,6 +130,7 @@ class WechatPlugin : DeepDeepPlugin {
         if (result.exitCode != 0 || version != WechatCli.VERSION) {
             throw WechatException(host.text(TEXT_ERROR_INSTALL, WechatCli.cleanOutput(result.stdout).takeLast(ERROR_TAIL)))
         }
+        notifyInstalled(host)
     }
 
     internal suspend fun syncAndIngest(host: PluginHost, onProgress: (String) -> Unit) {
@@ -124,6 +141,7 @@ class WechatPlugin : DeepDeepPlugin {
         if (result.exitCode != 0) {
             throw WechatException(host.text(TEXT_ERROR_SYNC, WechatCli.cleanOutput(result.stdout).takeLast(ERROR_TAIL)))
         }
+        notifySynced(host)
     }
 
     internal suspend fun exportRange(host: PluginHost, from: String, to: String, onProgress: (String) -> Unit): String {
@@ -138,6 +156,7 @@ class WechatPlugin : DeepDeepPlugin {
             throw WechatException(host.text(TEXT_ERROR_EXPORT, WechatCli.cleanOutput(result.stdout).takeLast(ERROR_TAIL)))
         }
         val output = WechatCli.cleanOutput(result.stdout)
+        notifyExported(host)
         return output.lineSequence()
             .map { it.trim() }
             .firstOrNull { it.startsWith("文件：") }
@@ -148,6 +167,28 @@ class WechatPlugin : DeepDeepPlugin {
 
     private fun linuxAvailable(host: PluginHost): Boolean =
         runCatching { host.linux().available }.getOrDefault(false)
+
+    private fun notifyInstalled(host: PluginHost) =
+        notify(host, NOTIFY_CLI_ID, TEXT_NOTIFY_INSTALL_TITLE, TEXT_NOTIFY_INSTALL_BODY)
+
+    private fun notifySynced(host: PluginHost) =
+        notify(host, NOTIFY_SYNC_ID, TEXT_NOTIFY_SYNC_TITLE, TEXT_NOTIFY_SYNC_BODY)
+
+    private fun notifyExported(host: PluginHost) =
+        notify(host, NOTIFY_EXPORT_ID, TEXT_NOTIFY_EXPORT_TITLE, TEXT_NOTIFY_EXPORT_BODY)
+
+    private fun notify(host: PluginHost, id: String, title: LocalizedText, body: LocalizedText) {
+        runCatching {
+            host.notifications().notifyChecked(
+                pluginNotificationWithActions(
+                    id = id,
+                    title = host.text(title),
+                    body = host.text(body),
+                    actions = listOf(notificationAction(ACTION_OPEN_PAGE, host.text(TEXT_ACTION_OPEN_PAGE))),
+                ),
+            )
+        }
+    }
 
     private fun linuxOrNull(host: PluginHost): LinuxService? =
         runCatching { host.linux() }.getOrNull()
@@ -201,5 +242,26 @@ class WechatPlugin : DeepDeepPlugin {
         val TEXT_ERROR_EXPORT = literal("导出失败：%1\$s", "Export failed: %1\$s")
         val TEXT_ERROR_DATE = literal("日期格式必须是 YYYY-MM-DD", "Date must be YYYY-MM-DD")
         val TEXT_EXPORT_DONE = literal("导出完成", "Export complete")
+
+        const val ACTION_OPEN_PAGE = "open-page"
+        const val NOTIFY_CLI_ID = "wechat-cli"
+        const val NOTIFY_SYNC_ID = "wechat-sync"
+        const val NOTIFY_EXPORT_ID = "wechat-export"
+        val TEXT_ACTION_OPEN_PAGE = literal("打开插件页", "Open plugin page")
+        val TEXT_NOTIFY_INSTALL_TITLE = literal("微信导出 CLI 已安装", "WeChat export CLI installed")
+        val TEXT_NOTIFY_INSTALL_BODY = literal(
+            "打开插件页同步微信数据库并导出记录。",
+            "Open the plugin page to sync the WeChat database and export records.",
+        )
+        val TEXT_NOTIFY_SYNC_TITLE = literal("微信数据已同步", "WeChat data synced")
+        val TEXT_NOTIFY_SYNC_BODY = literal(
+            "可以在插件页选择日期范围导出完整记录。",
+            "Choose a date range on the plugin page to export complete records.",
+        )
+        val TEXT_NOTIFY_EXPORT_TITLE = literal("微信记录已导出", "WeChat records exported")
+        val TEXT_NOTIFY_EXPORT_BODY = literal(
+            "打开插件页查看导出结果。",
+            "Open the plugin page to view the export result.",
+        )
     }
 }

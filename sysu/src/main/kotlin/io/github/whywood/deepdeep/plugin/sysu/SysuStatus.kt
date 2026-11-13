@@ -3,11 +3,12 @@ package io.github.whywood.deepdeep.plugin.sysu
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import java.io.File
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
@@ -37,35 +38,45 @@ internal data class SysuStoredStatus(
 
 internal object SysuStatusStore {
     const val FILE_NAME = "status.json"
+    private const val KEY = "status"
 
-    fun read(host: PluginHost): SysuStoredStatus? = runCatching {
-        val file = File(host.dataDir, FILE_NAME)
-        if (!file.isFile) return null
-        val json = Json.parseToJsonElement(file.readText()).jsonObject
-        SysuStoredStatus(
-            installedVersion = json.string("installedVersion"),
-            nodeVersion = json.string("nodeVersion"),
-            account = json.string("account"),
-            loggedIn = json["loggedIn"]?.jsonPrimitive?.booleanOrNull ?: false,
-            checkedAt = json["checkedAt"]?.jsonPrimitive?.longOrNull ?: 0L,
-        )
-    }.getOrNull()
+    suspend fun read(host: PluginHost): SysuStoredStatus? {
+        val stored = runCatching { host.settings().getJson(KEY) }.getOrNull()
+        if (stored != null) return runCatching { decode(stored) }.getOrNull()
+        val legacy = File(host.dataDir, FILE_NAME)
+        if (!legacy.isFile) return null
+        val migrated = runCatching {
+            decode(Json.parseToJsonElement(legacy.readText()).jsonObject)
+        }.getOrNull()
+        if (migrated != null) {
+            write(host, migrated)
+            runCatching { legacy.delete() }
+        }
+        return migrated
+    }
 
     suspend fun write(host: PluginHost, stored: SysuStoredStatus) {
-        val json = buildJsonObject {
-            stored.installedVersion?.let { put("installedVersion", it) }
-            stored.nodeVersion?.let { put("nodeVersion", it) }
-            stored.account?.let { put("account", it) }
-            put("loggedIn", stored.loggedIn)
-            put("checkedAt", stored.checkedAt)
-        }
-        runCatching { host.files().writeText(FILE_NAME, json.toString()) }
+        runCatching { host.settings().putJson(KEY, encode(stored)) }
     }
 
     suspend fun clear(host: PluginHost) {
-        runCatching { host.files().delete(FILE_NAME) }
+        runCatching { host.settings().remove(KEY) }
+        runCatching { File(host.dataDir, FILE_NAME).delete() }
     }
 
-    private fun kotlinx.serialization.json.JsonObject.string(name: String): String? =
-        (this[name] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+    private fun encode(stored: SysuStoredStatus): JsonObject = buildJsonObject {
+        stored.installedVersion?.let { put("installedVersion", it) }
+        stored.nodeVersion?.let { put("nodeVersion", it) }
+        stored.account?.let { put("account", it) }
+        put("loggedIn", stored.loggedIn)
+        put("checkedAt", stored.checkedAt)
+    }
+
+    private fun decode(root: JsonObject): SysuStoredStatus = SysuStoredStatus(
+        installedVersion = (root["installedVersion"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
+        nodeVersion = (root["nodeVersion"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
+        account = (root["account"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
+        loggedIn = (root["loggedIn"] as? JsonPrimitive)?.booleanOrNull ?: false,
+        checkedAt = (root["checkedAt"] as? JsonPrimitive)?.longOrNull ?: 0L,
+    )
 }

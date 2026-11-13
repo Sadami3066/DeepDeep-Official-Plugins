@@ -73,6 +73,33 @@ internal val ERROR_LOGOUT = literal("退出登录失败：%s", "Sign-out failed:
 internal val ERROR_STATUS = literal("状态检测失败：%s", "Status check failed: %s")
 internal val ERROR_UNKNOWN = literal("操作失败，请重试。", "The operation failed; try again.")
 
+internal const val NOTIFY_CLI_ID = "feishu-cli"
+internal const val ACTION_OPEN_PAGE = "open-page"
+internal val ACTION_OPEN_PAGE_LABEL = literal("打开插件页", "Open plugin page")
+internal val NOTIFY_CLI_TITLE = literal("飞书 CLI 已就绪", "Feishu CLI is ready")
+internal val NOTIFY_CLI_BODY = literal(
+    "CLI 安装完成，打开插件页完成飞书应用创建与账号授权。",
+    "The CLI is installed. Open the plugin page to create the Feishu app and authorize your account.",
+)
+
+internal val SNACKBAR_INSTALL_DONE = literal("飞书 CLI 安装完成", "Feishu CLI installed")
+internal val SNACKBAR_CONNECTED = literal("飞书已连接", "Feishu connected")
+internal val SNACKBAR_LOGGED_OUT = literal("已退出飞书登录", "Signed out of Feishu")
+
+internal val CONFIRM_LOGOUT_TITLE = literal("退出飞书登录？", "Sign out of Feishu?")
+internal val CONFIRM_LOGOUT_BODY = literal(
+    "退出后需要重新授权才能继续使用飞书能力。",
+    "You will need to authorize again to use Feishu.",
+)
+internal val CONFIRM_LOGOUT_OK = literal("退出登录", "Sign out")
+internal val CONFIRM_REAUTH_TITLE = literal("重新授权飞书账号？", "Reauthorize the Feishu account?")
+internal val CONFIRM_REAUTH_BODY = literal(
+    "当前登录会切换到新的飞书账号。",
+    "The current sign-in will switch to a new Feishu account.",
+)
+internal val CONFIRM_REAUTH_OK = literal("重新授权", "Reauthorize")
+internal val CONFIRM_CANCEL = literal("取消", "Cancel")
+
 internal const val LARK_CLI_BACKUP_PATH = "/usr/local/bin/.lark-cli.old"
 internal const val LARK_CLI_TEMP_PATH = "/usr/local/bin/.lark-cli.new"
 

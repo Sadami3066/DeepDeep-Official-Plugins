@@ -40,7 +40,6 @@ private class WechatPageState {
     var busy by mutableStateOf(false)
     var progress by mutableStateOf<String?>(null)
     var error by mutableStateOf<String?>(null)
-    var message by mutableStateOf<String?>(null)
     var from by mutableStateOf(today())
     var to by mutableStateOf(today())
 }
@@ -54,6 +53,10 @@ internal fun WechatPage(plugin: WechatPlugin, host: PluginHost) {
     LaunchedEffect(host) {
         state.busy = true
         try {
+            WechatSettingsStore(host).readRange()?.let { (from, to) ->
+                state.from = from
+                state.to = to
+            }
             state.status = plugin.loadStatus(host)
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -70,7 +73,6 @@ internal fun WechatPage(plugin: WechatPlugin, host: PluginHost) {
             state.busy = true
             state.progress = null
             state.error = null
-            state.message = null
             try {
                 action()
                 host.requestContributionsRefresh()
@@ -89,21 +91,22 @@ internal fun WechatPage(plugin: WechatPlugin, host: PluginHost) {
         runAction {
             plugin.ensureInstalled(host) { state.progress = it }
             state.status = plugin.loadStatus(host)
-            state.message = host.text(TEXT_INSTALLED)
+            host.ui().snackbar(host.text(TEXT_INSTALLED))
         }
     }
     val sync = {
         runAction {
             plugin.syncAndIngest(host) { state.progress = it }
             state.status = plugin.loadStatus(host)
-            state.message = host.text(TEXT_SYNCED)
+            host.ui().snackbar(host.text(TEXT_SYNCED))
         }
     }
     val export = {
         runAction {
             val path = plugin.exportRange(host, state.from.trim(), state.to.trim()) { state.progress = it }
+            WechatSettingsStore(host).writeRange(state.from.trim(), state.to.trim())
             state.status = plugin.loadStatus(host)
-            state.message = host.text(TEXT_EXPORTED, path)
+            host.ui().snackbar(host.text(TEXT_EXPORTED, path))
         }
     }
 
@@ -121,7 +124,6 @@ internal fun WechatPage(plugin: WechatPlugin, host: PluginHost) {
         }
         if (state.busy) DdLoadingBlock(text = state.progress)
         state.error?.let { Text(it, style = DdType.bodySmall, color = colors.danger) }
-        state.message?.let { Text(it, style = DdType.bodySmall, color = colors.inkSecondary) }
 
         DdGroupCard {
             Column(

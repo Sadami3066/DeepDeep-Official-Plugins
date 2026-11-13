@@ -33,6 +33,7 @@ import io.github.whywood.deepdeep.design.DdTextField
 import io.github.whywood.deepdeep.design.DdType
 import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.uiConfirmRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -46,7 +47,6 @@ private class SysuPageState {
     var status by mutableStateOf<SysuStatus?>(null)
     var codeRequired by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
-    var message by mutableStateOf<String?>(null)
 }
 
 @Composable
@@ -75,7 +75,6 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
         host.scope.launch {
             state.busy = true
             state.error = null
-            state.message = null
             state.progress = null
             try {
                 action()
@@ -110,10 +109,10 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
             state.status = plugin.loadStatus(host)
             if (needsCode) {
                 state.codeRequired = true
-                state.message = host.text(TEXT_CODE_SENT)
+                host.ui().snackbar(host.text(TEXT_CODE_SENT))
             } else {
                 state.codeRequired = false
-                state.message = host.text(TEXT_SIGNED_IN)
+                host.ui().snackbar(host.text(TEXT_SIGNED_IN))
             }
         }
     }
@@ -132,20 +131,33 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
             state.status = plugin.loadStatus(host)
             if (needsCode) {
                 state.codeRequired = true
-                state.message = host.text(TEXT_CODE_SENT)
+                host.ui().snackbar(host.text(TEXT_CODE_SENT))
             } else {
                 state.codeRequired = false
-                state.message = host.text(TEXT_SIGNED_IN)
+                host.ui().snackbar(host.text(TEXT_SIGNED_IN))
             }
         }
     }
 
     val signOut: () -> Unit = {
-        runAction {
-            plugin.logout(host)
-            state.codeRequired = false
-            state.status = plugin.loadStatus(host)
-            state.message = host.text(TEXT_SIGNED_OUT)
+        host.scope.launch {
+            val confirmed = host.ui().confirm(
+                uiConfirmRequest(
+                    title = host.text(TEXT_CONFIRM_SIGN_OUT_TITLE),
+                    message = host.text(TEXT_CONFIRM_SIGN_OUT_BODY),
+                    confirmLabel = host.text(TEXT_SIGN_OUT),
+                    cancelLabel = host.text(TEXT_CANCEL),
+                    destructive = true,
+                ),
+            )
+            if (confirmed) {
+                runAction {
+                    plugin.logout(host)
+                    state.codeRequired = false
+                    state.status = plugin.loadStatus(host)
+                    host.ui().snackbar(host.text(TEXT_SIGNED_OUT))
+                }
+            }
         }
     }
 
@@ -157,7 +169,7 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
             state.code = ""
             state.codeRequired = false
             state.status = plugin.loadStatus(host)
-            state.message = host.text(TEXT_SIGNED_IN)
+            host.ui().snackbar(host.text(TEXT_SIGNED_IN))
         }
     }
 
@@ -185,14 +197,6 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
                 modifier = Modifier.padding(horizontal = 4.dp),
                 style = DdType.bodySmall,
                 color = colors.danger,
-            )
-        }
-        state.message?.let { message ->
-            Text(
-                text = message,
-                modifier = Modifier.padding(horizontal = 4.dp),
-                style = DdType.bodySmall,
-                color = colors.inkSecondary,
             )
         }
         if (state.codeRequired) {
@@ -428,4 +432,9 @@ private val TEXT_CODE_SENT = literal(
 )
 private val TEXT_SIGNED_IN = literal("登录成功", "Signed in successfully")
 private val TEXT_SIGNED_OUT = literal("已退出登录", "Signed out")
+private val TEXT_CONFIRM_SIGN_OUT_TITLE = literal("退出中山大学登录？", "Sign out of SYSU?")
+private val TEXT_CONFIRM_SIGN_OUT_BODY = literal(
+    "退出后需要重新登录才能继续使用校园服务。",
+    "You will need to sign in again to use campus services.",
+)
 private val TEXT_ERROR_UNKNOWN = literal("操作失败，请重试", "Something went wrong. Try again.")

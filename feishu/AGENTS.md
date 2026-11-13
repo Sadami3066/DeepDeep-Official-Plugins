@@ -11,7 +11,7 @@ DeepDeep 官方飞书插件，打成外部 `.ddp`：无工具，靠技能与提�
 | `src/main/assets/icon.png` | 清单 `icon: asset:icon.png` 引用的飞书图标 |
 | `src/main/kotlin/.../FeishuPlugin.kt` | 入口：availability/onEnable/skills/promptSections/ui/uninstall 与提示词正文 |
 | `.../FeishuRuntime.kt` | 页面动作：状态刷新、CLI 安装/更新、device-code 登录/重新授权/退出；动作在 `host.scope` 后台执行并写回页面状态 |
-| `.../FeishuState.kt` | 运行状态快照与 `host.dataDir/state.json` 持久化（版本/应用/账号/权限） |
+| `.../FeishuState.kt` | 运行状态快照与 `host.settings()` 持久化（版本/应用/账号/权限；首次读旧 `state.json` 后迁移删除） |
 | `.../FeishuContent.kt` | 版本、下载地址、sha256、超时、本地化文案与技能 markdown |
 | `.../FeishuCli.kt` | `lark-cli` 命令构造与 JSON 输出解析（版本、状态、登录、配置链接） |
 | `.../FeishuPage.kt` | 插件页面 Compose：CLI 版本、连接状态、安装/连接/权限/退出按钮与授权链接 |
@@ -22,4 +22,5 @@ DeepDeep 官方飞书插件，打成外部 `.ddp`：无工具，靠技能与提�
 - `lark-cli` 来自 npm 镜像或 GitHub release（v1.0.98，sha256 固定），经 `host.network().download` 下载后由 `host.linux()` 在 proot 内解包、校验版本并安装到 `/usr/local/bin/lark-cli`；`/data` 已 bind 进 proot，`host.dataDir` 下的暂存目录与状态文件可直接被 Linux 访问。
 - 连接沿用旧 device-code 流程：`config init --new` 输出创建应用链接，`auth login --no-wait` 输出授权链接，`auth login --device-code` 轮询完成；页面展示链接与「打开浏览器」按钮。
 - 无宿主资源：页面文案全部 `localizedText(...)`（zh/en），图标走 `asset:`。
-- 卸载时删除 CLI 与 `~/.lark-cli`、`~/.local/share/lark-cli`，并清空 `state.json`。
+- 卸载时删除 CLI 与 `~/.lark-cli`、`~/.local/share/lark-cli`，并清空 `host.settings()`。
+- 安装完成通过 `host.notifications().notifyChecked` 发稳定 id 通知（带「打开插件页」动作，由 `notificationAction` hook 处理）；退出登录与重新授权前用 `host.ui().confirm` 确认。

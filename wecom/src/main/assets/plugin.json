@@ -1,16 +1,21 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.wecom",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "publisher": {
     "name": "milous"
   },
   "apiLevel": 6,
-  "minHostVersion": "1.0.4",
+  "minHostVersion": "1.0.6",
   "capabilities": [
     "files",
     "linux",
     "network",
+    "notifications",
+    "settings",
     "ui"
+  ],
+  "permissions": [
+    "notifications.post"
   ],
   "entryClass": "io.github.whywood.deepdeep.plugin.wecom.WecomPlugin",
   "name": {

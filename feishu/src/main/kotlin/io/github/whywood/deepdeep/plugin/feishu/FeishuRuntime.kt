@@ -5,6 +5,8 @@ import io.github.whywood.deepdeep.plugin.api.LinuxService
 import io.github.whywood.deepdeep.plugin.api.LocalizedText
 import io.github.whywood.deepdeep.plugin.api.NetworkService
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.notificationAction
+import io.github.whywood.deepdeep.plugin.api.pluginNotificationWithActions
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,12 +41,16 @@ internal class FeishuRuntime {
 
     private val refreshLock = Mutex()
 
-    fun snapshot(host: PluginHost): FeishuSnapshot? =
-        memory ?: FeishuStateStore.load(host)?.also { memory = it }
+    fun currentSnapshot(): FeishuSnapshot? = memory
+
+    suspend fun ensureLoaded(host: PluginHost) {
+        if (memory == null) memory = FeishuStateStore.load(host)
+    }
 
     suspend fun refresh(host: PluginHost) {
         refreshLock.withLock {
             try {
+                ensureLoaded(host)
                 val snapshot = readSnapshot(host)
                 memory = snapshot
                 FeishuStateStore.save(host, snapshot)
@@ -70,7 +76,7 @@ internal class FeishuRuntime {
     }
 
     fun openAppScopes(host: PluginHost) {
-        val appId = snapshot(host)?.appId?.takeIf { it.isNotBlank() } ?: return
+        val appId = currentSnapshot()?.appId?.takeIf { it.isNotBlank() } ?: return
         openUrl(host, "$APP_CONSOLE_URL/$appId/auth")
     }
 
@@ -79,7 +85,7 @@ internal class FeishuRuntime {
         openUrl(host, url)
     }
 
-    fun reset(host: PluginHost) {
+    suspend fun reset(host: PluginHost) {
         memory = null
         FeishuStateStore.delete(host)
         pageState.update { FeishuPageState() }
@@ -167,6 +173,8 @@ internal class FeishuRuntime {
             pageState.update { it.copy(stage = STAGE_FINISHING) }
             refresh(host)
             host.requestContributionsRefresh()
+            notifyInstalled(host)
+            host.ui().snackbar(host.text(SNACKBAR_INSTALL_DONE))
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
@@ -224,6 +232,7 @@ internal class FeishuRuntime {
         pageState.update { it.copy(stage = STAGE_FINISHING) }
         refresh(host)
         host.requestContributionsRefresh()
+        host.ui().snackbar(host.text(SNACKBAR_CONNECTED))
     }
 
     private suspend fun runConfigInit(host: PluginHost, linux: LinuxService) {
@@ -267,6 +276,20 @@ internal class FeishuRuntime {
         memory = memory?.copy(connected = false, account = null, scopeCount = 0, missingScopes = emptyList())
         refresh(host)
         host.requestContributionsRefresh()
+        host.ui().snackbar(host.text(SNACKBAR_LOGGED_OUT))
+    }
+
+    private fun notifyInstalled(host: PluginHost) {
+        runCatching {
+            host.notifications().notifyChecked(
+                pluginNotificationWithActions(
+                    id = NOTIFY_CLI_ID,
+                    title = host.text(NOTIFY_CLI_TITLE),
+                    body = host.text(NOTIFY_CLI_BODY),
+                    actions = listOf(notificationAction(ACTION_OPEN_PAGE, host.text(ACTION_OPEN_PAGE_LABEL))),
+                ),
+            )
+        }
     }
 
     private suspend fun readAuthStatus(linux: LinuxService): FeishuCli.AuthStatus? {

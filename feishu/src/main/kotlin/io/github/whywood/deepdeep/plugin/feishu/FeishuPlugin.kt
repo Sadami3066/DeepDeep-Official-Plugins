@@ -1,8 +1,11 @@
 package io.github.whywood.deepdeep.plugin.feishu
 
+import io.github.whywood.deepdeep.plugin.api.Contributions
 import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
+import io.github.whywood.deepdeep.plugin.api.NotificationActionEvent
 import io.github.whywood.deepdeep.plugin.api.PluginAvailability
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.PluginHooks
 import io.github.whywood.deepdeep.plugin.api.PluginPage
 import io.github.whywood.deepdeep.plugin.api.PluginSkill
 import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
@@ -10,6 +13,7 @@ import io.github.whywood.deepdeep.plugin.api.PromptSection
 import io.github.whywood.deepdeep.plugin.api.SlotBinding
 import io.github.whywood.deepdeep.plugin.api.assetIcon
 import io.github.whywood.deepdeep.plugin.api.available
+import io.github.whywood.deepdeep.plugin.api.contributions
 import io.github.whywood.deepdeep.plugin.api.pluginPage
 import io.github.whywood.deepdeep.plugin.api.pluginSkill
 import io.github.whywood.deepdeep.plugin.api.promptSection
@@ -43,7 +47,16 @@ class FeishuPlugin : DeepDeepPlugin {
             if (linux.available) linux.exec(FeishuCli.uninstallCommand(), timeoutMs = UNINSTALL_TIMEOUT_MS)
         }
         runtime.reset(host)
+        runCatching { host.settings().clear() }
     }
+
+    override fun contributions(host: PluginHost): Contributions = contributions(
+        hooks = object : PluginHooks {
+            override suspend fun notificationAction(event: NotificationActionEvent) {
+                if (event.actionId == ACTION_OPEN_PAGE) host.ui().openPage(FEISHU_PAGE_ID)
+            }
+        },
+    )
 
     override fun skills(host: PluginHost): List<PluginSkill> = listOf(
         pluginSkill(
@@ -77,8 +90,11 @@ class FeishuPlugin : DeepDeepPlugin {
                 append("如需使用飞书能力，请先让用户在 设置 → 运行环境 安装并启用 Linux 环境，之后在插件页的飞书页面完成 CLI 安装与账号连接。")
             }
         }
-        val snapshot = runtime.snapshot(host)
-        val version = snapshot?.installedVersion
+        val snapshot = runtime.currentSnapshot()
+        if (snapshot == null) {
+            return "飞书插件状态尚未加载完成。请让用户打开插件页查看安装与连接状态。"
+        }
+        val version = snapshot.installedVersion
         if (version == null) {
             return buildString {
                 appendLine("飞书 CLI 尚未安装。")

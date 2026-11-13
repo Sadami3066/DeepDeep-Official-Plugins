@@ -1,16 +1,6 @@
 package io.github.whywood.deepdeep.plugin.micloud
 
-import android.annotation.SuppressLint
-import android.content.Context
-import android.graphics.Color as AndroidColor
-import android.net.Uri
 import android.webkit.CookieManager
-import android.webkit.RenderProcessGoneDetail
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,7 +30,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import io.github.whywood.deepdeep.design.DdGroupCard
 import io.github.whywood.deepdeep.design.DdListRow
 import io.github.whywood.deepdeep.design.DdLoadingBlock
@@ -49,10 +38,14 @@ import io.github.whywood.deepdeep.design.DdSectionLabel
 import io.github.whywood.deepdeep.design.DdSwitch
 import io.github.whywood.deepdeep.design.DdTextAction
 import io.github.whywood.deepdeep.design.DdType
+import io.github.whywood.deepdeep.design.DdWebView
+import io.github.whywood.deepdeep.design.DdWebViewErrorKind
+import io.github.whywood.deepdeep.design.DdWebViewState
 import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.LocalizedText
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.localizedText
+import io.github.whywood.deepdeep.plugin.api.uiConfirmRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -68,7 +61,6 @@ internal fun MiCloudPage(host: PluginHost, content: MiCloudContent) {
     val capabilities by content.preferences.capabilities.collectAsState()
     var status by remember { mutableStateOf(content.lastStatus) }
     var busy by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf<String?>(null) }
     var loginMode by remember { mutableStateOf(false) }
     var webViewError by remember { mutableStateOf<String?>(null) }
     var webViewGeneration by remember { mutableIntStateOf(0) }
@@ -76,14 +68,13 @@ internal fun MiCloudPage(host: PluginHost, content: MiCloudContent) {
     fun refreshStatus(force: Boolean) {
         if (busy) return
         busy = true
-        message = null
         scope.launch {
             try {
                 status = content.resolveStatus(force)
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                message = host.text(MiCloudTexts.statusRefreshFailed)
+                host.ui().snackbar(host.text(MiCloudTexts.statusRefreshFailed))
             } finally {
                 busy = false
             }
@@ -92,7 +83,6 @@ internal fun MiCloudPage(host: PluginHost, content: MiCloudContent) {
 
     fun startLogin(clearExisting: Boolean) {
         if (busy) return
-        message = null
         webViewError = null
         webViewGeneration++
         if (!clearExisting) {
@@ -108,7 +98,7 @@ internal fun MiCloudPage(host: PluginHost, content: MiCloudContent) {
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                message = host.text(MiCloudTexts.logoutFailed)
+                host.ui().snackbar(host.text(MiCloudTexts.logoutFailed))
             } finally {
                 busy = false
             }
@@ -119,24 +109,23 @@ internal fun MiCloudPage(host: PluginHost, content: MiCloudContent) {
         if (busy) return
         val cookie = currentWebCookie()
         if (cookie == null || cookieValue(cookie, SERVICE_TOKEN) == null) {
-            message = host.text(MiCloudTexts.loginNotCompleted)
+            host.ui().snackbar(host.text(MiCloudTexts.loginNotCompleted))
             return
         }
         busy = true
-        message = null
         scope.launch {
             try {
                 content.verifyCookie(cookie)
                 status = content.lastStatus
                 loginMode = false
                 host.requestContributionsRefresh()
-                message = host.text(MiCloudTexts.loginSucceeded)
+                host.ui().snackbar(host.text(MiCloudTexts.loginSucceeded))
             } catch (error: CancellationException) {
                 throw error
             } catch (_: MiCloudAuthException) {
-                message = host.text(MiCloudTexts.loginVerifyFailed)
+                host.ui().snackbar(host.text(MiCloudTexts.loginVerifyFailed))
             } catch (_: Exception) {
-                message = host.text(MiCloudTexts.loginVerifyError)
+                host.ui().snackbar(host.text(MiCloudTexts.loginVerifyError))
             } finally {
                 busy = false
             }
@@ -146,20 +135,34 @@ internal fun MiCloudPage(host: PluginHost, content: MiCloudContent) {
     fun logout() {
         if (busy) return
         busy = true
-        message = null
         scope.launch {
             try {
                 content.logout()
                 status = content.lastStatus
                 host.requestContributionsRefresh()
-                message = host.text(MiCloudTexts.loggedOut)
+                host.ui().snackbar(host.text(MiCloudTexts.loggedOut))
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                message = host.text(MiCloudTexts.logoutFailed)
+                host.ui().snackbar(host.text(MiCloudTexts.logoutFailed))
             } finally {
                 busy = false
             }
+        }
+    }
+
+    fun confirmLogout() {
+        scope.launch {
+            val confirmed = host.ui().confirm(
+                uiConfirmRequest(
+                    title = host.text(MiCloudTexts.confirmLogoutTitle),
+                    message = host.text(MiCloudTexts.confirmLogoutBody),
+                    confirmLabel = host.text(MiCloudTexts.confirmLogoutOk),
+                    cancelLabel = host.text(MiCloudTexts.cancel),
+                    destructive = true,
+                ),
+            )
+            if (confirmed) logout()
         }
     }
 
@@ -174,6 +177,7 @@ internal fun MiCloudPage(host: PluginHost, content: MiCloudContent) {
         status = content.lastStatus
         busy = true
         try {
+            content.ensureLoaded()
             status = content.resolveStatus()
         } catch (error: CancellationException) {
             throw error
@@ -197,14 +201,14 @@ internal fun MiCloudPage(host: PluginHost, content: MiCloudContent) {
                 content.verifyCookie(cookie)
                 status = content.lastStatus
                 loginMode = false
-                message = host.text(MiCloudTexts.loginSucceeded)
+                host.ui().snackbar(host.text(MiCloudTexts.loginSucceeded))
                 break
             } catch (error: CancellationException) {
                 throw error
             } catch (_: MiCloudAuthException) {
-                message = host.text(MiCloudTexts.loginVerifyFailed)
+                host.ui().snackbar(host.text(MiCloudTexts.loginVerifyFailed))
             } catch (_: Exception) {
-                message = host.text(MiCloudTexts.loginVerifyError)
+                host.ui().snackbar(host.text(MiCloudTexts.loginVerifyError))
             } finally {
                 busy = false
             }
@@ -229,16 +233,22 @@ internal fun MiCloudPage(host: PluginHost, content: MiCloudContent) {
             ) {
                 if (webViewError == null) {
                     key(webViewGeneration) {
-                        AndroidView(
-                            factory = { context ->
-                                createLoginWebView(
-                                    context = context,
-                                    onPageError = { webViewError = host.text(MiCloudTexts.pageError) },
-                                    onRendererGone = { webViewError = host.text(MiCloudTexts.rendererError) },
-                                )
-                            },
+                        val webState = remember { DdWebViewState() }
+                        DdWebView(
+                            url = MICLOUD_ORIGIN,
                             modifier = Modifier.fillMaxSize(),
-                            onRelease = { view -> destroyWebView(view) },
+                            state = webState,
+                            onPageFinished = { url ->
+                                if (url != null && isMiCloudHost(url)) {
+                                    webState.evaluateJavascript(VIEWPORT_FIX_SCRIPT, null)
+                                }
+                            },
+                            onError = { error ->
+                                webViewError = when (error.kind) {
+                                    DdWebViewErrorKind.RENDERER -> host.text(MiCloudTexts.rendererError)
+                                    else -> host.text(MiCloudTexts.pageError)
+                                }
+                            },
                         )
                     }
                     if (busy) {
@@ -271,14 +281,6 @@ internal fun MiCloudPage(host: PluginHost, content: MiCloudContent) {
                     }
                 }
             }
-            message?.let { text ->
-                Text(
-                    text = text,
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                    style = DdType.bodySmall,
-                    color = colors.inkSecondary,
-                )
-            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -296,7 +298,6 @@ internal fun MiCloudPage(host: PluginHost, content: MiCloudContent) {
                     text = host.text(MiCloudTexts.cancel),
                     onClick = {
                         loginMode = false
-                        message = null
                     },
                 )
             }
@@ -322,7 +323,7 @@ internal fun MiCloudPage(host: PluginHost, content: MiCloudContent) {
                 if (signedIn) {
                     DdListRow(
                         title = host.text(MiCloudTexts.logout),
-                        onClick = ::logout,
+                        onClick = ::confirmLogout,
                         enabled = !busy,
                     )
                     DdListRow(
@@ -378,14 +379,6 @@ internal fun MiCloudPage(host: PluginHost, content: MiCloudContent) {
                 style = DdType.bodySmall,
                 color = colors.inkTertiary,
             )
-            message?.let { text ->
-                Text(
-                    text = text,
-                    modifier = Modifier.padding(horizontal = 4.dp),
-                    style = DdType.bodySmall,
-                    color = colors.inkSecondary,
-                )
-            }
         }
     }
 }
@@ -415,54 +408,9 @@ private fun currentWebCookie(): String? = runCatching {
     CookieManager.getInstance().getCookie(MICLOUD_ORIGIN)
 }.getOrNull()?.takeIf { it.isNotBlank() }
 
-@SuppressLint("SetJavaScriptEnabled")
-private fun createLoginWebView(
-    context: Context,
-    onPageError: () -> Unit,
-    onRendererGone: () -> Unit,
-): WebView {
-    val view = WebView(context)
-    view.setBackgroundColor(AndroidColor.WHITE)
-    view.settings.apply {
-        javaScriptEnabled = true
-        domStorageEnabled = true
-        allowFileAccess = false
-        allowContentAccess = false
-        mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-        userAgentString = WebSettings.getDefaultUserAgent(context).replace("; wv", "")
-        setSupportZoom(false)
-        builtInZoomControls = false
-        displayZoomControls = false
-    }
-    CookieManager.getInstance().apply {
-        setAcceptCookie(true)
-        setAcceptThirdPartyCookies(view, true)
-    }
-    view.webViewClient = object : WebViewClient() {
-        override fun onPageFinished(view: WebView, url: String) {
-            val host = runCatching { Uri.parse(url).host }.getOrNull().orEmpty()
-            if (!host.endsWith("mi.com") && !host.endsWith("xiaomi.com")) return
-            view.evaluateJavascript(VIEWPORT_FIX_SCRIPT, null)
-        }
-
-        override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-            if (!request.isForMainFrame) return
-            onPageError()
-        }
-
-        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail?): Boolean {
-            onRendererGone()
-            return true
-        }
-    }
-    view.loadUrl(MICLOUD_ORIGIN)
-    return view
-}
-
-private fun destroyWebView(view: WebView) {
-    runCatching { view.stopLoading() }
-    runCatching { view.removeAllViews() }
-    runCatching { view.destroy() }
+private fun isMiCloudHost(url: String): Boolean {
+    val host = runCatching { java.net.URI(url).host }.getOrNull().orEmpty()
+    return host.endsWith("mi.com") || host.endsWith("xiaomi.com")
 }
 
 private val VIEWPORT_FIX_SCRIPT = """
@@ -532,6 +480,21 @@ internal object MiCloudTexts {
     val featureGallery = literal("相册", "Gallery")
     val featureRecordings = literal("录音", "Recordings")
     val featureAccount = literal("账号信息", "Account info")
+
+    const val ACTION_OPEN_PAGE = "open-page"
+    const val NOTIFY_SIGNED_IN_ID = "micloud-signed-in"
+    val actionOpenPage = literal("打开插件页", "Open plugin page")
+    val notifySignedInTitle = literal("小米云已登录", "Signed in to Xiaomi Cloud")
+    val notifySignedInBody = literal(
+        "打开插件页开启需要的云数据开关。",
+        "Open the plugin page to enable the cloud data switches you need.",
+    )
+    val confirmLogoutTitle = literal("退出小米云登录？", "Sign out of Xiaomi Cloud?")
+    val confirmLogoutBody = literal(
+        "退出后需要重新登录才能读取小米云数据。",
+        "You will need to sign in again to read Xiaomi Cloud data.",
+    )
+    val confirmLogoutOk = literal("退出登录", "Sign out")
 }
 
 private fun literal(zh: String, en: String): LocalizedText =

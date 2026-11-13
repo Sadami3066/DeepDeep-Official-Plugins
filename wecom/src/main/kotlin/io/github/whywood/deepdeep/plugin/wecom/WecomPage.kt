@@ -1,7 +1,5 @@
 package io.github.whywood.deepdeep.plugin.wecom
 
-import android.graphics.BitmapFactory
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,10 +22,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import io.github.whywood.deepdeep.design.DdGroupCard
+import io.github.whywood.deepdeep.design.DdImage
 import io.github.whywood.deepdeep.design.DdListRow
 import io.github.whywood.deepdeep.design.DdLoadingBlock
 import io.github.whywood.deepdeep.design.DdPrimaryButton
@@ -37,10 +34,12 @@ import io.github.whywood.deepdeep.design.DdType
 import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.LinuxChunkKind
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.notificationAction
+import io.github.whywood.deepdeep.plugin.api.pluginNotificationWithActions
+import io.github.whywood.deepdeep.plugin.api.uiConfirmRequest
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -63,7 +62,6 @@ internal data class WecomPageState(
     val progress: Float? = null,
     val qrPath: String? = null,
     val qrUrl: String? = null,
-    val notice: String? = null,
     val error: String? = null,
 ) {
     val installed: Boolean get() = cliVersion != null
@@ -71,7 +69,10 @@ internal data class WecomPageState(
     val busy: Boolean get() = checking || installing || connecting || loggingOut
 }
 
-internal class WecomPageController(private val host: PluginHost) {
+internal class WecomPageController(
+    private val host: PluginHost,
+    private val plugin: WecomPlugin,
+) {
     var state by mutableStateOf(WecomPageState())
         private set
 
@@ -111,7 +112,9 @@ internal class WecomPageController(private val host: PluginHost) {
                 val showResult = host.linux().exec(WecomCli.authShowCommand(), timeoutMs = STATUS_TIMEOUT_MS)
                 botId = WecomCli.parseBotId(showResult.stdout)
             }
-            store.write(WecomStatus(version, authorized, botId, System.currentTimeMillis()))
+            val status = WecomStatus(version, authorized, botId, System.currentTimeMillis())
+            store.write(status)
+            plugin.updateStatus(status)
             state = state.copy(
                 checking = false,
                 loading = false,
@@ -137,7 +140,6 @@ internal class WecomPageController(private val host: PluginHost) {
         state = state.copy(
             installing = true,
             error = null,
-            notice = null,
             stage = host.text(WecomTexts.stageDownloading),
             progress = null,
             qrPath = null,
@@ -182,7 +184,8 @@ internal class WecomPageController(private val host: PluginHost) {
             refresh()
             host.requestContributionsRefresh()
             if (state.error == null) {
-                state = state.copy(notice = host.text(WecomTexts.installDone))
+                host.ui().snackbar(host.text(WecomTexts.installDone))
+                notifyInstalled()
             }
         } catch (error: CancellationException) {
             restore(hadBinary)
@@ -205,7 +208,6 @@ internal class WecomPageController(private val host: PluginHost) {
         state = state.copy(
             connecting = true,
             error = null,
-            notice = null,
             stage = host.text(WecomTexts.stageScan),
             progress = null,
             qrPath = null,
@@ -274,6 +276,7 @@ internal class WecomPageController(private val host: PluginHost) {
             }
             state = state.copy(stage = null)
             host.requestContributionsRefresh()
+            host.ui().snackbar(host.text(WecomTexts.snackbarConnected))
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
@@ -291,7 +294,7 @@ internal class WecomPageController(private val host: PluginHost) {
 
     suspend fun logout() {
         if (state.busy) return
-        state = state.copy(loggingOut = true, error = null, notice = null, stage = host.text(WecomTexts.stageSigningOut))
+        state = state.copy(loggingOut = true, error = null, stage = host.text(WecomTexts.stageSigningOut))
         try {
             val result = host.linux().exec(WecomCli.logoutCommand(), timeoutMs = LOGOUT_TIMEOUT_MS)
             if (result.exitCode != 0) {
@@ -302,6 +305,7 @@ internal class WecomPageController(private val host: PluginHost) {
             state = state.copy(loggingOut = false, stage = null, authorized = false, botId = null)
             refresh()
             host.requestContributionsRefresh()
+            host.ui().snackbar(host.text(WecomTexts.snackbarLoggedOut))
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
@@ -309,6 +313,21 @@ internal class WecomPageController(private val host: PluginHost) {
                 loggingOut = false,
                 stage = null,
                 error = error.message ?: error.javaClass.simpleName,
+            )
+        }
+    }
+
+    private fun notifyInstalled() {
+        runCatching {
+            host.notifications().notifyChecked(
+                pluginNotificationWithActions(
+                    id = WecomTexts.NOTIFY_CLI_ID,
+                    title = host.text(WecomTexts.notifyTitle),
+                    body = host.text(WecomTexts.notifyBody),
+                    actions = listOf(
+                        notificationAction(WecomTexts.ACTION_OPEN_PAGE, host.text(WecomTexts.actionOpenPage)),
+                    ),
+                ),
             )
         }
     }
@@ -382,12 +401,11 @@ internal class WecomPageController(private val host: PluginHost) {
 }
 
 @Composable
-internal fun WecomPage(host: PluginHost) {
-    val controller = remember(host) { WecomPageController(host) }
+internal fun WecomPage(plugin: WecomPlugin, host: PluginHost) {
+    val controller = remember(host, plugin) { WecomPageController(host, plugin) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(controller) { controller.refresh() }
     val page = controller.state
-    val qrBitmap = rememberQrBitmap(page.qrPath)
     val colors = deepDeepColors()
     Column(
         modifier = Modifier
@@ -411,14 +429,6 @@ internal fun WecomPage(host: PluginHost) {
             ActionsCard(host, page, controller, scope)
         }
         if (page.busy && page.qrPath == null && page.qrUrl == null) DdLoadingBlock(text = page.stage)
-        page.notice?.let { notice ->
-            Text(
-                text = notice,
-                modifier = Modifier.padding(horizontal = 4.dp),
-                style = DdType.bodySmall,
-                color = colors.inkSecondary,
-            )
-        }
         page.error?.let { error ->
             Text(
                 text = error,
@@ -437,9 +447,9 @@ internal fun WecomPage(host: PluginHost) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    qrBitmap?.let { bitmap ->
-                        Image(
-                            bitmap = bitmap,
+                    page.qrPath?.let { path ->
+                        DdImage(
+                            path = path,
                             contentDescription = host.text(WecomTexts.stageScan),
                             modifier = Modifier.size(220.dp),
                         )
@@ -512,13 +522,38 @@ private fun ActionsCard(
                     ) {
                         DdTextAction(
                             text = host.text(WecomTexts.reauthorize),
-                            onClick = { scope.launch { controller.connect() } },
+                            onClick = {
+                                scope.launch {
+                                    val confirmed = host.ui().confirm(
+                                        uiConfirmRequest(
+                                            title = host.text(WecomTexts.confirmReauthTitle),
+                                            message = host.text(WecomTexts.confirmReauthBody),
+                                            confirmLabel = host.text(WecomTexts.confirmReauthOk),
+                                            cancelLabel = host.text(WecomTexts.confirmCancel),
+                                        ),
+                                    )
+                                    if (confirmed) controller.connect()
+                                }
+                            },
                             enabled = !page.busy,
                         )
                         Spacer(Modifier.width(24.dp))
                         DdTextAction(
                             text = host.text(WecomTexts.logout),
-                            onClick = { scope.launch { controller.logout() } },
+                            onClick = {
+                                scope.launch {
+                                    val confirmed = host.ui().confirm(
+                                        uiConfirmRequest(
+                                            title = host.text(WecomTexts.confirmLogoutTitle),
+                                            message = host.text(WecomTexts.confirmLogoutBody),
+                                            confirmLabel = host.text(WecomTexts.confirmLogoutOk),
+                                            cancelLabel = host.text(WecomTexts.confirmCancel),
+                                            destructive = true,
+                                        ),
+                                    )
+                                    if (confirmed) controller.logout()
+                                }
+                            },
                             color = colors.danger,
                             enabled = !page.busy,
                         )
@@ -527,21 +562,6 @@ private fun ActionsCard(
             }
         }
     }
-}
-
-@Composable
-private fun rememberQrBitmap(path: String?): ImageBitmap? {
-    var bitmap by remember(path) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(path) {
-        bitmap = if (path == null) {
-            null
-        } else {
-            withContext(Dispatchers.IO) {
-                BitmapFactory.decodeFile(path)?.asImageBitmap()
-            }
-        }
-    }
-    return bitmap
 }
 
 private fun versionText(host: PluginHost, page: WecomPageState): String = when {
