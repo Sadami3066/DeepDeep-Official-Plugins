@@ -15,4 +15,5 @@ fi
   :wecom:verifyPlugin \
   :sysu:verifyPlugin \
   :wechat:verifyPlugin \
-  :micloud:verifyPlugin
+  :micloud:verifyPlugin \
+  :mail:verifyPlugin
