@@ -2,10 +2,12 @@ package io.github.whywood.deepdeep.plugin.mail
 
 import io.github.whywood.deepdeep.plugin.mail.mime.HtmlText
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposer
+import io.github.whywood.deepdeep.plugin.mail.mime.MailLimits
 import io.github.whywood.deepdeep.plugin.mail.mime.MailMimeParser
 import io.github.whywood.deepdeep.plugin.mail.mime.OutgoingMail
 import io.github.whywood.deepdeep.plugin.mail.mime.Rfc2047
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.nio.charset.Charset
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -14,9 +16,14 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 class MimeTest {
+    @get:Rule
+    val temporaryFolder = TemporaryFolder()
+
     private val mixedMessage = """
         From: =?UTF-8?B?5byg5LiJ?= <zhangsan@example.com>
         To: "Li Si" <lisi@example.com>
@@ -129,6 +136,12 @@ class MimeTest {
     }
 
     @Test
+    fun stripsScriptAndStyleContent() {
+        assertEquals("Hello world", HtmlText.toPlainText("<style>p{color:red}</style><p>Hello <b>world</b></p>"))
+        assertEquals("before", HtmlText.toPlainText("before<script>var value = 1;"))
+    }
+
+    @Test
     fun previewFlattensWhitespaceAndTruncates() {
         assertEquals("a b c", HtmlText.preview("  a\n\nb   c  "))
         val long = "word ".repeat(100)
@@ -176,6 +189,82 @@ class MimeTest {
         )
         val text = message.toString(Charsets.UTF_8)
         assertFalse(text.contains("\r\nBcc: evil"))
+    }
+
+    @Test
+    fun parsesFromFileWithSameHeadersAndBody() {
+        val file = File(temporaryFolder.newFolder("mime"), "message.eml")
+        file.writeBytes(mixedMessage.toByteArray(Charsets.UTF_8))
+        val parsed = MailMimeParser.parse(file)
+        assertEquals("测试主题", parsed.headers.subject)
+        assertEquals("你好，世界", parsed.textBody)
+        assertEquals(1, parsed.attachments.size)
+        assertNull(parsed.attachments.single().data)
+    }
+
+    @Test
+    fun truncatesOversizedTextBodyWithinLimit() {
+        val body = ("a".repeat(1000) + "\n").repeat(MailLimits.MAX_TEXT_PART_BYTES / 500)
+        val raw = "Subject: huge\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n$body"
+        val parsed = MailMimeParser.parse(raw.toByteArray(Charsets.UTF_8))
+        assertTrue(parsed.textBody.length <= MailLimits.MAX_TEXT_PART_BYTES)
+        assertTrue(parsed.textBody.isNotBlank())
+    }
+
+    @Test
+    fun fallbackStaysBoundedForMalformedHugeMessage() {
+        val longHeader = "a".repeat(MailLimits.MAX_LINE_LENGTH + 1000)
+        val body = "b".repeat(MailLimits.MAX_TEXT_PART_BYTES * 2)
+        val raw = "Subject: fallback\r\nX-Long: $longHeader\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n$body"
+        val parsed = MailMimeParser.parse(raw.toByteArray(Charsets.UTF_8))
+        assertEquals("fallback", parsed.headers.subject)
+        assertTrue(parsed.textBody.length <= MailLimits.MAX_TEXT_PART_BYTES)
+    }
+
+    @Test
+    fun extractsOnlyRequestedAttachmentFromFile() {
+        val raw = """
+            Subject: two attachments
+            Content-Type: multipart/mixed; boundary="TWO"
+
+            --TWO
+            Content-Type: text/plain; charset=UTF-8
+
+            body
+            --TWO
+            Content-Type: application/pdf; name="first.pdf"
+            Content-Disposition: attachment; filename="first.pdf"
+            Content-Transfer-Encoding: base64
+
+            JVBERi0xLjQK
+            --TWO
+            Content-Type: application/octet-stream
+            Content-Disposition: attachment; filename="second.bin"
+            Content-Transfer-Encoding: base64
+
+            c2Vjb25k
+            --TWO--
+        """.trimIndent().replace("\n", "\r\n")
+        val file = File(temporaryFolder.newFolder("targeted"), "message.eml")
+        file.writeBytes(raw.toByteArray(Charsets.UTF_8))
+        val metadata = MailMimeParser.parse(file)
+        assertEquals(2, metadata.attachments.size)
+        assertEquals("first.pdf", metadata.attachments[0].name)
+        assertEquals(9L, metadata.attachments[0].sizeBytes)
+        assertEquals("second.bin", metadata.attachments[1].name)
+        assertNull(metadata.attachments[0].data)
+        val secondFile = File(temporaryFolder.newFolder("second"), "second.bin")
+        assertEquals(6L, MailMimeParser.extractAttachmentTo(file, "att-1", secondFile, 1024 * 1024))
+        assertEquals("second", secondFile.readText())
+        val firstFile = File(temporaryFolder.newFolder("first"), "first.pdf")
+        assertEquals(9L, MailMimeParser.extractAttachmentTo(file, "att-0", firstFile, 1024 * 1024))
+        assertEquals("%PDF-1.4\n", firstFile.readText())
+        val missingFile = File(temporaryFolder.newFolder("missing"), "none.bin")
+        assertNull(MailMimeParser.extractAttachmentTo(file, "att-9", missingFile, 1024 * 1024))
+        assertFalse(missingFile.exists())
+        val cappedFile = File(temporaryFolder.newFolder("capped"), "first.pdf")
+        assertNull(MailMimeParser.extractAttachmentTo(file, "att-0", cappedFile, 2))
+        assertFalse(cappedFile.exists())
     }
 
     @Test

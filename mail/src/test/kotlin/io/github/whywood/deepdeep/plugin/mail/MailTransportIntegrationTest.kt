@@ -3,6 +3,9 @@ package io.github.whywood.deepdeep.plugin.mail
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposer
 import io.github.whywood.deepdeep.plugin.mail.mime.OutgoingMail
 import io.github.whywood.deepdeep.plugin.mail.sync.FolderMapping
+import io.github.whywood.deepdeep.plugin.mail.transport.ImapBodyOutcome
+import io.github.whywood.deepdeep.plugin.mail.transport.ImapBodySkip
+import io.github.whywood.deepdeep.plugin.mail.transport.ImapBodyTarget
 import io.github.whywood.deepdeep.plugin.mail.transport.ImapClient
 import io.github.whywood.deepdeep.plugin.mail.transport.ImapCredentials
 import io.github.whywood.deepdeep.plugin.mail.transport.ImapEndpoint
@@ -13,13 +16,20 @@ import io.github.whywood.deepdeep.plugin.mail.transport.SmtpClient
 import io.github.whywood.deepdeep.plugin.mail.transport.SmtpCredentials
 import io.github.whywood.deepdeep.plugin.mail.transport.SmtpEndpoint
 import io.github.whywood.deepdeep.plugin.mail.transport.SmtpSecurity
+import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 class MailTransportIntegrationTest {
+    @get:Rule
+    val temporaryFolder = TemporaryFolder()
+
     @Test
     fun imapTimesOutWhenServerStopsResponding() {
         val server = FakeImapServer(mutableListOf(FakeFolder("INBOX")), stallAfterGreeting = true)
@@ -141,10 +151,14 @@ class MailTransportIntegrationTest {
                 assertNotNull(first.envelope?.subject)
                 assertNotNull(first.headerBlock)
 
-                val bodies = client.fetchBodies(listOf(1L))
+                val bodyFile = File(temporaryFolder.newFolder("bodies"), "inbox-1.eml")
+                val outcomes = client.fetchBodiesToFiles(listOf(ImapBodyTarget(1L, bodyFile)), 1024 * 1024)
+                val saved = outcomes.single()
+                assertTrue(saved is ImapBodyOutcome.Saved)
+                assertEquals(bodyFile.length(), (saved as ImapBodyOutcome.Saved).size)
                 assertEquals(
                     inbox.messages.first { it.uid == 1L }.raw.toString(Charsets.UTF_8),
-                    bodies[1L]?.toString(Charsets.UTF_8),
+                    bodyFile.readBytes().toString(Charsets.UTF_8),
                 )
 
                 val flags = client.fetchFlags(listOf(1L, 2L))
@@ -168,6 +182,78 @@ class MailTransportIntegrationTest {
             }
             assertTrue(server.commands.any { it.contains("UID FETCH") })
             assertTrue(server.commands.any { it.contains("UID MOVE") })
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun imapStreamsBodyToFileAndSkipsOversizedMessage() {
+        val inbox = FakeFolder(
+            "INBOX",
+            messages = mutableListOf(
+                message(1, "small", "small body"),
+                message(2, "large", "large body".repeat(200_000)),
+            ),
+        )
+        val server = FakeImapServer(mutableListOf(inbox))
+        try {
+            val client = ImapClient(
+                ImapEndpoint("127.0.0.1", server.port, tls = false),
+                ImapCredentials("user@example.com", "secret"),
+            )
+            try {
+                client.connect()
+                client.login()
+                client.select("INBOX", readOnly = true)
+                val directory = temporaryFolder.newFolder("streamed")
+                val small = File(directory, "one.eml")
+                val large = File(directory, "two.eml")
+                val outcomes = client.fetchBodiesToFiles(
+                    listOf(ImapBodyTarget(1L, small), ImapBodyTarget(2L, large)),
+                    1024 * 1024,
+                )
+                assertTrue(outcomes.first { it is ImapBodyOutcome.Saved } is ImapBodyOutcome.Saved)
+                val skipped = outcomes.first { it is ImapBodyOutcome.Skipped } as ImapBodyOutcome.Skipped
+                assertEquals(2L, skipped.uid)
+                assertEquals(ImapBodySkip.TOO_LARGE, skipped.reason)
+                assertFalse(large.exists())
+                assertFalse(File(directory, "two.eml.part").exists())
+                assertTrue(small.readBytes().toString(Charsets.UTF_8).contains("small body"))
+            } finally {
+                client.close()
+            }
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun imapSkipsBodyByDeclaredSizeWithoutNetworkRoundTrip() {
+        val inbox = FakeFolder("INBOX", messages = mutableListOf(message(1, "first", "body")))
+        val server = FakeImapServer(mutableListOf(inbox))
+        try {
+            val client = ImapClient(
+                ImapEndpoint("127.0.0.1", server.port, tls = false),
+                ImapCredentials("user@example.com", "secret"),
+            )
+            try {
+                client.connect()
+                client.login()
+                client.select("INBOX", readOnly = true)
+                val commandsBefore = server.commands.size
+                val file = File(temporaryFolder.newFolder("declared"), "one.eml")
+                val outcomes = client.fetchBodiesToFiles(
+                    listOf(ImapBodyTarget(1L, file, declaredSize = 200L * 1024 * 1024)),
+                    1024 * 1024,
+                )
+                val skipped = outcomes.single() as ImapBodyOutcome.Skipped
+                assertEquals(ImapBodySkip.TOO_LARGE, skipped.reason)
+                assertEquals(commandsBefore, server.commands.size)
+                assertFalse(file.exists())
+            } finally {
+                client.close()
+            }
         } finally {
             server.close()
         }

@@ -2,10 +2,12 @@ package io.github.whywood.deepdeep.plugin.mail
 
 import io.github.whywood.deepdeep.plugin.mail.sync.MailMessageMapper
 import io.github.whywood.deepdeep.plugin.mail.transport.ImapCodec
+import io.github.whywood.deepdeep.plugin.mail.transport.ImapLiteralHandler
 import io.github.whywood.deepdeep.plugin.mail.transport.ImapParse
 import io.github.whywood.deepdeep.plugin.mail.transport.ImapResponse
 import io.github.whywood.deepdeep.plugin.mail.transport.ImapResponseReader
 import io.github.whywood.deepdeep.plugin.mail.transport.ImapFolder
+import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 import org.junit.Assert.assertEquals
@@ -167,6 +169,36 @@ class ImapProtocolTest {
         assertEquals(7L, fetch?.uid)
         assertEquals(setOf("\\Flagged"), fetch?.flags)
         assertNull(fetch?.body)
+    }
+
+    @Test
+    fun streamsBodyLiteralIntoHandler() {
+        val raw = "Subject: hi\r\n\r\nbody bytes".toByteArray(Charsets.ISO_8859_1)
+        val script = "* 1 FETCH (UID 9 BODY[] {${raw.size}}\r\n".toByteArray() + raw + ")\r\n".toByteArray()
+        val output = ByteArrayOutputStream()
+        val reader = ImapResponseReader(script.inputStream()) {
+            ImapLiteralHandler { _, preceding ->
+                if (preceding.contains("BODY[]")) output else null
+            }
+        }
+        val response = reader.readResponse()
+        val fetch = ImapParse.fetch(response as ImapResponse.Untagged)
+        assertEquals(9L, fetch?.uid)
+        assertEquals(raw.size, fetch?.streamedBodySize)
+        assertNull(fetch?.body)
+        assertEquals("Subject: hi\r\n\r\nbody bytes", output.toString(Charsets.ISO_8859_1.name()))
+    }
+
+    @Test
+    fun rejectsBufferedLiteralAboveLimit() {
+        val size = 3 * 1024 * 1024
+        val script = "* 1 FETCH (UID 1 BODY[] {$size}\r\n".toByteArray() + ByteArray(size) + ")\r\n".toByteArray()
+        try {
+            ImapResponseReader(script.inputStream()).readResponse()
+            throw AssertionError("expected literal limit rejection")
+        } catch (error: io.github.whywood.deepdeep.plugin.mail.transport.MailProtocolException) {
+            assertNotNull(error.message)
+        }
     }
 
     @Test

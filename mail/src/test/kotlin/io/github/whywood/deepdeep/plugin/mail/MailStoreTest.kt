@@ -115,6 +115,21 @@ class MailStoreTest {
     }
 
     @Test
+    fun pruneRemovesStalePartFiles() {
+        val store = store()
+        store.writeBody("abc123", "inbox-7", "hello".toByteArray())
+        val directory = File(temporaryFolder.root, "mail/bodies/abc123")
+        val stale = File(directory, "inbox-8.eml.part").apply {
+            writeText("partial")
+            setLastModified(System.currentTimeMillis() - 2 * 60 * 60 * 1000)
+        }
+        val fresh = File(directory, "inbox-9.eml.part").apply { writeText("partial") }
+        store.retainBodies("abc123", setOf("inbox-7"))
+        assertFalse(stale.exists())
+        assertTrue(fresh.exists())
+    }
+
+    @Test
     fun attachmentPathIsSanitized() {
         val store = store()
         val file = store.attachmentFile("abc123", "inbox-7", "att-0", "../../evil name.txt")
@@ -130,7 +145,7 @@ class MailStoreTest {
         store.saveIndex(MailAccountIndex(accountId = "abc123", messages = listOf(summary)))
         store.writeBody("abc123", "inbox-7", "body".toByteArray())
         store.attachmentFile("abc123", "inbox-7", "att-0", "file.txt").apply {
-            parentFile.mkdirs()
+            parentFile?.mkdirs()
             writeText("x")
         }
         store.deleteAccount("abc123")

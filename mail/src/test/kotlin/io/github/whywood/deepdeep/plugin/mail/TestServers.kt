@@ -54,7 +54,6 @@ internal class FakeImapServer(
                 thread(isDaemon = true, name = "fake-imap-client") { handle(socket) }
             }
         } catch (error: Exception) {
-            Unit
         }
     }
 
@@ -419,7 +418,6 @@ internal class FakeSmtpServer(
                 thread(isDaemon = true, name = "fake-smtp-client") { handle(socket) }
             }
         } catch (error: Exception) {
-            Unit
         }
     }
 

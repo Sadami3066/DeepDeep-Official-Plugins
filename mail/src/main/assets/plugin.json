@@ -1,6 +1,6 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.mail",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "apiLevel": 6,
   "minHostVersion": "1.0.5",
   "ui": {
@@ -12,7 +12,8 @@
     "notifications",
     "logs",
     "app",
-    "ui"
+    "ui",
+    "chat"
   ],
   "entryClass": "io.github.whywood.deepdeep.plugin.mail.MailPlugin",
   "name": {
@@ -44,8 +45,9 @@
     ],
     "skills": [],
     "uiSlots": [
-      "tool.card.content:mail_search",
-      "tool.card.content:mail_draft"
+      "chat.message:mail.search",
+      "chat.message:mail.draft",
+      "chat.message:mail.read"
     ],
     "pages": [
       "mail"

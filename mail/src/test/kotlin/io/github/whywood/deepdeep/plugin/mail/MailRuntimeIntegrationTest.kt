@@ -298,6 +298,174 @@ class MailRuntimeIntegrationTest {
     }
 
     @Test
+    fun streamsLargeBodyToDiskAndParsesFromFile() = runBlocking {
+        val body = ("line ".repeat(200) + "\n").repeat(2000)
+        val inbox = FakeFolder("INBOX", messages = mutableListOf(fixtureMessage(1, "big", body)))
+        val rig = createRig(listOf(inbox))
+        try {
+            val accountId = rig.connectAccount(expectedMessages = 1)
+            val bodyFile = File(File(rig.mailDir, "bodies"), "$accountId/inbox-1.eml")
+            assertTrue(bodyFile.isFile)
+            assertTrue(bodyFile.length() > 1_500_000)
+            bodyFile.delete()
+            val detail = rig.runtime.message(accountId, rig.runtime.state.value.messages.single().id)
+            assertNotNull(detail)
+            assertTrue(detail!!.textBody.length <= 1024 * 1024)
+            assertTrue(detail.textBody.isNotEmpty())
+            assertTrue(bodyFile.isFile)
+            assertFalse(File(bodyFile.parentFile, bodyFile.name + ".part").exists())
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    @Test
+    fun oversizedMessageProducesReadableError() = runBlocking {
+        val dataDir = temporaryFolder.newFolder("oversize")
+        val host = FakePluginHost(dataDir)
+        val runtime = MailRuntime(host, PlainTextMailTransport)
+        val accountId = "over0001"
+        val closedPort = ServerSocket(0).use { it.localPort }
+        val mailDir = File(dataDir, "mail")
+        val store = MailStore(mailDir)
+        val summary = MailMessageSummary(
+            id = "$accountId:inbox:1",
+            accountId = accountId,
+            folderRole = MailFolderRole.INBOX,
+            uid = 1,
+            threadId = "1@example.com",
+            subject = "huge",
+            fromName = "Sender",
+            fromAddress = "sender@example.com",
+            to = listOf("user@example.com"),
+            dateMillis = 1,
+            preview = "",
+            unread = false,
+            starred = false,
+            hasAttachments = true,
+            sizeBytes = 200L * 1024 * 1024,
+        )
+        store.saveAccounts(listOf(MailAccount(accountId, "custom", "user@example.com", "User", 1, true, 1)))
+        store.saveServers(listOf(MailServerSettings(accountId, "127.0.0.1", closedPort, "127.0.0.1", closedPort)))
+        store.saveIndex(
+            MailAccountIndex(
+                accountId = accountId,
+                folders = listOf(MailFolderIndex(MailFolderRole.INBOX, "INBOX", 100, 1)),
+                messages = listOf(summary),
+            ),
+        )
+        host.secretValues["mail-$accountId"] = "secret"
+        runtime.start()
+        try {
+            val error = runCatching { runBlocking { runtime.message(accountId, summary.id) } }.exceptionOrNull()
+            assertTrue(error is MailLocalizedException)
+            assertTrue(error?.message.orEmpty().contains("太大"))
+            assertFalse(error?.message.orEmpty().contains("Exception"))
+        } finally {
+            runBlocking { runtime.stop() }
+            host.close()
+        }
+    }
+
+    @Test
+    fun prefetchSkipsMessagesAboveSizeBudget() = runBlocking {
+        val hugeBody = "x".repeat(5 * 1024 * 1024)
+        val inbox = FakeFolder(
+            "INBOX",
+            messages = mutableListOf(
+                fixtureMessage(1, "small", "small preview"),
+                fixtureMessage(2, "huge", hugeBody),
+            ),
+        )
+        val rig = createRig(listOf(inbox))
+        try {
+            val accountId = rig.connectAccount(expectedMessages = 2)
+            val state = rig.runtime.state.value
+            val small = state.messages.first { it.uid == 1L }
+            val huge = state.messages.first { it.uid == 2L }
+            assertTrue(small.preview.isNotEmpty())
+            assertTrue(huge.preview.isEmpty())
+            assertTrue(huge.sizeBytes > 4L * 1024 * 1024)
+            val bodyDirectory = File(File(rig.mailDir, "bodies"), accountId)
+            assertTrue(File(bodyDirectory, "inbox-1.eml").isFile)
+            assertFalse(File(bodyDirectory, "inbox-2.eml").exists())
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    @Test
+    fun throwableErrorsNeverEscapeRuntimeEntryPoints() = runBlocking {
+        val dataDir = temporaryFolder.newFolder("throwable")
+        val host = FakePluginHost(dataDir)
+        val runtime = MailRuntime(host, ExplodingMailTransport)
+        val accountId = "boom0001"
+        val closedPort = ServerSocket(0).use { it.localPort }
+        val store = MailStore(File(dataDir, "mail"))
+        val summary = MailMessageSummary(
+            id = "$accountId:inbox:1",
+            accountId = accountId,
+            folderRole = MailFolderRole.INBOX,
+            uid = 1,
+            threadId = "1@example.com",
+            subject = "cached",
+            fromName = "Sender",
+            fromAddress = "sender@example.com",
+            to = listOf("user@example.com"),
+            dateMillis = 1,
+            preview = "cached",
+            unread = false,
+            starred = false,
+            hasAttachments = false,
+        )
+        store.saveAccounts(listOf(MailAccount(accountId, "custom", "user@example.com", "User", 1, true, 1)))
+        store.saveServers(listOf(MailServerSettings(accountId, "127.0.0.1", closedPort, "127.0.0.1", closedPort)))
+        store.saveIndex(
+            MailAccountIndex(
+                accountId = accountId,
+                folders = listOf(MailFolderIndex(MailFolderRole.INBOX, "INBOX", 100, 1)),
+                messages = listOf(summary),
+            ),
+        )
+        host.secretValues["mail-$accountId"] = "secret"
+        runtime.start()
+        try {
+            awaitUntil { runtime.state.value.accountErrors.containsKey(accountId) }
+            val error = runtime.state.value.accountErrors.getValue(accountId)
+            assertTrue(error.isNotBlank())
+            assertFalse(error.contains("OutOfMemoryError"))
+            assertFalse(error.contains("StackOverflowError"))
+            assertEquals(1, runtime.state.value.messages.size)
+            assertFalse(runtime.state.value.syncing)
+
+            val test = runtime.testConnection(
+                MailAccountInput(
+                    providerId = "custom",
+                    email = "user@example.com",
+                    password = "secret",
+                    imapHost = "127.0.0.1",
+                    imapPort = closedPort,
+                    smtpHost = "127.0.0.1",
+                    smtpPort = closedPort,
+                ),
+            )
+            assertFalse(test.ok)
+            assertTrue(test.imapError.orEmpty().isNotBlank())
+
+            val message = runtime.message(accountId, summary.id)
+            assertNull(message)
+
+            val markError = runCatching { runtime.mark(accountId, summary.id, unread = true) }.exceptionOrNull()
+            assertTrue(markError is MailLocalizedException)
+            assertFalse(markError?.message.orEmpty().contains("OutOfMemoryError"))
+            assertFalse(runtime.state.value.messages.single().unread)
+        } finally {
+            runBlocking { runtime.stop() }
+            host.close()
+        }
+    }
+
+    @Test
     fun refreshIsDebouncedRightAfterSync() = runBlocking {
         val inbox = FakeFolder("INBOX", messages = mutableListOf(fixtureMessage(1, "first", "one")))
         val rig = createRig(listOf(inbox))
@@ -477,6 +645,14 @@ class MailRuntimeIntegrationTest {
             smtpHost = "127.0.0.1",
             smtpPort = smtp.port,
         )
+    }
+
+    private object ExplodingMailTransport : MailTransport {
+        override fun imap(host: String, port: Int, credentials: ImapCredentials): ImapClient =
+            throw OutOfMemoryError("simulated imap allocation failure")
+
+        override fun smtp(host: String, port: Int, credentials: SmtpCredentials): SmtpClient =
+            throw StackOverflowError("simulated smtp stack overflow")
     }
 
     private object PlainTextMailTransport : MailTransport {

@@ -121,13 +121,19 @@ internal fun MailThreadSheet(
         attachmentError = null
         attachmentBusyId = attachment.id
         scope.launch {
-            val path = runCatching { repository.loadAttachment(request.accountId, messageId, attachment.id) }
-                .getOrNull()
+            val result = runCatching { repository.loadAttachment(request.accountId, messageId, attachment.id) }
             attachmentBusyId = null
-            if (path.isNullOrBlank()) {
-                attachmentError = host.t("附件下载失败，请重试。", "Couldn't download the attachment. Try again.")
-            } else {
+            val path = result.getOrNull()
+            if (!path.isNullOrBlank()) {
                 host.ui().share(shareRequest(filePath = path, mimeType = attachment.mimeType))
+            } else {
+                attachmentError = result.exceptionOrNull()?.let { error ->
+                    host.readableError(
+                        error,
+                        fallbackZh = "附件下载失败，请重试。",
+                        fallbackEn = "Couldn't download the attachment. Try again.",
+                    )
+                } ?: host.t("附件下载失败，请重试。", "Couldn't download the attachment. Try again.")
             }
         }
     }

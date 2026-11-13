@@ -4,7 +4,6 @@ import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.localizedText
 import io.github.whywood.deepdeep.plugin.api.pluginNotification
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposer
-import io.github.whywood.deepdeep.plugin.mail.mime.MailHeaders
 import io.github.whywood.deepdeep.plugin.mail.mime.MailMimeParser
 import io.github.whywood.deepdeep.plugin.mail.mime.OutgoingMail
 import io.github.whywood.deepdeep.plugin.mail.store.MailAccountIndex
@@ -15,15 +14,18 @@ import io.github.whywood.deepdeep.plugin.mail.sync.FolderMapping
 import io.github.whywood.deepdeep.plugin.mail.sync.MailMessageMapper
 import io.github.whywood.deepdeep.plugin.mail.sync.MessageKeys
 import io.github.whywood.deepdeep.plugin.mail.sync.SyncPolicy
+import io.github.whywood.deepdeep.plugin.mail.transport.ImapBodyOutcome
+import io.github.whywood.deepdeep.plugin.mail.transport.ImapBodySkip
+import io.github.whywood.deepdeep.plugin.mail.transport.ImapBodyTarget
 import io.github.whywood.deepdeep.plugin.mail.transport.ImapClient
 import io.github.whywood.deepdeep.plugin.mail.transport.ImapCredentials
 import io.github.whywood.deepdeep.plugin.mail.transport.MailConnectionLostException
 import io.github.whywood.deepdeep.plugin.mail.transport.MailLocalizedException
 import io.github.whywood.deepdeep.plugin.mail.transport.MailNetworkException
 import io.github.whywood.deepdeep.plugin.mail.transport.MailTexts
+import io.github.whywood.deepdeep.plugin.mail.transport.MailTimeoutException
 import io.github.whywood.deepdeep.plugin.mail.transport.MailTransport
 import io.github.whywood.deepdeep.plugin.mail.transport.SecureMailTransport
-import io.github.whywood.deepdeep.plugin.mail.transport.MailTimeoutException
 import io.github.whywood.deepdeep.plugin.mail.transport.SmtpCredentials
 import java.io.File
 import java.security.MessageDigest
@@ -50,6 +52,9 @@ internal class MailRuntime(
     private val store = MailStore(File(host.dataDir, "mail")) { message, error ->
         host.logs().warn(message, error)
     }
+    private val fallbackErrorText: String = runCatching {
+        host.text(localizedText(default = FALLBACK_ERROR_ZH, zh = FALLBACK_ERROR_ZH, en = FALLBACK_ERROR_EN))
+    }.getOrDefault("")
     private val stateMutex = Mutex()
     private val refreshLock = Mutex()
     private val notifiedAt = mutableMapOf<String, Long>()
@@ -67,11 +72,123 @@ internal class MailRuntime(
     private var started = false
     private var syncJob: Job? = null
 
-    override fun accounts(): List<MailAccount> = _state.value.accounts
+    override fun accounts(): List<MailAccount> = try {
+        _state.value.accounts
+    } catch (error: Throwable) {
+        report(error)
+        emptyList()
+    }
 
-    override fun providers(): List<MailProviderPreset> = ProviderCatalog.presets
+    override fun providers(): List<MailProviderPreset> = try {
+        ProviderCatalog.presets
+    } catch (error: Throwable) {
+        report(error)
+        emptyList()
+    }
 
-    override suspend fun start() {
+    override suspend fun start(): Unit = boundary(
+        fallback = {
+            _state.update { current -> current.copy(loading = false) }
+        },
+    ) {
+        startInternal()
+    }
+
+    override suspend fun stop(): Unit = boundary(fallback = { }) {
+        stopInternal()
+    }
+
+    override suspend fun refresh(): Unit = boundary(
+        fallback = { error -> markSyncFailure(safeDescribe(error)) },
+    ) {
+        refreshInternal(force = false)
+    }
+
+    override suspend fun testConnection(input: MailAccountInput): MailConnectionTest = boundary(
+        fallback = { error -> connectionFailure(safeDescribe(error)) },
+    ) {
+        testConnectionInternal(input)
+    }
+
+    override suspend fun addAccount(input: MailAccountInput): MailConnectionTest = boundary(
+        fallback = { error -> connectionFailure(safeDescribe(error)) },
+    ) {
+        addAccountInternal(input)
+    }
+
+    override suspend fun updateAccount(accountId: String, update: MailAccountUpdate): Unit = boundary(fallback = { }) {
+        updateAccountInternal(accountId, update)
+    }
+
+    override suspend fun removeAccount(accountId: String): Unit = boundary(fallback = { }) {
+        removeAccountInternal(accountId)
+    }
+
+    override suspend fun reauthorize(accountId: String, password: String): MailConnectionTest = boundary(
+        fallback = { error -> connectionFailure(safeDescribe(error)) },
+    ) {
+        reauthorizeInternal(accountId, password)
+    }
+
+    override suspend fun message(accountId: String, messageId: String): MailMessageDetail? = boundary(
+        fallback = { null },
+    ) {
+        messageInternal(accountId, messageId)
+    }
+
+    override suspend fun mark(accountId: String, messageId: String, unread: Boolean): Unit = boundary(
+        fallback = { error -> throw localizedFailure(error) },
+    ) {
+        markInternal(accountId, messageId, unread)
+    }
+
+    override suspend fun archive(accountId: String, messageId: String): Unit = boundary(
+        fallback = { error -> throw localizedFailure(error) },
+    ) {
+        archiveInternal(accountId, messageId)
+    }
+
+    override suspend fun trash(accountId: String, messageId: String): Unit = boundary(
+        fallback = { error -> throw localizedFailure(error) },
+    ) {
+        trashInternal(accountId, messageId)
+    }
+
+    override suspend fun deleteForever(accountId: String, messageId: String): Unit = boundary(
+        fallback = { error -> throw localizedFailure(error) },
+    ) {
+        deleteForeverInternal(accountId, messageId)
+    }
+
+    override suspend fun saveDraft(draft: MailDraft): MailDraft = boundary(
+        fallback = { error -> throw localizedFailure(error) },
+    ) {
+        saveDraftInternal(draft)
+    }
+
+    override suspend fun deleteDraft(draftId: String): Unit = boundary(fallback = { }) {
+        deleteDraftInternal(draftId)
+    }
+
+    override suspend fun sendDraft(draftId: String): MailSendResult = boundary(
+        fallback = { error -> MailSendResult(ok = false, error = safeDescribe(error)) },
+    ) {
+        sendDraftInternal(draftId)
+    }
+
+    override suspend fun search(query: String, accountId: String?): List<MailMessageSummary> = boundary(
+        fallback = { emptyList() },
+    ) {
+        searchInternal(query, accountId)
+    }
+
+    override suspend fun loadAttachment(accountId: String, messageId: String, attachmentId: String): String? = boundary(
+        fallback = { error -> throw localizedFailure(error) },
+    ) {
+        loadAttachmentInternal(accountId, messageId, attachmentId)
+    }
+
+    private suspend fun startInternal() {
         if (stateMutex.withLock { started }) return
         val loaded = withContext(Dispatchers.IO) {
             val loadedAccounts = store.accounts()
@@ -95,37 +212,33 @@ internal class MailRuntime(
         syncJob = host.scope.launch {
             try {
                 refreshInternal(force = true)
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                host.logs().warn("mail initial sync failed", error)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                report(error)
             }
             while (isActive) {
                 delay(SyncPolicy.REFRESH_INTERVAL_MS)
                 if (!stateMutex.withLock { started }) break
                 try {
                     refreshInternal(force = false)
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (error: Exception) {
-                    host.logs().warn("mail periodic sync failed", error)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Throwable) {
+                    report(error)
                 }
             }
         }
     }
 
-    override suspend fun stop() {
+    private suspend fun stopInternal() {
         syncJob?.cancel()
         syncJob = null
         stateMutex.withLock { started = false }
         _state.update { it.copy(syncing = false) }
     }
 
-    override suspend fun refresh() {
-        refreshInternal(force = false)
-    }
-
-    override suspend fun testConnection(input: MailAccountInput): MailConnectionTest {
+    private suspend fun testConnectionInternal(input: MailAccountInput): MailConnectionTest {
         val email = input.email.trim()
         if (!EMAIL.matches(email)) return MailConnectionTest(false, false, texts.invalidEmail(), texts.invalidEmail())
         if (input.password.isBlank()) {
@@ -140,8 +253,8 @@ internal class MailRuntime(
         return testServers(servers, email, input.password)
     }
 
-    override suspend fun addAccount(input: MailAccountInput): MailConnectionTest {
-        val test = testConnection(input)
+    private suspend fun addAccountInternal(input: MailAccountInput): MailConnectionTest {
+        val test = testConnectionInternal(input)
         if (!test.ok) return test
         val email = input.email.trim()
         val accountId = accountId(email)
@@ -181,7 +294,7 @@ internal class MailRuntime(
         return test
     }
 
-    override suspend fun updateAccount(accountId: String, update: MailAccountUpdate) {
+    private suspend fun updateAccountInternal(accountId: String, update: MailAccountUpdate) {
         stateMutex.withLock {
             accounts = accounts.map { account ->
                 if (account.id != accountId) {
@@ -198,7 +311,7 @@ internal class MailRuntime(
         }
     }
 
-    override suspend fun removeAccount(accountId: String) {
+    private suspend fun removeAccountInternal(accountId: String) {
         stateMutex.withLock {
             accounts = accounts.filterNot { it.id == accountId }
             servers = servers - accountId
@@ -216,7 +329,7 @@ internal class MailRuntime(
         host.secrets().remove(secretKey(accountId))
     }
 
-    override suspend fun reauthorize(accountId: String, password: String): MailConnectionTest {
+    private suspend fun reauthorizeInternal(accountId: String, password: String): MailConnectionTest {
         val account = stateMutex.withLock { accounts.firstOrNull { it.id == accountId } }
             ?: return MailConnectionTest(false, false, texts.missingAccount(), texts.missingAccount())
         if (password.isBlank()) {
@@ -237,14 +350,16 @@ internal class MailRuntime(
         return test
     }
 
-    override suspend fun message(accountId: String, messageId: String): MailMessageDetail? {
+    private suspend fun messageInternal(accountId: String, messageId: String): MailMessageDetail? {
         val summary = findMessage(accountId, messageId) ?: return null
         val account = stateMutex.withLock { accounts.firstOrNull { it.id == accountId } } ?: return null
-        val raw = ensureBody(account, summary) ?: return null
+        val file = ensureBodyFile(account, summary) ?: return null
         val parsed = try {
-            MailMimeParser.parse(raw)
-        } catch (error: Exception) {
-            host.logs().warn("mail: cannot parse message", error)
+            MailMimeParser.parse(file)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            report(error)
             return null
         }
         val updated = MailMessageMapper.withParsed(summary, parsed)
@@ -265,7 +380,7 @@ internal class MailRuntime(
         )
     }
 
-    override suspend fun mark(accountId: String, messageId: String, unread: Boolean) {
+    private suspend fun markInternal(accountId: String, messageId: String, unread: Boolean) {
         val summary = requireMessage(accountId, messageId)
         if (summary.unread == unread) return
         val account = requireAccount(accountId)
@@ -275,55 +390,31 @@ internal class MailRuntime(
                 client.select(folder, readOnly = false)
                 client.storeSeen(summary.uid, seen = !unread)
             }
-        } catch (error: CancellationException) {
-            throw error
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
             throw MailLocalizedException(texts.describeImap(error), error)
         }
         updateMessage(summary.copy(unread = unread))
     }
 
-    override suspend fun archive(accountId: String, messageId: String) {
+    private suspend fun archiveInternal(accountId: String, messageId: String) {
         val summary = requireMessage(accountId, messageId)
         if (summary.folderRole == MailFolderRole.ARCHIVE) return
         val target = folderOf(accountId, MailFolderRole.ARCHIVE)
             ?: throw MailLocalizedException(texts.missingArchiveFolder())
-        val account = requireAccount(accountId)
-        val source = folderOf(accountId, summary.folderRole) ?: throw MailLocalizedException(texts.missingMessage())
-        try {
-            withImap(account) { client ->
-                client.select(source, readOnly = false)
-                client.move(summary.uid, target)
-            }
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            throw MailLocalizedException(texts.describeImap(error), error)
-        }
-        removeMessage(summary)
+        moveMessage(summary, target)
     }
 
-    override suspend fun trash(accountId: String, messageId: String) {
+    private suspend fun trashInternal(accountId: String, messageId: String) {
         val summary = requireMessage(accountId, messageId)
         if (summary.folderRole == MailFolderRole.TRASH) return
         val target = folderOf(accountId, MailFolderRole.TRASH)
             ?: throw MailLocalizedException(texts.missingTrashFolder())
-        val account = requireAccount(accountId)
-        val source = folderOf(accountId, summary.folderRole) ?: throw MailLocalizedException(texts.missingMessage())
-        try {
-            withImap(account) { client ->
-                client.select(source, readOnly = false)
-                client.move(summary.uid, target)
-            }
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            throw MailLocalizedException(texts.describeImap(error), error)
-        }
-        removeMessage(summary)
+        moveMessage(summary, target)
     }
 
-    override suspend fun deleteForever(accountId: String, messageId: String) {
+    private suspend fun deleteForeverInternal(accountId: String, messageId: String) {
         val summary = requireMessage(accountId, messageId)
         val account = requireAccount(accountId)
         val source = folderOf(accountId, summary.folderRole) ?: throw MailLocalizedException(texts.missingMessage())
@@ -332,15 +423,32 @@ internal class MailRuntime(
                 client.select(source, readOnly = false)
                 client.delete(summary.uid)
             }
-        } catch (error: CancellationException) {
-            throw error
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
             throw MailLocalizedException(texts.describeImap(error), error)
         }
         removeMessage(summary)
     }
 
-    override suspend fun saveDraft(draft: MailDraft): MailDraft {
+    private suspend fun moveMessage(summary: MailMessageSummary, target: String) {
+        val account = requireAccount(summary.accountId)
+        val source = folderOf(summary.accountId, summary.folderRole)
+            ?: throw MailLocalizedException(texts.missingMessage())
+        try {
+            withImap(account) { client ->
+                client.select(source, readOnly = false)
+                client.move(summary.uid, target)
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            throw MailLocalizedException(texts.describeImap(error), error)
+        }
+        removeMessage(summary)
+    }
+
+    private suspend fun saveDraftInternal(draft: MailDraft): MailDraft {
         val now = System.currentTimeMillis()
         val saved = draft.copy(
             id = draft.id.ifBlank { "draft-$now-${UUID.randomUUID().toString().take(8)}" },
@@ -355,7 +463,7 @@ internal class MailRuntime(
         return saved
     }
 
-    override suspend fun deleteDraft(draftId: String) {
+    private suspend fun deleteDraftInternal(draftId: String) {
         stateMutex.withLock {
             drafts = drafts.filterNot { it.id == draftId }
             persistDrafts()
@@ -363,7 +471,7 @@ internal class MailRuntime(
         }
     }
 
-    override suspend fun sendDraft(draftId: String): MailSendResult {
+    private suspend fun sendDraftInternal(draftId: String): MailSendResult {
         val draft = stateMutex.withLock { drafts.firstOrNull { it.id == draftId } }
             ?: return MailSendResult(ok = false, error = texts.missingDraft())
         if (draft.to.isEmpty()) return MailSendResult(ok = false, error = texts.missingRecipients())
@@ -399,8 +507,8 @@ internal class MailRuntime(
                 client.send(account.email, recipients, message)
                 client.quit()
                 null
-            } catch (failure: CancellationException) {
-                throw failure
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (failure: Exception) {
                 texts.describeSmtp(failure)
             } finally {
@@ -415,17 +523,17 @@ internal class MailRuntime(
                     client.select(sentFolder, readOnly = false)
                     client.append(sentFolder, listOf("\\Seen"), message)
                 }
-            } catch (failure: CancellationException) {
-                throw failure
-            } catch (failure: Exception) {
-                host.logs().warn("mail: sent copy was not appended", failure)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                report(failure)
             }
         }
-        deleteDraft(draft.id)
+        deleteDraftInternal(draft.id)
         return MailSendResult(ok = true)
     }
 
-    override suspend fun search(query: String, accountId: String?): List<MailMessageSummary> {
+    private suspend fun searchInternal(query: String, accountId: String?): List<MailMessageSummary> {
         val term = query.trim()
         val messages = stateMutex.withLock { indexes.values.flatMap { it.messages } }
         return messages.asSequence()
@@ -435,30 +543,48 @@ internal class MailRuntime(
             .toList()
     }
 
-    override suspend fun loadAttachment(accountId: String, messageId: String, attachmentId: String): String? {
+    private suspend fun loadAttachmentInternal(accountId: String, messageId: String, attachmentId: String): String? {
         val summary = findMessage(accountId, messageId) ?: return null
         val account = stateMutex.withLock { accounts.firstOrNull { it.id == accountId } } ?: return null
-        val raw = ensureBody(account, summary) ?: return null
-        val parsed = try {
-            MailMimeParser.parse(raw, retainAttachments = true)
-        } catch (error: Exception) {
-            host.logs().warn("mail: cannot decode attachment", error)
+        val bodyFile = ensureBodyFile(account, summary) ?: return null
+        val metadata = try {
+            MailMimeParser.parse(bodyFile)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            report(error)
             return null
         }
-        val attachment = parsed.attachments.firstOrNull { it.id == attachmentId } ?: return null
-        val data = attachment.data ?: return null
+        val attachment = metadata.attachments.firstOrNull { it.id == attachmentId } ?: return null
+        if (attachment.sizeBytes > SyncPolicy.MAX_ATTACHMENT_BYTES) {
+            throw MailLocalizedException(texts.attachmentTooLarge())
+        }
         val key = MessageKeys.key(summary.folderRole, summary.uid)
         val file = store.attachmentFile(accountId, key, attachment.id, attachment.name)
-        return try {
-            if (!file.isFile || file.length() != data.size.toLong()) {
-                file.parentFile?.mkdirs()
-                file.writeBytes(data)
-            }
-            file.absolutePath
-        } catch (error: Exception) {
-            host.logs().warn("mail: cannot save attachment", error)
+        file.parentFile?.mkdirs()
+        val temporary = File(file.parentFile, file.name + ".part")
+        temporary.delete()
+        val written = try {
+            MailMimeParser.extractAttachmentTo(bodyFile, attachmentId, temporary, SyncPolicy.MAX_ATTACHMENT_BYTES)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            report(error)
             null
+        } ?: run {
+            temporary.delete()
+            throw MailLocalizedException(texts.attachmentUnavailable())
         }
+        if (file.isFile && file.length() == written) {
+            temporary.delete()
+            return file.absolutePath
+        }
+        file.delete()
+        if (!temporary.renameTo(file)) {
+            temporary.delete()
+            throw MailLocalizedException(texts.storageFailed())
+        }
+        return file.absolutePath
     }
 
     private suspend fun refreshInternal(force: Boolean) {
@@ -487,10 +613,10 @@ internal class MailRuntime(
             for (account in snapshot) {
                 try {
                     syncAccount(account)
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (error: Exception) {
-                    val message = texts.describeImap(error)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Throwable) {
+                    val message = safeDescribe(error)
                     host.logs().warn("mail sync failed: ${account.email}", error)
                     lastError = message
                     stateMutex.withLock {
@@ -500,13 +626,15 @@ internal class MailRuntime(
                 }
             }
         } finally {
-            _state.update {
-                it.copy(
-                    syncing = false,
-                    loading = false,
-                    syncError = lastError,
-                    lastSyncAt = System.currentTimeMillis(),
-                )
+            runCatching {
+                _state.update {
+                    it.copy(
+                        syncing = false,
+                        loading = false,
+                        syncError = lastError,
+                        lastSyncAt = System.currentTimeMillis(),
+                    )
+                }
             }
             lastRefreshAt = System.currentTimeMillis()
         }
@@ -532,10 +660,10 @@ internal class MailRuntime(
                 }
                 commitAccount(account, folderStates, messages, newUnread)
                 return
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                if (attempt == 0 && error.isRetryable()) {
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                if (attempt == 0 && error is Exception && error.isRetryable()) {
                     attempt += 1
                     continue
                 }
@@ -622,25 +750,43 @@ internal class MailRuntime(
         messages: List<MailMessageSummary>,
     ): List<MailMessageSummary> {
         if (messages.isEmpty()) return messages
-        val targets = messages.sortedByDescending { it.uid }.take(SyncPolicy.BODY_PREFETCH_LIMIT)
-        val bodies = try {
-            client.fetchBodies(targets.map { it.uid })
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
+        val targets = selectPrefetchTargets(account, role, messages)
+        if (targets.isEmpty()) return messages
+        val outcomes = try {
+            client.fetchBodiesToFiles(targets, SyncPolicy.PREFETCH_MAX_MESSAGE_BYTES)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            report(error)
             return messages
         }
+        val saved = outcomes.filterIsInstance<ImapBodyOutcome.Saved>().associateBy { it.uid }
+        if (saved.isEmpty()) return messages
         val result = messages.toMutableList()
         for ((position, message) in result.withIndex()) {
-            val bytes = bodies[message.uid] ?: continue
+            if (message.uid !in saved) continue
             try {
-                store.writeBody(account.id, MessageKeys.key(role, message.uid), bytes)
-                result[position] = MailMessageMapper.withParsed(message, MailMimeParser.parse(bytes))
-            } catch (error: Exception) {
-                host.logs().warn("mail: cannot cache message body", error)
+                val file = store.bodyFile(account.id, MessageKeys.key(role, message.uid))
+                result[position] = MailMessageMapper.withParsed(message, MailMimeParser.parse(file))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                report(error)
             }
         }
         return result
+    }
+
+    private fun selectPrefetchTargets(
+        account: MailAccount,
+        role: MailFolderRole,
+        messages: List<MailMessageSummary>,
+    ): List<ImapBodyTarget> = SyncPolicy.prefetchCandidates(messages).map { message ->
+        ImapBodyTarget(
+            uid = message.uid,
+            file = store.bodyFile(account.id, MessageKeys.key(role, message.uid)),
+            declaredSize = message.sizeBytes,
+        )
     }
 
     private suspend fun commitAccount(
@@ -673,77 +819,95 @@ internal class MailRuntime(
     }
 
     private suspend fun notifyNewMail(account: MailAccount, newUnread: List<MailMessageSummary>) {
-        if (newUnread.isEmpty() || !account.notify) return
-        val now = System.currentTimeMillis()
-        val previous = notifiedAt[account.id] ?: 0L
-        if (now - previous < SyncPolicy.NOTIFY_THROTTLE_MS) return
-        notifiedAt[account.id] = now
-        val latest = newUnread.maxByOrNull { it.dateMillis }
-        val count = newUnread.size
-        val subject = latest?.subject.orEmpty()
-        val title = host.text(localizedText(default = "新邮件", zh = "新邮件", en = "New mail"))
-        val body = host.text(
-            localizedText(
-                default = if (subject.isBlank()) {
-                    "${account.email} 收到 $count 封新邮件"
-                } else {
-                    "${account.email} 收到 $count 封新邮件，最新：$subject"
-                },
-                zh = if (subject.isBlank()) {
-                    "${account.email} 收到 $count 封新邮件"
-                } else {
-                    "${account.email} 收到 $count 封新邮件，最新：$subject"
-                },
-                en = if (subject.isBlank()) {
-                    "${account.email}: $count new messages"
-                } else {
-                    "${account.email}: $count new messages, latest: $subject"
-                },
-            ),
-        )
-        host.notifications().notify(pluginNotification("mail-unread-${account.id}", title, body))
+        try {
+            if (newUnread.isEmpty() || !account.notify) return
+            val now = System.currentTimeMillis()
+            val previous = notifiedAt[account.id] ?: 0L
+            if (now - previous < SyncPolicy.NOTIFY_THROTTLE_MS) return
+            notifiedAt[account.id] = now
+            val latest = newUnread.maxByOrNull { it.dateMillis }
+            val count = newUnread.size
+            val subject = latest?.subject.orEmpty()
+            val title = host.text(localizedText(default = "新邮件", zh = "新邮件", en = "New mail"))
+            val body = host.text(
+                localizedText(
+                    default = if (subject.isBlank()) {
+                        "${account.email} 收到 $count 封新邮件"
+                    } else {
+                        "${account.email} 收到 $count 封新邮件，最新：$subject"
+                    },
+                    zh = if (subject.isBlank()) {
+                        "${account.email} 收到 $count 封新邮件"
+                    } else {
+                        "${account.email} 收到 $count 封新邮件，最新：$subject"
+                    },
+                    en = if (subject.isBlank()) {
+                        "${account.email}: $count new messages"
+                    } else {
+                        "${account.email}: $count new messages, latest: $subject"
+                    },
+                ),
+            )
+            host.notifications().notify(pluginNotification("mail-unread-${account.id}", title, body))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            report(error)
+        }
     }
 
-    private suspend fun ensureBody(account: MailAccount, summary: MailMessageSummary): ByteArray? {
+    private suspend fun ensureBodyFile(account: MailAccount, summary: MailMessageSummary): File? {
         val key = MessageKeys.key(summary.folderRole, summary.uid)
-        store.readBody(account.id, key)?.let { return it }
+        val file = store.bodyFile(account.id, key)
+        if (file.isFile && file.length() > 0) return file
         val folder = folderOf(account.id, summary.folderRole) ?: return null
-        val bytes = try {
+        val limit = SyncPolicy.MAX_MESSAGE_BODY_BYTES
+        if (summary.sizeBytes > limit) throw MailLocalizedException(texts.messageTooLarge())
+        val outcome = try {
             withImap(account) { client ->
                 client.select(folder, readOnly = true)
-                client.fetchBodies(listOf(summary.uid))[summary.uid]
+                client.fetchBodiesToFiles(listOf(ImapBodyTarget(summary.uid, file, summary.sizeBytes)), limit)
+                    .firstOrNull()
             }
-        } catch (error: CancellationException) {
-            throw error
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (localized: MailLocalizedException) {
+            throw localized
         } catch (error: Exception) {
             host.logs().warn("mail: cannot fetch message body", error)
-            return null
+            null
+        } catch (error: Throwable) {
+            report(error)
+            null
         }
-        if (bytes != null) {
-            try {
-                store.writeBody(account.id, key, bytes)
-            } catch (error: Exception) {
-                host.logs().warn("mail: cannot cache message body", error)
+        return when (outcome) {
+            is ImapBodyOutcome.Saved -> file
+            is ImapBodyOutcome.Skipped -> if (outcome.reason == ImapBodySkip.TOO_LARGE) {
+                throw MailLocalizedException(texts.messageTooLarge())
+            } else {
+                null
             }
+            null -> null
         }
-        return bytes
     }
 
     private suspend fun replyContext(account: MailAccount, draft: MailDraft): Pair<String?, List<String>> {
         val replyTo = draft.inReplyToId?.takeIf { it.isNotBlank() } ?: return null to emptyList()
         val summary = findMessage(account.id, replyTo) ?: return null to emptyList()
-        val raw = try {
-            ensureBody(account, summary)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
+        val file = try {
+            ensureBodyFile(account, summary)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
             null
         } ?: return null to emptyList()
         return try {
-            val headers = MailHeaders.parse(raw)
+            val headers = MailMimeParser.parse(file).headers
             val messageId = headers.messageId ?: return null to emptyList()
             messageId to (headers.references + messageId).distinct().takeLast(20)
-        } catch (error: Exception) {
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
             null to emptyList()
         }
     }
@@ -825,8 +989,8 @@ internal class MailRuntime(
                     client.connect()
                     client.login()
                     return@withContext block(client)
-                } catch (error: CancellationException) {
-                    throw error
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
                 } catch (error: Exception) {
                     if (attempt == 0 && error.isRetryable()) {
                         lastError = error
@@ -857,8 +1021,13 @@ internal class MailRuntime(
                 client.login()
                 client.listFolders()
                 null
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 texts.describeImap(error)
+            } catch (error: Throwable) {
+                report(error)
+                safeDescribe(error)
             } finally {
                 client.close()
             }
@@ -874,8 +1043,13 @@ internal class MailRuntime(
                 client.login()
                 client.quit()
                 null
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 texts.describeSmtp(error)
+            } catch (error: Throwable) {
+                report(error)
+                safeDescribe(error)
             } finally {
                 client.close()
             }
@@ -892,10 +1066,10 @@ internal class MailRuntime(
         host.scope.launch {
             try {
                 refreshInternal(force = true)
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                host.logs().warn("mail sync failed", error)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                report(error)
             }
         }
     }
@@ -986,6 +1160,38 @@ internal class MailRuntime(
 
     private fun paletteColor(accountId: String): Int = PALETTE[accountId.hashCode().mod(PALETTE.size)]
 
+    private fun markSyncFailure(message: String) {
+        runCatching {
+            _state.update {
+                it.copy(syncing = false, loading = false, syncError = message, lastSyncAt = System.currentTimeMillis())
+            }
+        }
+    }
+
+    private fun connectionFailure(message: String): MailConnectionTest =
+        MailConnectionTest(imapOk = false, smtpOk = false, imapError = message, smtpError = message)
+
+    private fun localizedFailure(error: Throwable): MailLocalizedException =
+        MailLocalizedException(safeDescribe(error), error)
+
+    private fun safeDescribe(error: Throwable): String =
+        runCatching { texts.describeAny(error) }.getOrElse { fallbackErrorText }
+
+    private fun report(error: Throwable) {
+        runCatching { host.logs().error("mail: unexpected failure", error) }
+    }
+
+    private suspend fun <T> boundary(fallback: (Throwable) -> T, block: suspend () -> T): T = try {
+        block()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (localized: MailLocalizedException) {
+        throw localized
+    } catch (error: Throwable) {
+        report(error)
+        fallback(error)
+    }
+
     private fun Throwable.isRetryable(): Boolean =
         this is MailNetworkException || this is MailTimeoutException || this is MailConnectionLostException
 
@@ -1010,6 +1216,8 @@ internal class MailRuntime(
     )
 
     private companion object {
+        const val FALLBACK_ERROR_ZH = "操作没有完成，请稍后重试。"
+        const val FALLBACK_ERROR_EN = "The action did not finish. Try again later."
         val EMAIL = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
         val PALETTE = listOf(
             0xFF5B8DEF.toInt(),

@@ -116,8 +116,13 @@ internal class MailStore(
 
     fun retainBodies(accountId: String, validKeys: Set<String>) {
         val files = bodiesDirectory(accountId).listFiles() ?: return
+        val now = System.currentTimeMillis()
         for (file in files) {
             if (!file.isFile) continue
+            if (file.name.endsWith(PART_SUFFIX)) {
+                if (now - file.lastModified() > STALE_PART_MILLIS) file.delete()
+                continue
+            }
             if (!file.name.endsWith(BODY_SUFFIX)) continue
             val key = file.name.removeSuffix(BODY_SUFFIX)
             if (key !in validKeys) file.delete()
@@ -198,6 +203,8 @@ internal class MailStore(
 
     private companion object {
         const val BODY_SUFFIX = ".eml"
+        const val PART_SUFFIX = ".eml.part"
         const val TEMP_SUFFIX = ".tmp"
+        const val STALE_PART_MILLIS = 60L * 60 * 1000
     }
 }

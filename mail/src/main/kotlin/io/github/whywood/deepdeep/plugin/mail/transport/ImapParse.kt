@@ -47,6 +47,7 @@ internal data class ImapFetchResult(
     val envelope: ImapEnvelope?,
     val headerBlock: ByteArray?,
     val body: ByteArray?,
+    val streamedBodySize: Int? = null,
 )
 
 internal object ImapParse {
@@ -111,6 +112,7 @@ internal object ImapParse {
         var envelope: ImapEnvelope? = null
         var headerBlock: ByteArray? = null
         var body: ByteArray? = null
+        var streamedBodySize: Int? = null
         var index = 0
         while (index + 1 < items.size) {
             val name = (items[index] as? ImapToken.Atom)?.value ?: break
@@ -127,11 +129,14 @@ internal object ImapParse {
                     name.equals("RFC822.HEADER", ignoreCase = true) -> headerBlock = bytes(value)
                 name.equals("BODY[]", ignoreCase = true) ||
                     name.equals("BODY", ignoreCase = true) ||
-                    name.equals("RFC822", ignoreCase = true) -> body = bytes(value)
+                    name.equals("RFC822", ignoreCase = true) -> {
+                    val streamed = value as? ImapToken.Streamed
+                    if (streamed != null) streamedBodySize = streamed.size else body = bytes(value)
+                }
             }
             index += 2
         }
-        return ImapFetchResult(sequence, uid, flags, internalDate, size, envelope, headerBlock, body)
+        return ImapFetchResult(sequence, uid, flags, internalDate, size, envelope, headerBlock, body, streamedBodySize)
     }
 
     fun envelope(token: ImapToken): ImapEnvelope? {
@@ -159,6 +164,7 @@ internal object ImapParse {
             envelope = incoming.envelope ?: current.envelope,
             headerBlock = incoming.headerBlock ?: current.headerBlock,
             body = incoming.body ?: current.body,
+            streamedBodySize = incoming.streamedBodySize ?: current.streamedBodySize,
         )
     }
 

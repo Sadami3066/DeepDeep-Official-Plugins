@@ -109,6 +109,10 @@ internal object SyncPolicy {
     const val FLAG_WINDOW_SIZE = 500
     const val FETCH_PAGE_SIZE = 50
     const val BODY_PREFETCH_LIMIT = 50
+    const val PREFETCH_MAX_MESSAGE_BYTES = 4L * 1024 * 1024
+    const val PREFETCH_TOTAL_BYTES = 24L * 1024 * 1024
+    const val MAX_MESSAGE_BODY_BYTES = 48L * 1024 * 1024
+    const val MAX_ATTACHMENT_BYTES = 32L * 1024 * 1024
     const val REFRESH_INTERVAL_MS = 5 * 60 * 1000L
     const val REFRESH_DEBOUNCE_MS = 30 * 1000L
     const val NOTIFY_THROTTLE_MS = 30 * 60 * 1000L
@@ -123,6 +127,26 @@ internal object SyncPolicy {
             .sortedByDescending { it.uid }
             .take(FLAG_WINDOW_SIZE)
             .toList()
+
+    fun prefetchCandidates(
+        messages: List<MailMessageSummary>,
+        limit: Int = BODY_PREFETCH_LIMIT,
+        maxMessageBytes: Long = PREFETCH_MAX_MESSAGE_BYTES,
+        totalBudget: Long = PREFETCH_TOTAL_BYTES,
+    ): List<MailMessageSummary> {
+        val result = mutableListOf<MailMessageSummary>()
+        var budget = totalBudget
+        for (message in messages.sortedByDescending { it.uid }) {
+            if (result.size >= limit) break
+            if (budget <= 0) break
+            val estimated = if (message.sizeBytes > 0) message.sizeBytes else maxMessageBytes
+            if (estimated > maxMessageBytes) continue
+            if (estimated > budget) continue
+            budget -= estimated
+            result += message
+        }
+        return result
+    }
 }
 
 internal object MailMessageMapper {
@@ -156,6 +180,7 @@ internal object MailMessageMapper {
             unread = flags.none { it.equals("\\Seen", ignoreCase = true) },
             starred = flags.any { it.equals("\\Flagged", ignoreCase = true) },
             hasAttachments = false,
+            sizeBytes = fetch.size ?: 0L,
         )
     }
 

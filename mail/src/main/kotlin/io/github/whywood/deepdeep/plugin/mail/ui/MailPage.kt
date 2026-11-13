@@ -65,6 +65,7 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
     var hiddenIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var refreshError by remember { mutableStateOf<String?>(null) }
     var pullRefreshing by remember { mutableStateOf(false) }
+    var cardRequest by remember { mutableStateOf<MailCardNavigation.Request?>(null) }
 
     val accounts = state.accounts
     val activeAccountId = selectedAccountId?.takeIf { id -> accounts.any { it.id == id } }
@@ -156,6 +157,50 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
             return
         }
         overlay = MailOverlay.Compose(request ?: MailComposeRequest(accountId = accountId), returnTo)
+    }
+
+    LaunchedEffect(Unit) {
+        cardRequest = MailCardNavigation.consume()
+    }
+
+    LaunchedEffect(cardRequest, state.loading, state.drafts) {
+        val request = cardRequest ?: return@LaunchedEffect
+        if (state.loading) return@LaunchedEffect
+        cardRequest = null
+        when (request) {
+            is MailCardNavigation.Request.OpenThread -> {
+                overlay = MailOverlay.Thread(
+                    MailThreadRequest(
+                        accountId = request.accountId,
+                        threadId = request.threadId,
+                        messageId = request.messageId,
+                    ),
+                )
+            }
+
+            is MailCardNavigation.Request.EditDraft -> {
+                val draft = state.drafts.firstOrNull { it.id == request.draftId }
+                if (draft == null) {
+                    runCatching {
+                        host.ui().toast(
+                            host.t("这份草稿已不在草稿箱中。", "This draft is no longer in your drafts."),
+                        )
+                    }
+                } else {
+                    overlay = MailOverlay.Compose(
+                        request = MailComposeRequest(
+                            accountId = draft.accountId,
+                            to = draft.to,
+                            cc = draft.cc,
+                            subject = draft.subject,
+                            body = draft.body,
+                            draft = draft,
+                        ),
+                        returnTo = null,
+                    )
+                }
+            }
+        }
     }
 
     LaunchedEffect(Unit) {

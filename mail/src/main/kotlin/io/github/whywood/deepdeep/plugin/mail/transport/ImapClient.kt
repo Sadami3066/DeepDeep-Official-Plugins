@@ -3,12 +3,15 @@ package io.github.whywood.deepdeep.plugin.mail.transport
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.Closeable
+import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
+import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
-import javax.net.SocketFactory
 import java.net.SocketTimeoutException
 import java.util.Base64
+import javax.net.SocketFactory
 import javax.net.ssl.SSLException
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
@@ -24,6 +27,28 @@ internal data class ImapCredentials(
     val password: String,
 )
 
+internal data class ImapBodyTarget(
+    val uid: Long,
+    val file: File,
+    val declaredSize: Long = 0L,
+)
+
+internal sealed interface ImapBodyOutcome {
+    data class Saved(val uid: Long, val size: Long) : ImapBodyOutcome
+
+    data class Skipped(
+        val uid: Long,
+        val size: Long,
+        val reason: ImapBodySkip,
+    ) : ImapBodyOutcome
+}
+
+internal enum class ImapBodySkip {
+    TOO_LARGE,
+    NOT_FOUND,
+    EMPTY,
+}
+
 internal class ImapClient(
     private val endpoint: ImapEndpoint,
     private val credentials: ImapCredentials,
@@ -36,6 +61,7 @@ internal class ImapClient(
     private var tagIndex = 0
     private var capabilities: Set<String>? = null
     private var authenticated = false
+    private var literalHandler: ImapLiteralHandler? = null
 
     fun connect() {
         if (socket != null) return
@@ -107,13 +133,18 @@ internal class ImapClient(
             "BODY.PEEK[HEADER.FIELDS (DATE FROM TO CC SUBJECT MESSAGE-ID REFERENCES IN-REPLY-TO CONTENT-TYPE)]",
     )
 
-    fun fetchBodies(uids: Collection<Long>): Map<Long, ByteArray> = fetch(uids, "UID BODY.PEEK[]")
-        .mapNotNull { result ->
-            val uid = result.uid ?: return@mapNotNull null
-            val body = result.body ?: return@mapNotNull null
-            uid to body
+    fun fetchBodiesToFiles(targets: List<ImapBodyTarget>, maxBytesPerMessage: Long = DEFAULT_BODY_LIMIT_BYTES): List<ImapBodyOutcome> {
+        if (targets.isEmpty()) return emptyList()
+        val outcomes = mutableListOf<ImapBodyOutcome>()
+        for (target in targets.sortedBy { it.uid }) {
+            if (maxBytesPerMessage > 0 && target.declaredSize > maxBytesPerMessage) {
+                outcomes += ImapBodyOutcome.Skipped(target.uid, target.declaredSize, ImapBodySkip.TOO_LARGE)
+                continue
+            }
+            outcomes += fetchBodyToFile(target, maxBytesPerMessage)
         }
-        .toMap()
+        return outcomes
+    }
 
     fun fetchFlags(uids: Collection<Long>): Map<Long, Set<String>> = fetch(uids, "UID FLAGS")
         .mapNotNull { result ->
@@ -181,6 +212,46 @@ internal class ImapClient(
         authenticated = false
         capabilities = null
         if (target != null) runCatching { target.close() }
+    }
+
+    private fun fetchBodyToFile(target: ImapBodyTarget, maxBytesPerMessage: Long): ImapBodyOutcome {
+        val file = target.file
+        val part = File(file.parentFile, file.name + PART_SUFFIX)
+        file.parentFile?.mkdirs()
+        part.delete()
+        var stream: OutputStream? = null
+        var saved = false
+        literalHandler = ImapLiteralHandler { _, preceding ->
+            if (stream == null && preceding.contains("BODY[]", ignoreCase = true)) {
+                BufferedOutputStream(FileOutputStream(part), BODY_WRITE_BUFFER_SIZE).also { stream = it }
+            } else {
+                null
+            }
+        }
+        try {
+            val responses = try {
+                execute("UID FETCH ${target.uid} (UID BODY.PEEK[])")
+            } catch (error: MailServerException) {
+                return ImapBodyOutcome.Skipped(target.uid, target.declaredSize, ImapBodySkip.NOT_FOUND)
+            }
+            requireOk(responses, "FETCH")
+            stream?.flush()
+            stream?.close()
+            stream = null
+            val size = part.length()
+            if (size <= 0L) return ImapBodyOutcome.Skipped(target.uid, size, ImapBodySkip.EMPTY)
+            if (maxBytesPerMessage > 0 && size > maxBytesPerMessage) {
+                return ImapBodyOutcome.Skipped(target.uid, size, ImapBodySkip.TOO_LARGE)
+            }
+            file.delete()
+            if (!part.renameTo(file)) throw MailStorageException("cannot cache message body")
+            saved = true
+            return ImapBodyOutcome.Saved(target.uid, size)
+        } finally {
+            literalHandler = null
+            runCatching { stream?.close() }
+            if (!saved) part.delete()
+        }
     }
 
     private fun fetch(uids: Collection<Long>, attributes: String): List<ImapFetchResult> {
@@ -280,7 +351,7 @@ internal class ImapClient(
             socket = connected
             val stream = BufferedInputStream(connected.getInputStream())
             output = BufferedOutputStream(connected.getOutputStream())
-            reader = ImapResponseReader(stream)
+            reader = ImapResponseReader(stream) { literalHandler }
         } catch (error: SocketTimeoutException) {
             closeQuietly(plain)
             throw MailTimeoutException(endpoint.host, error)
@@ -354,6 +425,9 @@ internal class ImapClient(
     private companion object {
         const val DEFAULT_TIMEOUT_MS = 30_000
         const val FETCH_PAGE_SIZE = 50
+        const val BODY_WRITE_BUFFER_SIZE = 64 * 1024
+        const val PART_SUFFIX = ".part"
+        const val DEFAULT_BODY_LIMIT_BYTES = 64L * 1024 * 1024
         val CRLF = byteArrayOf('\r'.code.toByte(), '\n'.code.toByte())
 
         fun defaultSocketFactory(tls: Boolean): SocketFactory =

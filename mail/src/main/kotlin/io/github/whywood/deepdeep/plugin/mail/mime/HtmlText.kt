@@ -3,20 +3,33 @@ package io.github.whywood.deepdeep.plugin.mail.mime
 internal object HtmlText {
     fun toPlainText(html: String): String {
         if (html.isEmpty()) return ""
-        val withoutScripts = SCRIPT.replace(STYLE.replace(html, " "), " ")
-        val builder = StringBuilder(withoutScripts.length)
+        val builder = StringBuilder(html.length)
         var index = 0
-        while (index < withoutScripts.length) {
-            val char = withoutScripts[index]
+        while (index < html.length) {
+            val char = html[index]
             if (char == '<') {
-                if (withoutScripts.startsWith("<!--", index)) {
-                    val end = withoutScripts.indexOf("-->", index)
-                    index = if (end < 0) withoutScripts.length else end + 3
+                if (html.startsWith("<!--", index)) {
+                    val end = html.indexOf("-->", index)
+                    index = if (end < 0) html.length else end + 3
                     continue
                 }
-                val end = withoutScripts.indexOf('>', index)
+                val end = html.indexOf('>', index)
                 if (end < 0) break
-                handleTag(builder, withoutScripts.substring(index + 1, end).trim())
+                val tagText = html.substring(index + 1, end).trim()
+                val name = tagName(tagText)
+                if (name == "script" || name == "style") {
+                    if (!tagText.startsWith('/')) {
+                        val closing = html.indexOf("</$name", end + 1, ignoreCase = true)
+                        if (closing < 0) {
+                            index = html.length
+                            continue
+                        }
+                        val closingEnd = html.indexOf('>', closing)
+                        index = if (closingEnd < 0) html.length else closingEnd + 1
+                        continue
+                    }
+                }
+                handleTag(builder, tagText)
                 index = end + 1
                 continue
             }
@@ -26,6 +39,12 @@ internal object HtmlText {
         return cleanup(decodeEntities(builder.toString()))
     }
 
+    private fun tagName(tagText: String): String = tagText.trimStart('/')
+        .substringBefore(' ')
+        .substringBefore('\t')
+        .substringBefore('/')
+        .lowercase()
+
     fun preview(text: String, limit: Int = 200): String {
         val flattened = WHITESPACE.replace(text, " ").trim()
         return if (flattened.length > limit) flattened.take(limit) else flattened
@@ -34,11 +53,7 @@ internal object HtmlText {
     private fun handleTag(builder: StringBuilder, tagText: String) {
         if (tagText.isEmpty() || tagText.startsWith("!") || tagText.startsWith("?")) return
         val closing = tagText.startsWith('/')
-        val name = tagText.trimStart('/')
-            .substringBefore(' ')
-            .substringBefore('\t')
-            .substringBefore('/')
-            .lowercase()
+        val name = tagName(tagText)
         when (name) {
             "br" -> builder.append('\n')
             "p", "div", "tr", "li", "ul", "ol", "table", "blockquote", "section", "article",
@@ -117,8 +132,6 @@ internal object HtmlText {
         return result.toString()
     }
 
-    private val SCRIPT = Regex("<script\\b[^>]*>.*?</script>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
-    private val STYLE = Regex("<style\\b[^>]*>.*?</style>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
     private val ALT = Regex("alt\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')", RegexOption.IGNORE_CASE)
     private val SPACES = Regex("[ \\t\\f\\u000B]+")
     private val WHITESPACE = Regex("[\\s\\u00a0]+")

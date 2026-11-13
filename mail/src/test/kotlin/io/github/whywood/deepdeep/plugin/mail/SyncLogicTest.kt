@@ -131,6 +131,22 @@ class SyncLogicTest {
     }
 
     @Test
+    fun prefetchSkipsLargeMessagesFromStressScenario() {
+        val messages = (1L..8L).map { uid -> summary(uid, dateMillis = uid, sizeBytes = 32L * 1024 * 1024) }
+        assertTrue(SyncPolicy.prefetchCandidates(messages).isEmpty())
+    }
+
+    @Test
+    fun prefetchRespectsTotalBudgetAndNewestFirst() {
+        val messages = (1L..10L).map { uid -> summary(uid, dateMillis = uid, sizeBytes = 3L * 1024 * 1024) }
+        val selected = SyncPolicy.prefetchCandidates(messages)
+        assertEquals(8, selected.size)
+        assertTrue(selected.sumOf { it.sizeBytes } <= SyncPolicy.PREFETCH_TOTAL_BYTES)
+        assertEquals(10L, selected.first().uid)
+        assertEquals(3L, selected.last().uid)
+    }
+
+    @Test
     fun messageKeysRoundTrip() {
         assertEquals("acc:inbox:5", MessageKeys.id("acc", MailFolderRole.INBOX, 5))
         assertEquals("inbox-5", MessageKeys.key(MailFolderRole.INBOX, 5))
@@ -169,6 +185,7 @@ class SyncLogicTest {
         assertEquals("self@example.com", summary.threadId)
         assertEquals("", summary.preview)
         assertFalse(summary.hasAttachments)
+        assertEquals(100L, summary.sizeBytes)
     }
 
     @Test
@@ -183,6 +200,7 @@ class SyncLogicTest {
         uid: Long,
         dateMillis: Long,
         role: MailFolderRole = MailFolderRole.INBOX,
+        sizeBytes: Long = 0,
     ): MailMessageSummary = MailMessageSummary(
         id = MessageKeys.id("acc", role, uid),
         accountId = "acc",
@@ -198,5 +216,6 @@ class SyncLogicTest {
         unread = false,
         starred = false,
         hasAttachments = false,
+        sizeBytes = sizeBytes,
     )
 }

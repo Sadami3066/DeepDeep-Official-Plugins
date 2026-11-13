@@ -59,6 +59,7 @@ data class MailMessageSummary(
     val unread: Boolean,
     val starred: Boolean,
     val hasAttachments: Boolean,
+    val sizeBytes: Long = 0,
 )
 
 @Serializable

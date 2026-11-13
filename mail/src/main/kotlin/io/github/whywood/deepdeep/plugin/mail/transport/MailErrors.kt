@@ -37,6 +37,11 @@ internal class MailProtocolException(
     message: String,
 ) : IOException(message)
 
+internal class MailStorageException(
+    message: String,
+    cause: Throwable? = null,
+) : IOException(message, cause)
+
 internal class MailLocalizedException(
     message: String,
     cause: Throwable? = null,
@@ -150,25 +155,53 @@ internal class MailTexts(
         "Something went wrong. Try again later.",
     )
 
+    fun messageTooLarge(): String = text(
+        "这封邮件太大，无法完整加载。",
+        "This message is too large to load in full.",
+    )
+
+    fun attachmentTooLarge(): String = text(
+        "这个附件太大，无法下载。",
+        "This attachment is too large to download.",
+    )
+
+    fun storageFailed(): String = text(
+        "无法保存邮件内容，请检查手机存储空间。",
+        "Could not save the message content. Check the device storage.",
+    )
+
     fun describeImap(error: Throwable): String = describe(error, imapLoginFailed())
 
     fun describeSmtp(error: Throwable): String = describe(error, smtpLoginFailed())
 
-    fun describe(error: Throwable, loginFailed: String = imapLoginFailed()): String {
-        if (error !is MailLocalizedException) {
-            host.logs().warn("mail transport failure", error)
+    fun describe(error: Throwable, loginFailed: String = imapLoginFailed()): String = describeAny(error, loginFailed)
+
+    fun describeAny(error: Throwable, loginFailed: String = imapLoginFailed()): String {
+        runCatching {
+            if (error !is MailLocalizedException) host.logs().warn("mail transport failure", error)
         }
-        return when (error) {
-            is MailLocalizedException -> error.message.orEmpty()
-            is MailTimeoutException -> timedOut(error.target)
-            is MailTlsException -> tlsFailed(error.target)
-            is MailNetworkException -> connectionFailed(error.target)
-            is MailConnectionLostException -> connectionLost()
-            is MailAuthenticationException -> loginFailed
-            is MailServerException -> serverRejected()
-            else -> unknown()
-        }
+        return runCatching {
+            when (error) {
+                is MailLocalizedException -> error.message.orEmpty()
+                is MailTimeoutException -> timedOut(error.target)
+                is MailTlsException -> tlsFailed(error.target)
+                is MailNetworkException -> connectionFailed(error.target)
+                is MailConnectionLostException -> connectionLost()
+                is MailAuthenticationException -> loginFailed
+                is MailServerException -> serverRejected()
+                is MailStorageException -> storageFailed()
+                else -> unknown()
+            }
+        }.getOrElse { fallbackText }
     }
+
+    private val fallbackText: String = runCatching {
+        text(
+            "操作没有完成，请稍后重试。",
+            "The action did not finish. Try again later.",
+        )
+    }.getOrDefault("")
+
 
     private fun text(zh: String, en: String): String =
         host.text(localizedText(default = zh, zh = zh, en = en))

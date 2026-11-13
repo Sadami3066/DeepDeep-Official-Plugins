@@ -1,11 +1,16 @@
 package io.github.whywood.deepdeep.plugin.mail.mime
 
 import io.github.whywood.deepdeep.plugin.mail.transport.decodeText
+import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
 import java.io.InputStream
-import java.io.OutputStream
 import java.nio.charset.Charset
-import java.nio.charset.StandardCharsets
+import org.apache.james.mime4j.codec.Base64InputStream
+import org.apache.james.mime4j.codec.DecodeMonitor
+import org.apache.james.mime4j.codec.QuotedPrintableInputStream
 import org.apache.james.mime4j.parser.AbstractContentHandler
 import org.apache.james.mime4j.parser.MimeStreamParser
 import org.apache.james.mime4j.stream.BodyDescriptor
@@ -29,116 +34,139 @@ internal data class ParsedMail(
     val preview: String get() = HtmlText.preview(textBody)
 }
 
+internal object MailLimits {
+    const val MAX_TEXT_PART_BYTES = 1024 * 1024
+    const val MAX_TEXT_TOTAL_BYTES = 2 * 1024 * 1024
+    const val MAX_ATTACHMENT_RETAIN_BYTES = 32 * 1024 * 1024
+    const val MAX_RETAINED_ATTACHMENT_BYTES = 32 * 1024 * 1024
+    const val MAX_HEADER_BLOCK_BYTES = 256 * 1024
+    const val MAX_LINE_LENGTH = 32 * 1024
+    const val MAX_HEADER_COUNT = 1_000
+    const val MAX_HEADER_LENGTH = 256 * 1024
+    const val MAX_TOTAL_HEADER_COUNT = 5_000
+    const val MAX_TOTAL_HEADER_LENGTH = 2L * 1024 * 1024
+    const val MAX_CONTENT_BYTES = 64L * 1024 * 1024
+    const val MAX_PART_COUNT = 500
+    const val MAX_NESTING_DEPTH = 16
+}
+
 internal object MailMimeParser {
-    fun parse(raw: ByteArray, retainAttachments: Boolean = false): ParsedMail {
-        val collector = Collector(retainAttachments)
+    fun parse(raw: ByteArray, retainAttachments: Boolean = false): ParsedMail =
+        parseSource({ ByteArrayInputStream(raw) }, retainAttachments)
+
+    fun parse(file: File, retainAttachments: Boolean = false): ParsedMail =
+        parseSource({ BufferedInputStream(file.inputStream()) }, retainAttachments)
+
+    fun extractAttachmentTo(file: File, attachmentId: String, destination: File, maxBytes: Long): Long? {
+        val index = attachmentId.removePrefix(ATTACHMENT_ID_PREFIX).toIntOrNull() ?: return null
+        if (index < 0) return null
+        destination.parentFile?.mkdirs()
+        val collector = Collector(retainAttachments = false, streamTarget = index, targetFile = destination, targetMaxBytes = maxBytes)
+        val parsed = try {
+            parseStream(BufferedInputStream(file.inputStream()), collector)
+        } catch (error: Exception) {
+            null
+        }
+        val written = collector.streamedTargetBytes
+        if (parsed == null || written == null || written < 0) {
+            destination.delete()
+            return null
+        }
+        return written
+    }
+
+    private fun parseSource(open: () -> InputStream, retainAttachments: Boolean): ParsedMail {
+        val collector = Collector(retainAttachments = retainAttachments, streamTarget = null, targetFile = null, targetMaxBytes = 0)
+        val primary = try {
+            parseStream(open(), collector)
+        } catch (error: Exception) {
+            null
+        }
+        if (primary != null) return primary
         return try {
+            fallback(open())
+        } catch (error: Exception) {
+            ParsedMail(MailHeaders.EMPTY, "", null, emptyList())
+        }
+    }
+
+    private fun parseStream(stream: InputStream, collector: Collector): ParsedMail {
+        stream.use {
             val parser = MimeStreamParser(
                 MimeConfig.custom()
-                    .setMaxLineLen(MAX_LINE_LENGTH)
-                    .setMaxHeaderCount(MAX_HEADER_COUNT)
-                    .setMaxHeaderLen(MAX_HEADER_LENGTH)
-                    .setMaxContentLen(MAX_CONTENT_LENGTH)
-                    .setMaxPartCount(MAX_PART_COUNT)
-                    .setMaxNestingDepth(MAX_NESTING_DEPTH)
+                    .setMaxLineLen(MailLimits.MAX_LINE_LENGTH)
+                    .setMaxHeaderCount(MailLimits.MAX_HEADER_COUNT)
+                    .setMaxHeaderLen(MailLimits.MAX_HEADER_LENGTH)
+                    .setMaxTotalHeaderCount(MailLimits.MAX_TOTAL_HEADER_COUNT)
+                    .setMaxTotalHeaderLen(MailLimits.MAX_TOTAL_HEADER_LENGTH)
+                    .setMaxContentLen(MailLimits.MAX_CONTENT_BYTES)
+                    .setMaxPartCount(MailLimits.MAX_PART_COUNT)
+                    .setMaxNestingDepth(MailLimits.MAX_NESTING_DEPTH)
                     .build(),
             )
             parser.setContentDecoding(true)
             parser.setRecurse()
             parser.setContentHandler(collector)
-            parser.parse(ByteArrayInputStream(raw))
-            collector.finish()
-        } catch (error: Exception) {
-            fallback(raw)
+            parser.parse(it)
+            return collector.finish()
         }
     }
 
-    private fun fallback(raw: ByteArray): ParsedMail {
-        val headers = MailHeaders.parse(raw)
-        val text = raw.toString(StandardCharsets.ISO_8859_1)
-        val lineBreak = when {
-            text.contains("\r\n\r\n") -> text.indexOf("\r\n\r\n") + 4
-            text.contains("\n\n") -> text.indexOf("\n\n") + 2
-            else -> text.length
-        }
-        val headerBlock = raw.copyOf(
-            when {
-                text.contains("\r\n\r\n") -> text.indexOf("\r\n\r\n")
-                text.contains("\n\n") -> text.indexOf("\n\n")
-                else -> raw.size
-            },
-        )
-        val fields = MailHeaders.parseFields(decodeText(headerBlock))
-        val bodyBytes = text.substring(lineBreak).toByteArray(StandardCharsets.ISO_8859_1)
-        val contentType = fields["content-type"]?.firstOrNull().orEmpty().lowercase()
-        val transferEncoding = fields["content-transfer-encoding"]?.firstOrNull().orEmpty().trim().lowercase()
-        val decodedBody = when {
-            transferEncoding.contains("base64") -> decodeBase64(bodyBytes)
-            transferEncoding.contains("quoted-printable") -> decodeQuotedPrintable(bodyBytes)
-            else -> bodyBytes
-        }
-        val charsetName = contentTypeParameter(contentType, "charset")
-        val bodyText = decodeBytes(decodedBody, charsetName)
-        val textBody = if (contentType.contains("text/html")) HtmlText.toPlainText(bodyText) else bodyText
-        return ParsedMail(
-            headers = headers,
-            textBody = textBody,
-            htmlBody = if (contentType.contains("text/html")) bodyText else null,
-            attachments = emptyList(),
-        )
-    }
-
-    private fun decodeBase64(bytes: ByteArray): ByteArray {
-        val compact = bytes.toString(StandardCharsets.ISO_8859_1).replace(Regex("\\s+"), "")
-        return try {
-            java.util.Base64.getDecoder().decode(compact)
-        } catch (error: IllegalArgumentException) {
-            ByteArray(0)
-        }
-    }
-
-    private fun decodeQuotedPrintable(bytes: ByteArray): ByteArray {
-        val output = java.io.ByteArrayOutputStream()
-        var index = 0
-        while (index < bytes.size) {
-            val byte = bytes[index].toInt() and 0xff
-            if (byte == '='.code) {
-                if (index + 1 < bytes.size && bytes[index + 1].toInt() == '\n'.code) {
-                    index += 2
-                    continue
-                }
-                if (index + 1 < bytes.size && bytes[index + 1].toInt() == '\r'.code &&
-                    index + 2 < bytes.size && bytes[index + 2].toInt() == '\n'.code
-                ) {
-                    index += 3
-                    continue
-                }
-                if (index + 2 < bytes.size) {
-                    val high = hexValue(bytes[index + 1])
-                    val low = hexValue(bytes[index + 2])
-                    if (high >= 0 && low >= 0) {
-                        output.write((high shl 4) or low)
-                        index += 3
-                        continue
-                    }
-                }
+    private fun fallback(stream: InputStream): ParsedMail {
+        stream.use {
+            val headerBytes = readHeaderBlock(it)
+            val fields = MailHeaders.parseFields(decodeText(headerBytes))
+            val headers = MailHeaders.fromFields(fields)
+            val contentType = fields["content-type"]?.firstOrNull().orEmpty().lowercase()
+            if (contentType.contains("multipart")) {
+                return ParsedMail(headers, "", null, emptyList())
             }
+            val transferEncoding = fields["content-transfer-encoding"]?.firstOrNull().orEmpty().trim().lowercase()
+            val decoded = when {
+                transferEncoding.contains("base64") -> Base64InputStream(it, DecodeMonitor.SILENT)
+                transferEncoding.contains("quoted-printable") -> QuotedPrintableInputStream(it, DecodeMonitor.SILENT)
+                else -> it
+            }
+            val bodyBytes = readLimited(decoded, MailLimits.MAX_TEXT_PART_BYTES)
+            val bodyText = String(bodyBytes, charsetOf(contentTypeParameter(contentType, "charset")) ?: Charsets.UTF_8)
+            val isHtml = contentType.contains("text/html")
+            return ParsedMail(
+                headers = headers,
+                textBody = if (isHtml) HtmlText.toPlainText(bodyText) else bodyText,
+                htmlBody = if (isHtml) bodyText else null,
+                attachments = emptyList(),
+            )
+        }
+    }
+
+    private fun readHeaderBlock(stream: InputStream): ByteArray {
+        val output = ByteArrayOutputStream()
+        val tail = IntArray(4) { -1 }
+        while (true) {
+            val byte = stream.read()
+            if (byte < 0) break
             output.write(byte)
-            index += 1
+            tail[0] = tail[1]
+            tail[1] = tail[2]
+            tail[2] = tail[3]
+            tail[3] = byte
+            val crlfEnd = tail[0] == '\r'.code && tail[1] == '\n'.code && tail[2] == '\r'.code && tail[3] == '\n'.code
+            val lfEnd = tail[2] == '\n'.code && tail[3] == '\n'.code
+            if (crlfEnd || lfEnd) break
+            if (output.size() >= MailLimits.MAX_HEADER_BLOCK_BYTES) break
         }
         return output.toByteArray()
     }
 
-    private fun hexValue(byte: Byte): Int = when (val char = byte.toInt().toChar()) {
-        in '0'..'9' -> char - '0'
-        in 'A'..'F' -> char - 'A' + 10
-        in 'a'..'f' -> char - 'a' + 10
-        else -> -1
-    }
-
-    private fun decodeBytes(bytes: ByteArray, charsetName: String?): String {
-        val charset = charsetOf(charsetName) ?: Charsets.UTF_8
-        return String(bytes, charset)
+    private fun readLimited(stream: InputStream, limit: Int): ByteArray {
+        val output = ByteArrayOutputStream(minOf(limit, 64 * 1024))
+        val buffer = ByteArray(READ_BUFFER_SIZE)
+        while (output.size() < limit) {
+            val read = stream.read(buffer, 0, minOf(buffer.size, limit - output.size()))
+            if (read < 0) break
+            output.write(buffer, 0, read)
+        }
+        return output.toByteArray()
     }
 
     private fun charsetOf(name: String?): Charset? {
@@ -162,11 +190,20 @@ internal object MailMimeParser {
 
     private class Collector(
         private val retainAttachments: Boolean,
+        private val streamTarget: Int?,
+        private val targetFile: File?,
+        private val targetMaxBytes: Long,
     ) : AbstractContentHandler() {
         private val messageHeaders = LinkedHashMap<String, MutableList<String>>()
         private val headerStack = ArrayDeque<MutableMap<String, MutableList<String>>>()
-        private val leaves = mutableListOf<Leaf>()
-        private var retainedBytes = 0L
+        private val attachments = mutableListOf<MimeAttachment>()
+        private var plainText: String? = null
+        private var htmlText: String? = null
+        private var textBytesUsed = 0L
+        private var attachmentIndex = 0
+        private var retainedAttachmentBytes = 0L
+        var streamedTargetBytes: Long? = null
+            private set
 
         override fun field(field: Field) {
             val target = headerStack.lastOrNull() ?: messageHeaders
@@ -187,25 +224,81 @@ internal object MailMimeParser {
             val disposition = disposition(headers.firstValue("content-disposition"))
             val contentTypeName = parameter(headers.firstValue("content-type").orEmpty(), "name")
             val fileName = disposition.filename ?: contentTypeName?.let { Rfc2047.decode(it) }
-            val isText = mimeType == "text/plain" || mimeType == "text/html"
-            val keep = isText || (retainAttachments && retainedBytes < MAX_RETAINED_BYTES)
-            val limit = if (isText) MAX_TEXT_BYTES else MAX_ATTACHMENT_BYTES
+            if (mimeType == "text/plain" || mimeType == "text/html") {
+                collectText(mimeType, descriptor.charset, stream)
+            } else {
+                collectAttachment(mimeType, fileName, stream)
+            }
+        }
+
+        private fun collectText(mimeType: String, charset: String?, stream: InputStream) {
+            val isPlain = mimeType == "text/plain"
+            val wanted = (isPlain && plainText == null) || (!isPlain && htmlText == null)
+            val remaining = MailLimits.MAX_TEXT_TOTAL_BYTES - textBytesUsed
+            val keep = wanted && remaining > 0
+            val limit = minOf(MailLimits.MAX_TEXT_PART_BYTES.toLong(), remaining).toInt()
             val body = readBody(stream, keep, limit)
-            if (!isText && body.data != null) retainedBytes += body.data.size
-            leaves += Leaf(
+            val data = body.data ?: return
+            textBytesUsed += data.size
+            val text = String(data, charsetOf(charset) ?: Charsets.UTF_8)
+            if (text.isBlank()) return
+            if (isPlain && plainText == null) plainText = text
+            if (!isPlain && htmlText == null) htmlText = text
+        }
+
+        private fun collectAttachment(mimeType: String, fileName: String?, stream: InputStream) {
+            val index = attachmentIndex++
+            if (streamTarget == index && targetFile != null) {
+                streamedTargetBytes = streamAttachment(stream, targetFile, targetMaxBytes)
+                attachments += MimeAttachment(
+                    id = "$ATTACHMENT_ID_PREFIX$index",
+                    name = if (!fileName.isNullOrBlank()) fileName else defaultName(mimeType, index),
+                    mimeType = mimeType,
+                    sizeBytes = streamedTargetBytes ?: 0L,
+                    data = null,
+                )
+                return
+            }
+            val remaining = MailLimits.MAX_RETAINED_ATTACHMENT_BYTES - retainedAttachmentBytes
+            val keep = retainAttachments && remaining > 0
+            val limit = minOf(MailLimits.MAX_ATTACHMENT_RETAIN_BYTES.toLong(), remaining).toInt()
+            val body = readBody(stream, keep, limit)
+            val data = body.data?.takeIf { !body.truncated }
+            if (data != null) retainedAttachmentBytes += data.size
+            attachments += MimeAttachment(
+                id = "$ATTACHMENT_ID_PREFIX$index",
+                name = if (!fileName.isNullOrBlank()) fileName else defaultName(mimeType, index),
                 mimeType = mimeType,
-                charset = descriptor.charset,
-                data = body.data,
                 sizeBytes = body.size,
-                fileName = fileName,
-                dispositionType = disposition.type,
+                data = data,
             )
         }
 
-        private fun readBody(stream: InputStream, keep: Boolean, limit: Int): BodyData {
+        private fun streamAttachment(stream: InputStream, destination: File, maxBytes: Long): Long {
             val buffer = ByteArray(READ_BUFFER_SIZE)
-            val output = if (keep) java.io.ByteArrayOutputStream() else null
+            var written = 0L
+            var overflow = false
+            FileOutputStream(destination).buffered(READ_BUFFER_SIZE).use { output ->
+                while (true) {
+                    val read = stream.read(buffer)
+                    if (read < 0) break
+                    if (overflow) continue
+                    if (written + read > maxBytes) {
+                        overflow = true
+                        continue
+                    }
+                    output.write(buffer, 0, read)
+                    written += read
+                }
+            }
+            return if (overflow) -1L else written
+        }
+
+        private fun readBody(stream: InputStream, keep: Boolean, limit: Int): BodyData {
+            val output = if (keep && limit > 0) ByteArrayOutputStream(minOf(limit, 64 * 1024)) else null
+            val buffer = ByteArray(READ_BUFFER_SIZE)
             var total = 0L
+            var truncated = false
             while (true) {
                 val read = stream.read(buffer)
                 if (read < 0) break
@@ -213,37 +306,28 @@ internal object MailMimeParser {
                 if (output != null) {
                     val remaining = limit - output.size()
                     if (remaining > 0) output.write(buffer, 0, minOf(read, remaining))
+                    if (read > remaining) truncated = true
                 }
             }
-            return BodyData(output?.takeIf { total <= limit }?.toByteArray(), total)
+            return BodyData(output?.takeIf { it.size() > 0 }?.toByteArray(), total, truncated)
         }
-
-        private data class BodyData(val data: ByteArray?, val size: Long)
 
         fun finish(): ParsedMail {
-            val headers = MailHeaders.fromFields(messageHeaders)
-            val plain = leaves.firstOrNull { it.mimeType == "text/plain" && it.text().isNotBlank() }
-            val html = leaves.firstOrNull { it.mimeType == "text/html" && it.text().isNotBlank() }
-            val htmlBody = html?.text()
-            val textBody = plain?.text() ?: htmlBody?.let { HtmlText.toPlainText(it) }.orEmpty()
-            val attachments = leaves
-                .filter { it.isAttachment() }
-                .mapIndexed { index, leaf ->
-                    MimeAttachment(
-                        id = "att-$index",
-                        name = leaf.fileName?.takeIf { it.isNotBlank() } ?: defaultName(leaf.mimeType, index),
-                        mimeType = leaf.mimeType,
-                        sizeBytes = leaf.sizeBytes,
-                        data = leaf.data,
-                    )
-                }
+            val htmlBody = htmlText
+            val textBody = plainText ?: htmlBody?.let { HtmlText.toPlainText(it) }.orEmpty()
             return ParsedMail(
-                headers = headers,
+                headers = MailHeaders.fromFields(messageHeaders),
                 textBody = textBody,
                 htmlBody = htmlBody,
-                attachments = attachments,
+                attachments = attachments.toList(),
             )
         }
+
+        private data class BodyData(
+            val data: ByteArray?,
+            val size: Long,
+            val truncated: Boolean,
+        )
 
         private data class Disposition(val type: String, val filename: String?)
 
@@ -255,10 +339,9 @@ internal object MailMimeParser {
             for (part in parts.drop(1)) {
                 val index = part.indexOf('=')
                 if (index <= 0) continue
-                var name = part.substring(0, index).trim().lowercase()
-                var rawValue = part.substring(index + 1).trim()
+                val name = part.substring(0, index).trim().lowercase()
                 if (name == "filename" || name == "filename*") {
-                    filename = decodeParameter(rawValue)
+                    filename = decodeParameter(part.substring(index + 1).trim())
                     break
                 }
             }
@@ -295,7 +378,7 @@ internal object MailMimeParser {
             if (secondQuote < 0) return Rfc2047.decode(value)
             val charsetName = value.substring(0, firstQuote)
             val encoded = value.substring(secondQuote + 1)
-            val bytes = java.io.ByteArrayOutputStream()
+            val bytes = ByteArrayOutputStream()
             var index = 0
             while (index < encoded.length) {
                 val char = encoded[index]
@@ -336,37 +419,6 @@ internal object MailMimeParser {
             return parts.filter { it.isNotEmpty() }
         }
 
-        private data class Leaf(
-            val mimeType: String,
-            val charset: String?,
-            val data: ByteArray?,
-            val sizeBytes: Long,
-            val fileName: String?,
-            val dispositionType: String,
-        ) {
-            fun text(): String {
-                val bytes = data ?: return ""
-                val charset = charsetName()
-                return String(bytes, charset)
-            }
-
-            fun isAttachment(): Boolean = fileName != null ||
-                dispositionType == "attachment" ||
-                (mimeType != "text/plain" && mimeType != "text/html")
-
-            private fun charsetName(): Charset {
-                val name = charset?.trim()?.trim('"')
-                if (!name.isNullOrBlank()) {
-                    try {
-                        return Charset.forName(name)
-                    } catch (error: Exception) {
-                        Unit
-                    }
-                }
-                return Charsets.UTF_8
-            }
-        }
-
         private fun Map<String, List<String>>.firstValue(name: String): String? =
             this[name]?.firstOrNull()?.takeIf { it.isNotBlank() }
 
@@ -377,9 +429,6 @@ internal object MailMimeParser {
 
         private companion object {
             const val READ_BUFFER_SIZE = 16 * 1024
-            const val MAX_TEXT_BYTES = 4 * 1024 * 1024
-            const val MAX_ATTACHMENT_BYTES = 64 * 1024 * 1024
-            const val MAX_RETAINED_BYTES = 96L * 1024 * 1024
             val EXTENSIONS = mapOf(
                 "image/png" to "png",
                 "image/jpeg" to "jpg",
@@ -405,10 +454,6 @@ internal object MailMimeParser {
         }
     }
 
-    private const val MAX_LINE_LENGTH = 100_000
-    private const val MAX_HEADER_COUNT = 2_000
-    private const val MAX_HEADER_LENGTH = 1_000_000
-    private const val MAX_CONTENT_LENGTH = 96L * 1024 * 1024
-    private const val MAX_PART_COUNT = 1_000
-    private const val MAX_NESTING_DEPTH = 20
+    private const val ATTACHMENT_ID_PREFIX = "att-"
+    private const val READ_BUFFER_SIZE = 16 * 1024
 }

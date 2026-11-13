@@ -2,6 +2,7 @@ package io.github.whywood.deepdeep.plugin.mail.transport
 
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
+import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
@@ -10,6 +11,8 @@ internal sealed interface ImapChunk {
     data class Text(val value: String) : ImapChunk
 
     data class Literal(val bytes: ByteArray) : ImapChunk
+
+    data class Streamed(val size: Int) : ImapChunk
 }
 
 internal sealed interface ImapToken {
@@ -19,6 +22,8 @@ internal sealed interface ImapToken {
 
     data class Literal(val bytes: ByteArray) : ImapToken
 
+    data class Streamed(val size: Int) : ImapToken
+
     data class Group(val items: List<ImapToken>) : ImapToken
 }
 
@@ -27,6 +32,7 @@ internal fun ImapToken?.asString(): String? = when (this) {
     is ImapToken.Atom -> if (value.equals("NIL", ignoreCase = true)) null else value
     is ImapToken.Quoted -> value
     is ImapToken.Literal -> decodeText(bytes)
+    is ImapToken.Streamed -> null
     is ImapToken.Group -> null
 }
 
@@ -50,6 +56,10 @@ internal fun decodeText(bytes: ByteArray): String {
     }
 }
 
+internal fun interface ImapLiteralHandler {
+    fun open(size: Int, precedingText: String): OutputStream?
+}
+
 internal sealed interface ImapResponse {
     data class Tagged(
         val tag: String,
@@ -68,9 +78,11 @@ internal sealed interface ImapResponse {
 
 internal class ImapResponseReader(
     private val input: InputStream,
+    private val literalHandler: (() -> ImapLiteralHandler?)? = null,
 ) {
     fun readResponse(): ImapResponse {
         val chunks = mutableListOf<ImapChunk>()
+        val precedingText = StringBuilder()
         while (true) {
             val line = readLine() ?: throw MailConnectionLostException()
             val literalStart = literalMarkerStart(line)
@@ -79,10 +91,19 @@ internal class ImapResponseReader(
                 chunks += ImapChunk.Text("\r\n")
                 break
             }
-            chunks += ImapChunk.Text(line.substring(0, literalStart))
+            val prefix = line.substring(0, literalStart)
+            chunks += ImapChunk.Text(prefix)
+            precedingText.append(prefix)
             val size = literalSize(line) ?: throw MailProtocolException("invalid literal size")
-            if (size > MAX_LITERAL_BYTES) throw MailProtocolException("literal too large")
-            chunks += ImapChunk.Literal(readExactly(size))
+            val target = literalHandler?.invoke()?.open(size, precedingText.toString())
+            if (target != null) {
+                if (size > MAX_STREAMED_LITERAL_BYTES) throw MailProtocolException("literal too large")
+                readStreamed(size, target)
+                chunks += ImapChunk.Streamed(size)
+            } else {
+                if (size > MAX_BUFFERED_LITERAL_BYTES) throw MailProtocolException("literal too large")
+                chunks += ImapChunk.Literal(readExactly(size))
+            }
         }
         return classify(ImapTokenizer(chunks).tokens())
     }
@@ -106,6 +127,7 @@ internal class ImapResponseReader(
         is ImapToken.Atom -> token.value
         is ImapToken.Quoted -> "\"${token.value}\""
         is ImapToken.Literal -> ""
+        is ImapToken.Streamed -> ""
         is ImapToken.Group -> token.items.joinToString(prefix = "(", postfix = ")") { render(it) }
     }
 
@@ -157,9 +179,23 @@ internal class ImapResponseReader(
         return bytes
     }
 
+    private fun readStreamed(size: Int, output: OutputStream) {
+        val buffer = ByteArray(READ_BUFFER_SIZE)
+        var remaining = size
+        while (remaining > 0) {
+            val count = input.read(buffer, 0, minOf(buffer.size, remaining))
+            if (count < 0) throw MailConnectionLostException()
+            output.write(buffer, 0, count)
+            remaining -= count
+        }
+        output.flush()
+    }
+
     private companion object {
         const val MAX_LINE_BYTES = 256 * 1024
-        const val MAX_LITERAL_BYTES = 64 * 1024 * 1024
+        const val MAX_BUFFERED_LITERAL_BYTES = 2 * 1024 * 1024
+        const val MAX_STREAMED_LITERAL_BYTES = 256 * 1024 * 1024
+        const val READ_BUFFER_SIZE = 16 * 1024
     }
 }
 
@@ -185,6 +221,11 @@ internal class ImapTokenizer(
             offset = 0
             return ImapToken.Literal(current.bytes)
         }
+        if (current is ImapChunk.Streamed) {
+            chunkIndex++
+            offset = 0
+            return ImapToken.Streamed(current.size)
+        }
         val text = (current as ImapChunk.Text).value
         return when (text[offset]) {
             '(' -> {
@@ -200,7 +241,7 @@ internal class ImapTokenizer(
     private fun skipWhitespace(): Boolean {
         while (chunkIndex < chunks.size) {
             val current = chunks[chunkIndex]
-            if (current is ImapChunk.Literal) return true
+            if (current is ImapChunk.Literal || current is ImapChunk.Streamed) return true
             val text = (current as ImapChunk.Text).value
             var index = offset
             while (index < text.length && text[index].isImapWhitespace()) index++
@@ -250,7 +291,9 @@ internal class ImapTokenizer(
         var bracketDepth = 0
         while (chunkIndex < chunks.size) {
             val current = chunks[chunkIndex]
-            if (current is ImapChunk.Literal) throw MailProtocolException("literal inside atom")
+            if (current is ImapChunk.Literal || current is ImapChunk.Streamed) {
+                throw MailProtocolException("literal inside atom")
+            }
             val text = (current as ImapChunk.Text).value
             while (offset < text.length) {
                 val char = text[offset]
@@ -258,7 +301,7 @@ internal class ImapTokenizer(
                     if (char.isImapWhitespace() || char == '(' || char == ')') {
                         return ImapToken.Atom(builder.toString())
                     }
-                    if (char == '[') bracketDepth = 1 else bracketDepth = 0
+                    if (char == '[') bracketDepth = 1
                     builder.append(char)
                     offset++
                 } else {
