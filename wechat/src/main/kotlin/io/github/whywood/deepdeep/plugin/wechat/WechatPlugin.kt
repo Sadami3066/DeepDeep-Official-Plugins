@@ -13,6 +13,7 @@ import io.github.whywood.deepdeep.plugin.api.PluginSkill
 import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
 import io.github.whywood.deepdeep.plugin.api.PromptSection
 import io.github.whywood.deepdeep.plugin.api.SlotBinding
+import io.github.whywood.deepdeep.plugin.api.assetIcon
 import io.github.whywood.deepdeep.plugin.api.available
 import io.github.whywood.deepdeep.plugin.api.contributions
 import io.github.whywood.deepdeep.plugin.api.notificationAction
@@ -79,6 +80,7 @@ class WechatPlugin : DeepDeepPlugin {
             pluginPage(
                 id = PAGE_ID,
                 title = TEXT_PAGE_TITLE,
+                icon = assetIcon(ICON_ASSET),
                 content = { WechatPage(this@WechatPlugin, host) },
             ),
         )
@@ -144,7 +146,7 @@ class WechatPlugin : DeepDeepPlugin {
         notifySynced(host)
     }
 
-    internal suspend fun exportRange(host: PluginHost, from: String, to: String, onProgress: (String) -> Unit): String {
+    internal suspend fun exportRange(host: PluginHost, from: String, to: String, onProgress: (String) -> Unit): WechatExport {
         if (!WechatCli.DATE_PATTERN.matches(from) || !WechatCli.DATE_PATTERN.matches(to)) {
             throw WechatException(host.text(TEXT_ERROR_DATE))
         }
@@ -156,13 +158,28 @@ class WechatPlugin : DeepDeepPlugin {
             throw WechatException(host.text(TEXT_ERROR_EXPORT, WechatCli.cleanOutput(result.stdout).takeLast(ERROR_TAIL)))
         }
         val output = WechatCli.cleanOutput(result.stdout)
+        val exportPath = WechatCli.parseExportPath(output)
+            ?: throw WechatException(host.text(TEXT_ERROR_EXPORT, output.takeLast(ERROR_TAIL)))
+        val targetDir = File(host.dataDir, EXPORT_DIR)
+        val publish = linux.exec(
+            WechatCli.publishCommand(exportPath, WechatCli.linuxPath(targetDir.absolutePath)),
+            timeoutMs = COPY_TIMEOUT_MS,
+        )
+        if (publish.exitCode != 0) {
+            throw WechatException(
+                host.text(TEXT_ERROR_EXPORT_FILE, WechatCli.cleanOutput(publish.stdout).takeLast(ERROR_TAIL)),
+            )
+        }
+        val file = File(targetDir, exportPath.substringAfterLast('/'))
+        if (!file.isFile) throw WechatException(host.text(TEXT_ERROR_EXPORT_FILE, exportPath))
         notifyExported(host)
-        return output.lineSequence()
-            .map { it.trim() }
-            .firstOrNull { it.startsWith("文件：") }
-            ?.removePrefix("文件：")
-            ?.trim()
-            ?: host.text(TEXT_EXPORT_DONE)
+        return WechatExport(
+            path = file.absolutePath,
+            name = file.name,
+            sizeBytes = file.length(),
+            from = from,
+            to = to,
+        )
     }
 
     private fun linuxAvailable(host: PluginHost): Boolean =
@@ -204,6 +221,8 @@ class WechatPlugin : DeepDeepPlugin {
         const val SECTION_ID = "wechat_prompt"
         const val SUPPORTED_ABI = "arm64-v8a"
         const val PROMPT_PRIORITY = 10
+        const val ICON_ASSET = "icon.png"
+        const val EXPORT_DIR = "exports"
 
         const val STATUS_TIMEOUT_MS = 30_000L
         const val SOURCE_CHECK_TIMEOUT_MS = 10_000L
@@ -212,6 +231,7 @@ class WechatPlugin : DeepDeepPlugin {
         const val INSTALL_TIMEOUT_MS = 180_000L
         const val SYNC_TIMEOUT_MS = 300_000L
         const val EXPORT_TIMEOUT_MS = 180_000L
+        const val COPY_TIMEOUT_MS = 120_000L
         const val ERROR_TAIL = 800
 
         val TEXT_PAGE_TITLE = literal("微信导出", "WeChat Export")
@@ -224,9 +244,9 @@ class WechatPlugin : DeepDeepPlugin {
             "微信数据不可读：请把 系统访问 切到 Root",
             "WeChat data is not readable. Set system access to Root.",
         )
-        val TEXT_STAGE_CHECKING = literal("正在检查 Node.js…", "Checking Node.js…")
-        val TEXT_STAGE_INSTALLING = literal("正在安装微信导出 CLI…", "Installing the WeChat export CLI…")
-        val TEXT_STAGE_SYNC = literal("正在同步微信数据库…", "Syncing the WeChat database…")
+        val TEXT_STAGE_CHECKING = literal("正在检查运行环境…", "Checking the runtime…")
+        val TEXT_STAGE_INSTALLING = literal("正在安装导出工具…", "Installing the export tool…")
+        val TEXT_STAGE_SYNC = literal("正在同步微信数据…", "Syncing WeChat data…")
         val TEXT_STAGE_EXPORT = literal("正在导出…", "Exporting…")
         val TEXT_ERROR_NODE_MISSING = literal(
             "没有找到 Node.js：请到 设置 → 运行环境 安装 Node.js 24+",
@@ -236,22 +256,22 @@ class WechatPlugin : DeepDeepPlugin {
             "Node.js 版本过低（%1\$s）：需要 24 或更高",
             "Node.js is too old (%1\$s); version 24 or newer is required.",
         )
-        val TEXT_ERROR_ASSET = literal("插件资源缺失：%1\$s", "Plugin asset is missing: %1\$s")
+        val TEXT_ERROR_ASSET = literal("安装文件缺失：%1\$s", "Install file is missing: %1\$s")
         val TEXT_ERROR_INSTALL = literal("安装失败：%1\$s", "Install failed: %1\$s")
         val TEXT_ERROR_SYNC = literal("同步失败：%1\$s", "Sync failed: %1\$s")
         val TEXT_ERROR_EXPORT = literal("导出失败：%1\$s", "Export failed: %1\$s")
+        val TEXT_ERROR_EXPORT_FILE = literal("导出文件无法准备：%1\$s", "Couldn't prepare the export file: %1\$s")
         val TEXT_ERROR_DATE = literal("日期格式必须是 YYYY-MM-DD", "Date must be YYYY-MM-DD")
-        val TEXT_EXPORT_DONE = literal("导出完成", "Export complete")
 
         const val ACTION_OPEN_PAGE = "open-page"
         const val NOTIFY_CLI_ID = "wechat-cli"
         const val NOTIFY_SYNC_ID = "wechat-sync"
         const val NOTIFY_EXPORT_ID = "wechat-export"
         val TEXT_ACTION_OPEN_PAGE = literal("打开插件页", "Open plugin page")
-        val TEXT_NOTIFY_INSTALL_TITLE = literal("微信导出 CLI 已安装", "WeChat export CLI installed")
+        val TEXT_NOTIFY_INSTALL_TITLE = literal("导出工具已安装", "Export tool installed")
         val TEXT_NOTIFY_INSTALL_BODY = literal(
-            "打开插件页同步微信数据库并导出记录。",
-            "Open the plugin page to sync the WeChat database and export records.",
+            "打开插件页同步微信数据并导出记录。",
+            "Open the plugin page to sync WeChat data and export records.",
         )
         val TEXT_NOTIFY_SYNC_TITLE = literal("微信数据已同步", "WeChat data synced")
         val TEXT_NOTIFY_SYNC_BODY = literal(

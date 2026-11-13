@@ -28,6 +28,8 @@ import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.CustomMessageSlotState
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 
@@ -142,6 +144,34 @@ internal fun MailChatUnavailableCard(host: PluginHost, title: String) {
 
 internal fun PluginHost.openMailPage() {
     runCatching { ui().openPage("mail") }.onFailure {
+        runCatching { ui().toast(t("无法打开邮箱页面", "Couldn't open the Mail page")) }
+    }
+}
+
+internal fun PluginHost.openMailThreadSheet(accountId: String, messageId: String, threadId: String) {
+    if (accountId.isBlank() || messageId.isBlank() || threadId.isBlank()) return
+    runCatching {
+        ui().openPageSheet(
+            "mail",
+            buildJsonObject {
+                put("accountId", accountId)
+                put("messageId", messageId)
+                put("threadId", threadId)
+            },
+        )
+    }.onFailure {
+        runCatching { ui().toast(t("无法打开这封邮件", "Couldn't open this message")) }
+    }
+}
+
+internal fun PluginHost.openMailDraftPage(draftId: String) {
+    if (draftId.isBlank()) return
+    runCatching {
+        ui().openPageWithArguments(
+            "mail",
+            buildJsonObject { put("draftId", draftId) },
+        )
+    }.onFailure {
         runCatching { ui().toast(t("无法打开邮箱页面", "Couldn't open the Mail page")) }
     }
 }

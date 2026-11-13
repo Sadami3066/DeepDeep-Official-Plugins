@@ -9,11 +9,14 @@ import io.github.whywood.deepdeep.plugin.api.notificationAction
 import io.github.whywood.deepdeep.plugin.api.pluginNotificationWithActions
 import java.io.File
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 internal enum class FeishuOperation {
     NONE,
@@ -29,6 +32,9 @@ internal data class FeishuPageState(
     val progress: Int? = null,
     val authUrl: String? = null,
     val error: String? = null,
+    val errorOperation: FeishuOperation? = null,
+    val checking: Boolean = true,
+    val cancelling: Boolean = false,
 )
 
 internal class FeishuRuntime {
@@ -41,6 +47,8 @@ internal class FeishuRuntime {
 
     private val refreshLock = Mutex()
 
+    private var operationJob: Job? = null
+
     fun currentSnapshot(): FeishuSnapshot? = memory
 
     suspend fun ensureLoaded(host: PluginHost) {
@@ -49,16 +57,38 @@ internal class FeishuRuntime {
 
     suspend fun refresh(host: PluginHost) {
         refreshLock.withLock {
+            pageState.update { it.copy(checking = true) }
             try {
                 ensureLoaded(host)
+                val cached = memory
+                if (cached != null) {
+                    pageState.update { if (it.snapshot == null) it.copy(snapshot = cached) else it }
+                }
                 val snapshot = readSnapshot(host)
                 memory = snapshot
                 FeishuStateStore.save(host, snapshot)
-                pageState.update { it.copy(snapshot = snapshot, error = null) }
+                pageState.update {
+                    it.copy(
+                        snapshot = snapshot,
+                        checking = false,
+                        error = if (it.errorOperation == null) null else it.error,
+                    )
+                }
             } catch (error: CancellationException) {
+                pageState.update { it.copy(checking = false) }
                 throw error
             } catch (error: Exception) {
-                pageState.update { it.copy(error = error.message ?: host.text(ERROR_UNKNOWN)) }
+                pageState.update { current ->
+                    if (current.errorOperation != null) {
+                        current.copy(checking = false)
+                    } else {
+                        current.copy(
+                            checking = false,
+                            error = error.message ?: host.text(ERROR_UNKNOWN),
+                            errorOperation = null,
+                        )
+                    }
+                }
             }
         }
     }
@@ -75,8 +105,32 @@ internal class FeishuRuntime {
         startOperation(host, FeishuOperation.LOGOUT) { logout(host) }
     }
 
+    fun cancelOperation(host: PluginHost) {
+        val state = pageState.value
+        if (state.operation == FeishuOperation.NONE || state.cancelling) return
+        pageState.update {
+            it.copy(cancelling = true, stage = STAGE_CANCELLING, progress = null, authUrl = null)
+        }
+        operationJob?.cancel()
+        runCatching { host.ui().snackbar(host.text(SNACKBAR_CANCELLED)) }
+    }
+
+    fun retry(host: PluginHost) {
+        when (pageState.value.errorOperation) {
+            FeishuOperation.INSTALL -> startInstall(host)
+            FeishuOperation.CONNECT -> startConnect(host)
+            FeishuOperation.LOGOUT -> startLogout(host)
+            FeishuOperation.NONE, null -> check(host)
+        }
+    }
+
+    fun check(host: PluginHost) {
+        if (pageState.value.operation != FeishuOperation.NONE) return
+        host.scope.launch { refresh(host) }
+    }
+
     fun openAppScopes(host: PluginHost) {
-        val appId = currentSnapshot()?.appId?.takeIf { it.isNotBlank() } ?: return
+        val appId = (currentSnapshot() ?: pageState.value.snapshot)?.appId?.takeIf { it.isNotBlank() } ?: return
         openUrl(host, "$APP_CONSOLE_URL/$appId/auth")
     }
 
@@ -85,7 +139,15 @@ internal class FeishuRuntime {
         openUrl(host, url)
     }
 
+    fun copyAuthUrl(host: PluginHost) {
+        val url = pageState.value.authUrl ?: return
+        val copied = runCatching { host.clipboard().setText(url) }.isSuccess
+        runCatching { host.ui().snackbar(host.text(if (copied) SNACKBAR_LINK_COPIED else ERROR_COPY)) }
+    }
+
     suspend fun reset(host: PluginHost) {
+        operationJob?.cancel()
+        operationJob = null
         memory = null
         FeishuStateStore.delete(host)
         pageState.update { FeishuPageState() }
@@ -96,23 +158,40 @@ internal class FeishuRuntime {
     }
 
     private fun startOperation(host: PluginHost, operation: FeishuOperation, block: suspend () -> Unit) {
-        host.scope.launch {
-            if (!operationLock.tryLock()) return@launch
-            try {
-                pageState.update {
-                    it.copy(operation = operation, stage = null, progress = null, authUrl = null, error = null)
+        if (pageState.value.operation != FeishuOperation.NONE) return
+        pageState.update {
+            it.copy(
+                operation = operation,
+                stage = null,
+                progress = null,
+                authUrl = null,
+                error = null,
+                errorOperation = null,
+                checking = false,
+                cancelling = false,
+            )
+        }
+        val job = host.scope.launch {
+            operationLock.withLock {
+                try {
+                    block()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    pageState.update {
+                        it.copy(
+                            error = error.message ?: host.text(ERROR_UNKNOWN),
+                            errorOperation = operation,
+                        )
+                    }
                 }
-                block()
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                pageState.update { it.copy(error = error.message ?: host.text(ERROR_UNKNOWN)) }
-            } finally {
-                pageState.update {
-                    it.copy(operation = FeishuOperation.NONE, stage = null, progress = null, authUrl = null)
-                }
-                operationLock.unlock()
             }
+        }
+        operationJob = job
+        if (pageState.value.cancelling) job.cancel()
+        job.invokeOnCompletion {
+            pageState.update { it.copy(operation = FeishuOperation.NONE) }
+            if (operationJob === job) operationJob = null
         }
     }
 
@@ -127,7 +206,7 @@ internal class FeishuRuntime {
         val statusResult = linux.exec(FeishuCli.statusCommand(), timeoutMs = STATUS_TIMEOUT_MS)
         val parsed = FeishuCli.parseAuthStatus(statusResult.stdout)
         return if (parsed == null) {
-            FeishuSnapshot(
+            (memory ?: FeishuSnapshot()).copy(
                 installedVersion = version,
                 checkedAt = checkedAt,
                 message = host.text(ERROR_STATUS, statusResult.stdout.takeLast(200).trim()),
@@ -150,6 +229,7 @@ internal class FeishuRuntime {
         val linux = requireLinux(host)
         val staging = File(host.dataDir, STAGING_DIR)
         val hadBinary = hasExistingBinary(linux)
+        var installed = false
         try {
             staging.deleteRecursively()
             staging.mkdirs()
@@ -170,15 +250,24 @@ internal class FeishuRuntime {
             if (install.exitCode != 0 || installedVersion != FEISHU_VERSION) {
                 throw IllegalStateException(host.text(ERROR_INSTALL, install.stdout.takeLast(400).trim()))
             }
+            installed = true
             pageState.update { it.copy(stage = STAGE_FINISHING) }
             refresh(host)
             host.requestContributionsRefresh()
             notifyInstalled(host)
             host.ui().snackbar(host.text(SNACKBAR_INSTALL_DONE))
         } catch (error: CancellationException) {
+            withContext(NonCancellable) {
+                if (!installed) {
+                    runCatching { linux.exec(feishuRestoreCommand(hadBinary), timeoutMs = CLEANUP_TIMEOUT_MS) }
+                }
+                staging.deleteRecursively()
+            }
             throw error
         } catch (error: Exception) {
-            runCatching { linux.exec(feishuRestoreCommand(hadBinary), timeoutMs = CLEANUP_TIMEOUT_MS) }
+            if (!installed) {
+                runCatching { linux.exec(feishuRestoreCommand(hadBinary), timeoutMs = CLEANUP_TIMEOUT_MS) }
+            }
             throw error
         } finally {
             staging.deleteRecursively()

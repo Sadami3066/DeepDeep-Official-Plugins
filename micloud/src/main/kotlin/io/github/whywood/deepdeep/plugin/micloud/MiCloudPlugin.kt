@@ -16,6 +16,7 @@ import io.github.whywood.deepdeep.plugin.api.SlotBinding
 import io.github.whywood.deepdeep.plugin.api.assetIcon
 import io.github.whywood.deepdeep.plugin.api.available
 import io.github.whywood.deepdeep.plugin.api.contributions
+import io.github.whywood.deepdeep.plugin.api.localizedText
 import io.github.whywood.deepdeep.plugin.api.notificationAction
 import io.github.whywood.deepdeep.plugin.api.pluginNotificationWithActions
 import io.github.whywood.deepdeep.plugin.api.pluginPage
@@ -27,6 +28,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+
+private const val NOTIFY_SIGNED_IN_ID = "micloud-signed-in"
+
+private const val ACTION_OPEN_PAGE = "open-page"
 
 internal class MiCloudContent(private val host: PluginHost) {
     private val dataDir: File = host.dataDir
@@ -121,11 +126,14 @@ internal class MiCloudContent(private val host: PluginHost) {
         runCatching {
             host.notifications().notifyChecked(
                 pluginNotificationWithActions(
-                    id = MiCloudTexts.NOTIFY_SIGNED_IN_ID,
-                    title = host.text(MiCloudTexts.notifySignedInTitle),
-                    body = host.text(MiCloudTexts.notifySignedInBody),
+                    id = NOTIFY_SIGNED_IN_ID,
+                    title = host.t("小米云已登录", "Signed in to Xiaomi Cloud"),
+                    body = host.t(
+                        "打开插件页开启需要的云数据开关。",
+                        "Open the plugin page to enable the cloud data switches you need.",
+                    ),
                     actions = listOf(
-                        notificationAction(MiCloudTexts.ACTION_OPEN_PAGE, host.text(MiCloudTexts.actionOpenPage)),
+                        notificationAction(ACTION_OPEN_PAGE, host.t("打开插件页", "Open plugin page")),
                     ),
                 ),
             )
@@ -226,7 +234,7 @@ class MiCloudPlugin : DeepDeepPlugin {
         tools = content(host).tools(),
         hooks = object : PluginHooks {
             override suspend fun notificationAction(event: NotificationActionEvent) {
-                if (event.actionId == MiCloudTexts.ACTION_OPEN_PAGE) host.ui().openPage(PAGE_ID)
+                if (event.actionId == ACTION_OPEN_PAGE) host.ui().openPage(PAGE_ID)
             }
         },
     )
@@ -239,7 +247,11 @@ class MiCloudPlugin : DeepDeepPlugin {
             override val pages: List<PluginPage> = listOf(
                 pluginPage(
                     id = PAGE_ID,
-                    title = MiCloudTexts.pageTitle,
+                    title = localizedText(
+                        default = "小米云服务",
+                        zh = "小米云服务",
+                        en = "Xiaomi Cloud",
+                    ),
                     icon = assetIcon(ICON_ASSET),
                     content = { MiCloudPage(host = host, content = content) },
                 ),

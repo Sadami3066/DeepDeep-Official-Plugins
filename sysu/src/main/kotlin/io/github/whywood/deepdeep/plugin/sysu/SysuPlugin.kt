@@ -168,7 +168,7 @@ class SysuPlugin : DeepDeepPlugin {
         ) ?: throw SysuException(host.text(TEXT_ERROR_NODE_MISSING))
         val nodeMajor = SysuCli.parseNodeMajor(nodeVersion)
         if (nodeMajor == null || nodeMajor < SysuCli.MIN_NODE_MAJOR) {
-            throw SysuException(host.text(TEXT_ERROR_NODE_OLD, nodeVersion))
+            throw SysuException(host.text(TEXT_ERROR_NODE_OLD))
         }
         val installed = runCatching {
             linux.exec(SysuCli.versionCommand(), timeoutMs = NODE_TIMEOUT_MS)
@@ -314,27 +314,27 @@ class SysuPlugin : DeepDeepPlugin {
         const val ERROR_TAIL = 500
 
         val TEXT_UNAVAILABLE_DEVICE = literal(
-            "当前设备不支持 Linux 环境",
-            "Linux environment is not supported on this device",
+            "当前设备无法使用校园服务",
+            "Campus services are not supported on this device",
         )
         val TEXT_UNAVAILABLE_LINUX = literal(
-            "请先在 设置 → 运行环境 安装 Linux 环境",
-            "Install the Linux environment in Settings → Runtime first",
+            "请先在 设置 → 运行环境 完成环境安装",
+            "Finish setting up the runtime in Settings → Runtime first",
         )
-        val TEXT_STAGE_CHECKING = literal("正在检查 Node.js…", "Checking Node.js…")
-        val TEXT_STAGE_INSTALLING = literal("正在安装校园 CLI…", "Installing the campus CLI…")
+        val TEXT_STAGE_CHECKING = literal("正在检查运行环境…", "Checking the runtime…")
+        val TEXT_STAGE_INSTALLING = literal("正在准备校园服务…", "Preparing campus services…")
         val TEXT_STAGE_LOGIN = literal("正在登录…", "Signing in…")
-        val TEXT_STAGE_CODE = literal("正在提交验证码…", "Submitting the verification code…")
+        val TEXT_STAGE_CODE = literal("正在验证…", "Verifying…")
         val TEXT_ERROR_NODE_MISSING = literal(
-            "没有找到 Node.js：请到 设置 → 运行环境 安装 Node.js",
-            "Node.js not found. Install Node.js in Settings → Runtime first.",
+            "运行环境不完整，请在 设置 → 运行环境 重新安装",
+            "The runtime is incomplete. Reinstall it in Settings → Runtime.",
         )
         val TEXT_ERROR_NODE_OLD = literal(
-            "Node.js 版本过低（%1\$s）：需要 22 或更高，请到 设置 → 运行环境 升级",
-            "Node.js is too old (%1\$s). Version 22 or newer is required; upgrade it in Settings → Runtime.",
+            "运行环境版本过低，请在 设置 → 运行环境 升级",
+            "The runtime is too old. Upgrade it in Settings → Runtime.",
         )
         val TEXT_ERROR_INSTALL = literal("安装失败：%1\$s", "Install failed: %1\$s")
-        val TEXT_ERROR_SAVE = literal("保存凭据失败：%1\$s", "Failed to save credentials: %1\$s")
+        val TEXT_ERROR_SAVE = literal("保存账号失败：%1\$s", "Failed to save the account: %1\$s")
         val TEXT_ERROR_ASSET = literal(
             "插件资源缺失：%1\$s，请重新安装插件",
             "Plugin asset is missing: %1\$s. Reinstall the plugin.",
@@ -357,10 +357,10 @@ class SysuPlugin : DeepDeepPlugin {
         const val NOTIFY_SIGNED_IN_ID = "sysu-signed-in"
 
         val TEXT_ACTION_OPEN_PAGE = literal("打开插件页", "Open plugin page")
-        val TEXT_NOTIFY_INSTALL_TITLE = literal("校园 CLI 已安装", "Campus CLI installed")
+        val TEXT_NOTIFY_INSTALL_TITLE = literal("校园服务已就绪", "Campus services ready")
         val TEXT_NOTIFY_INSTALL_BODY = literal(
-            "中山大学 CLI 已就绪，打开插件页完成登录。",
-            "The SYSU CLI is ready. Open the plugin page to sign in.",
+            "中山大学校园服务已就绪，打开插件页完成登录。",
+            "SYSU campus services are ready. Open the plugin page to sign in.",
         )
         val TEXT_NOTIFY_SIGNED_IN_TITLE = literal("已登录中山大学", "Signed in to SYSU")
         val TEXT_NOTIFY_SIGNED_IN_BODY = literal(

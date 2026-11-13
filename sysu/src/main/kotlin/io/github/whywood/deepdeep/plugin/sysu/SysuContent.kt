@@ -16,7 +16,7 @@ internal object SysuContent {
             return "中山大学 CLI 当前不可用：$reason。让用户到 设置 → 运行环境 安装或升级，然后在插件页「中山大学 CLI」填写账号密码并登录。"
         }
         if (!status.installed || status.outdated) {
-            return "中山大学 CLI 尚未安装或版本不是最新的（当前 ${status.installedVersion ?: "未安装"}，期望 ${SysuCli.VERSION}）：让用户打开插件页「中山大学 CLI」，填写账号密码后点「保存并登录」，页面会自动安装。"
+            return "中山大学 CLI 尚未安装或版本不是最新的（当前 ${status.installedVersion ?: "未安装"}，期望 ${SysuCli.VERSION}）：让用户打开插件页「中山大学 CLI」，填写账号密码后点「登录」，页面会自动安装。"
         }
         return if (status.loggedIn) {
             buildString {
@@ -26,10 +26,10 @@ internal object SysuContent {
                 appendLine("站点：sysu jwxt（教务）、sysu lms（在线教学）、sysu gym（体育场馆）、sysu netpay（网费）、sysu sso（通用换票）。")
                 appendLine("成绩、请假、预约与个人信息仅限本机会话；不要输出账号、密码、验证码或 session.json。")
                 appendLine("写操作必须先用 --dry-run 预览并让用户确认：请假、预约场地、网费续费；确认后才加 --yes。")
-                appendLine("会话失效时让用户在插件页点「重新登录」；接口报错不要反复重试，说明现象即可。")
+                appendLine("会话失效时让用户在插件页重新登录；接口报错不要反复重试，说明现象即可。")
             }
         } else {
-            "中山大学 CLI 已安装，当前未登录。让用户打开插件页填写 NetID 与密码并点「保存并登录」；需要验证码时页面会提示。不要向用户索要账号密码或验证码。"
+            "中山大学 CLI 已安装，当前未登录。让用户打开插件页填写 NetID 与密码并点「登录」；需要验证码时页面会提示。不要向用户索要账号密码或验证码。"
         }
     }
 
@@ -82,7 +82,7 @@ internal object SysuContent {
         ## 登录
 
         `sysu login` 成功即统一认证已登录，场馆 token 会自动获取，不需要单独 `gym login`。
-        会话失效会自动续期；真失效时让用户打开 DeepDeep 的「中山大学 CLI」插件页点「重新登录」：
+        会话失效会自动续期；真失效时让用户打开 DeepDeep 的「中山大学 CLI」插件页重新登录：
         页面会向企业微信发送 4 位验证码并提示输入。账号密码也只在插件页填写，不要在对话里索要。
         验证码错误时 CAS 可能写「NetID 或验证码错误」，但账号密码已通过；`--send-code` 会发新码。
 

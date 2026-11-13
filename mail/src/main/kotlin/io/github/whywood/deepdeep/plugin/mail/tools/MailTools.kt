@@ -19,6 +19,7 @@ import io.github.whywood.deepdeep.plugin.mail.MailDraft
 import io.github.whywood.deepdeep.plugin.mail.MailMessageDetail
 import io.github.whywood.deepdeep.plugin.mail.MailMessageSummary
 import io.github.whywood.deepdeep.plugin.mail.MailRepository
+import io.github.whywood.deepdeep.plugin.mail.MailSendResult
 import io.github.whywood.deepdeep.plugin.mail.mime.HtmlText
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeLimits
 import io.github.whywood.deepdeep.plugin.mail.ui.displayPreview
@@ -66,6 +67,7 @@ fun mailTools(
         readTool(host, repository),
         saveAttachmentTool(host, repository),
         draftTool(host, repository),
+        sendTool(host, repository),
         markTool(host, repository),
         archiveTool(host, repository),
     ),
@@ -118,7 +120,7 @@ private fun saveAttachmentTool(host: PluginHost, repository: MailRepository): Pl
 private fun draftTool(host: PluginHost, repository: MailRepository): PluginTool = pluginTool(
     name = "mail_draft",
     label = "起草邮件",
-    description = "生成一封待用户确认的邮件草稿。不会直接发送；草稿会以卡片形式交给用户确认。可以通过 attachments 附带本地文件。",
+    description = "生成一封邮件草稿并返回草稿 id。不会直接发送；用户明确要求发送时，生成后再调用 mail_send。可以通过 attachments 附带本地文件。",
     parameters = parameters(
         required = listOf("to", "subject", "body"),
         "to" to stringProperty("收件人，多个用逗号分隔"),
@@ -129,6 +131,17 @@ private fun draftTool(host: PluginHost, repository: MailRepository): PluginTool 
         "attachments" to stringProperty("附件文件的本地绝对路径，多个用英文逗号分隔，可留空"),
     ),
     execute = guardedExecute(host) { call -> draft(host, repository, call) },
+)
+
+private fun sendTool(host: PluginHost, repository: MailRepository): PluginTool = pluginTool(
+    name = "mail_send",
+    label = "发送邮件",
+    description = "发送一封 mail_draft 生成的草稿。只在用户明确要求发送时使用；发送后如实报告结果。",
+    parameters = parameters(
+        required = listOf("draft_id"),
+        "draft_id" to stringProperty("mail_draft 返回的草稿 id"),
+    ),
+    execute = guardedExecute(host) { call -> send(host, repository, call) },
 )
 
 private fun markTool(host: PluginHost, repository: MailRepository): PluginTool = pluginTool(
@@ -439,7 +452,47 @@ private suspend fun draft(
         "，附件 ${saved.attachments.size} 个"
     }
     return textResult(
-        "已生成草稿：收件人 ${saved.to.joinToString(", ")}，主题「${saved.subject.ifBlank { "（无主题）" }}」$attachmentNote。发送前请在草稿卡片上确认。",
+        "已生成草稿（id=${saved.id}）：收件人 ${saved.to.joinToString(", ")}，主题「${saved.subject.ifBlank { "（无主题）" }}」$attachmentNote。用户要求发送时调用 mail_send。",
+    )
+}
+
+private suspend fun send(
+    host: PluginHost,
+    repository: MailRepository,
+    call: PluginToolCall,
+): PluginToolResult {
+    val draftId = call.args.str("draft_id").trim()
+    if (draftId.isEmpty()) return textResult("请提供草稿 id。", isError = true)
+    val draft = repository.state.value.drafts.firstOrNull { it.id == draftId }
+        ?: return textResult(
+            host.toolText(
+                "找不到这份草稿，可能已经发送或删除；请重新用 mail_draft 生成草稿。",
+                "Couldn't find that draft. It may have been sent or deleted; create it again with mail_draft.",
+            ),
+            isError = true,
+        )
+    val result = try {
+        repository.sendDraft(draftId)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Throwable) {
+        MailSendResult(
+            ok = false,
+            error = host.readableError(
+                error,
+                fallbackZh = "发送失败，请稍后重试。",
+                fallbackEn = "Couldn't send the message. Try again.",
+            ),
+        )
+    }
+    if (!result.ok) {
+        val error = result.error?.takeIf { it.isNotBlank() }
+            ?: host.toolText("发送失败，请稍后重试。", "Couldn't send the message. Try again.")
+        return textResult(error, isError = true)
+    }
+    val subject = displaySubject(draft.subject, "（无主题）")
+    return textResult(
+        "已发送「$subject」给 ${draft.to.joinToString(", ")}。",
     )
 }
 

@@ -13,10 +13,23 @@ internal data class WechatStatus(
     val nodeTooOld: Boolean
         get() = nodeVersion?.let { (WechatCli.parseMajor(it) ?: 0) < WechatCli.MIN_NODE_MAJOR } == true
 
+    val nodeReady: Boolean
+        get() = nodeVersion != null && !nodeTooOld
+
     val installed: Boolean get() = cliVersion != null
 
     val outdated: Boolean get() = cliVersion != null && cliVersion != WechatCli.VERSION
+
+    val dataReady: Boolean get() = hasSnapshot && hasNormalized
 }
+
+internal data class WechatExport(
+    val path: String,
+    val name: String,
+    val sizeBytes: Long,
+    val from: String,
+    val to: String,
+)
 
 internal class WechatSettingsStore(private val host: PluginHost) {
     suspend fun readRange(): Pair<String, String>? {

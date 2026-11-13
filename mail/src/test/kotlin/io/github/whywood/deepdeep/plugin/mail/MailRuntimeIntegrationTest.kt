@@ -21,6 +21,7 @@ import io.github.whywood.deepdeep.plugin.mail.transport.SmtpCredentials
 import io.github.whywood.deepdeep.plugin.mail.transport.SmtpEndpoint
 import io.github.whywood.deepdeep.plugin.mail.tools.MAIL_OPEN_ACTION_ID
 import io.github.whywood.deepdeep.plugin.mail.tools.MAIL_SYNC_TASK_ID
+import io.github.whywood.deepdeep.plugin.mail.tools.MailChatCardTypes
 import io.github.whywood.deepdeep.plugin.mail.tools.mailHooks
 import io.github.whywood.deepdeep.plugin.mail.tools.mailNotificationPayload
 import io.github.whywood.deepdeep.plugin.mail.tools.mailTools
@@ -377,6 +378,161 @@ class MailRuntimeIntegrationTest {
             assertFalse(result.error.orEmpty().contains("Exception"))
             assertTrue(result.error.orEmpty().isNotBlank())
             assertEquals(1, rig.runtime.state.value.drafts.size)
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+
+    @Test
+    fun mailSendToolSendsDraftAndReturnsResult() = runBlocking {
+        val inbox = FakeFolder("INBOX", messages = mutableListOf(fixtureMessage(1, "first", "one")))
+        val sent = FakeFolder("已发送", flags = setOf("\\Sent"))
+        val rig = createRig(listOf(inbox, sent))
+        try {
+            rig.connectAccount(expectedMessages = 1)
+            val tools = mailTools(rig.host, rig.runtime).tools.associateBy { it.name }
+            val draftResult = tools.getValue("mail_draft").execute(
+                FakeToolCall(
+                    callId = "call-draft",
+                    args = buildJsonObject {
+                        put("to", "friend@example.com")
+                        put("subject", "测试主题")
+                        put("body", "正文内容")
+                    },
+                    sessionId = "session-1",
+                ),
+            )
+            assertFalse(draftResult.text.orEmpty(), draftResult.isError)
+            val draft = rig.runtime.state.value.drafts.single()
+            assertTrue(draftResult.text.orEmpty().contains(draft.id))
+            assertTrue(rig.host.chatCustomMessages.contains(MailChatCardTypes.DRAFT))
+
+            val sendResult = tools.getValue("mail_send").execute(
+                FakeToolCall(
+                    callId = "call-send",
+                    args = buildJsonObject { put("draft_id", draft.id) },
+                    sessionId = "session-1",
+                ),
+            )
+            assertFalse(sendResult.text.orEmpty(), sendResult.isError)
+            assertTrue(sendResult.text.orEmpty().contains("已发送"))
+            assertEquals(1, rig.smtp.messages.size)
+            val parsed = MailMimeParser.parse(rig.smtp.messages.single())
+            assertEquals("测试主题", parsed.headers.subject)
+            assertEquals(listOf("friend@example.com"), parsed.headers.to.map { it.address })
+            assertEquals("正文内容", parsed.textBody)
+            assertTrue(rig.runtime.state.value.drafts.isEmpty())
+            assertEquals(1, sent.messages.size)
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    @Test
+    fun mailSendToolMissingDraftReturnsReadableError() = runBlocking {
+        val rig = createRig(emptyList())
+        try {
+            val tools = mailTools(rig.host, rig.runtime).tools.associateBy { it.name }
+            val result = tools.getValue("mail_send").execute(
+                FakeToolCall(
+                    callId = "call-send",
+                    args = buildJsonObject { put("draft_id", "missing-draft") },
+                    sessionId = "session-1",
+                ),
+            )
+            assertTrue(result.isError)
+            assertTrue(result.text.orEmpty().contains("草稿"))
+            assertFalse(result.text.orEmpty().contains("Exception"))
+            assertTrue(rig.smtp.messages.isEmpty())
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    @Test
+    fun mailSendToolKeepsDraftWhenAttachmentIsMissing() = runBlocking {
+        val inbox = FakeFolder("INBOX", messages = mutableListOf(fixtureMessage(1, "first", "one")))
+        val rig = createRig(listOf(inbox))
+        try {
+            val accountId = rig.connectAccount(expectedMessages = 1)
+            val source = File(temporaryFolder.newFolder("send-missing-source"), "report.txt")
+            source.writeText("payload")
+            val attachment = rig.runtime.importDraftAttachment("draft-missing-1", source.absolutePath, "report.txt", "text/plain")
+            val draft = rig.runtime.saveDraft(
+                MailDraft(
+                    id = "draft-missing-1",
+                    accountId = accountId,
+                    to = listOf("friend@example.com"),
+                    subject = "missing attachment",
+                    body = "body",
+                    attachments = listOf(attachment),
+                    createdAt = 1,
+                    updatedAt = 1,
+                ),
+            )
+            File(attachment.path).delete()
+            val tools = mailTools(rig.host, rig.runtime).tools.associateBy { it.name }
+            val result = tools.getValue("mail_send").execute(
+                FakeToolCall(
+                    callId = "call-send",
+                    args = buildJsonObject { put("draft_id", draft.id) },
+                    sessionId = "session-1",
+                ),
+            )
+            assertTrue(result.isError)
+            assertTrue(result.text.orEmpty().contains("附件"))
+            assertFalse(result.text.orEmpty().contains("Exception"))
+            assertTrue(rig.smtp.messages.isEmpty())
+            assertEquals(1, rig.runtime.state.value.drafts.size)
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    @Test
+    fun mailSendToolSendsDraftWithAttachmentAndCleansUp() = runBlocking {
+        val inbox = FakeFolder("INBOX", messages = mutableListOf(fixtureMessage(1, "first", "one")))
+        val sent = FakeFolder("已发送", flags = setOf("\\Sent"))
+        val rig = createRig(listOf(inbox, sent))
+        try {
+            rig.connectAccount(expectedMessages = 1)
+            val source = File(temporaryFolder.newFolder("send-attach-source"), "report.txt")
+            source.writeText("attachment payload")
+            val tools = mailTools(rig.host, rig.runtime).tools.associateBy { it.name }
+            val draftResult = tools.getValue("mail_draft").execute(
+                FakeToolCall(
+                    callId = "call-draft",
+                    args = buildJsonObject {
+                        put("to", "friend@example.com")
+                        put("subject", "附件测试")
+                        put("body", "正文内容")
+                        put("attachments", source.absolutePath)
+                    },
+                    sessionId = "session-1",
+                ),
+            )
+            assertFalse(draftResult.text.orEmpty(), draftResult.isError)
+            val draft = rig.runtime.state.value.drafts.single()
+            assertEquals(1, draft.attachments.size)
+            val sendResult = tools.getValue("mail_send").execute(
+                FakeToolCall(
+                    callId = "call-send",
+                    args = buildJsonObject { put("draft_id", draft.id) },
+                    sessionId = "session-1",
+                ),
+            )
+            assertFalse(sendResult.text.orEmpty(), sendResult.isError)
+            assertEquals(1, rig.smtp.messages.size)
+            val parsed = MailMimeParser.parse(rig.smtp.messages.single(), retainAttachments = true)
+            assertEquals("附件测试", parsed.headers.subject)
+            assertEquals("report.txt", parsed.attachments.single().name)
+            assertEquals("attachment payload", parsed.attachments.single().data?.toString(Charsets.UTF_8))
+            assertEquals(1, sent.messages.size)
+            assertTrue(rig.runtime.state.value.drafts.isEmpty())
+            assertFalse(File(draft.attachments.single().path).exists())
+            assertTrue(File(rig.mailDir, "drafts").listFiles().orEmpty().isEmpty())
+            assertTrue(File(rig.mailDir, "tmp").listFiles().orEmpty().isEmpty())
         } finally {
             closeRig(rig)
         }

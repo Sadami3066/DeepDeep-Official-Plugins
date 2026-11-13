@@ -1,15 +1,16 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.feishu",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "publisher": {
     "name": "milous"
   },
   "apiLevel": 6,
-  "minHostVersion": "1.0.6",
+  "minHostVersion": "1.0.8",
   "ui": {
     "apiLevel": 2
   },
   "capabilities": [
+    "clipboard",
     "files",
     "linux",
     "network",

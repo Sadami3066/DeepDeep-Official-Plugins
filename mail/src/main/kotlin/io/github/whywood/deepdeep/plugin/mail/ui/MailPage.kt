@@ -42,6 +42,7 @@ import io.github.whywood.deepdeep.design.DdTextAction
 import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.LocalPluginPageContext
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.PluginPagePresentation
 import io.github.whywood.deepdeep.plugin.mail.MailAccount
 import io.github.whywood.deepdeep.plugin.mail.MailDraft
 import io.github.whywood.deepdeep.plugin.mail.MailFolderRole
@@ -62,9 +63,33 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
     val chinese = host.chinese
     val now = System.currentTimeMillis()
 
+    val pageContext = LocalPluginPageContext.current
+    val pageArguments = remember(pageContext) {
+        pageContext?.arguments?.let(::parseMailPageArguments)
+    }
+    val pageArgumentsKey = remember(pageArguments) { pageArguments?.toString().orEmpty() }
+    var pageArgumentsHandled by rememberSaveable(pageArgumentsKey) { mutableStateOf(false) }
+    val sheetPresentation = pageContext?.presentation == PluginPagePresentation.SHEET
+    val initialThread = remember(pageArguments, sheetPresentation) {
+        if (!sheetPresentation) {
+            null
+        } else {
+            pageArguments?.let { arguments ->
+                val accountId = arguments.accountId
+                val threadId = arguments.threadId
+                val messageId = arguments.messageId
+                if (accountId.isNullOrBlank() || threadId.isNullOrBlank() || messageId.isNullOrBlank()) {
+                    null
+                } else {
+                    MailThreadRequest(accountId, threadId, messageId)
+                }
+            }
+        }
+    }
+
     var overlay by remember { mutableStateOf<MailOverlay?>(null) }
-    var thread by remember { mutableStateOf<MailThreadRequest?>(null) }
-    var displayedThread by remember { mutableStateOf<MailThreadRequest?>(null) }
+    var thread by remember(initialThread) { mutableStateOf(initialThread) }
+    var displayedThread by remember(initialThread) { mutableStateOf(initialThread) }
     var query by rememberSaveable { mutableStateOf("") }
     var selectedAccountId by rememberSaveable { mutableStateOf<String?>(null) }
     var onlyUnread by rememberSaveable { mutableStateOf(false) }
@@ -76,13 +101,6 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
     var hiddenIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var refreshError by remember { mutableStateOf<String?>(null) }
     var pullRefreshing by remember { mutableStateOf(false) }
-    var cardRequest by remember { mutableStateOf<MailCardNavigation.Request?>(null) }
-    val pageContext = LocalPluginPageContext.current
-    val pageArguments = remember(pageContext) {
-        pageContext?.arguments?.let(::parseMailPageArguments)
-    }
-    val pageArgumentsKey = remember(pageArguments) { pageArguments?.toString().orEmpty() }
-    var pageArgumentsHandled by rememberSaveable(pageArgumentsKey) { mutableStateOf(false) }
 
     val accounts = state.accounts
     val activeAccountId = selectedAccountId?.takeIf { id -> accounts.any { it.id == id } }
@@ -184,38 +202,6 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
             return
         }
         overlay = MailOverlay.Compose(request ?: MailComposeRequest(accountId = accountId), returnTo)
-    }
-
-    LaunchedEffect(Unit) {
-        cardRequest = MailCardNavigation.consume()
-    }
-
-    LaunchedEffect(cardRequest, state.loading, state.drafts) {
-        val request = cardRequest ?: return@LaunchedEffect
-        if (state.loading) return@LaunchedEffect
-        cardRequest = null
-        when (request) {
-            is MailCardNavigation.Request.OpenThread -> {
-                thread = MailThreadRequest(
-                    accountId = request.accountId,
-                    threadId = request.threadId,
-                    messageId = request.messageId,
-                )
-            }
-
-            is MailCardNavigation.Request.EditDraft -> {
-                val draft = state.drafts.firstOrNull { it.id == request.draftId }
-                if (draft == null) {
-                    runCatching {
-                        host.ui().toast(
-                            host.t("这份草稿已不在草稿箱中。", "This draft is no longer in your drafts."),
-                        )
-                    }
-                } else {
-                    overlay = MailOverlay.Compose(request = composeRequestForDraft(draft), returnTo = null)
-                }
-            }
-        }
     }
 
     LaunchedEffect(pageArguments, state.loading, state.messages, state.drafts) {
@@ -488,17 +474,22 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
                     host = host,
                     repository = repository,
                     request = request,
-                    onBack = { thread = null },
+                    onBack = {
+                        thread = null
+                        if (sheetPresentation) host.ui().closePage()
+                    },
                     onCompose = { composeRequest ->
                         overlay = MailOverlay.Compose(composeRequest, returnTo = null)
                     },
                     onArchive = { messages ->
                         beginRemoval(messages, MailRemovalKind.ARCHIVE)
                         thread = null
+                        if (sheetPresentation) host.ui().closePage()
                     },
                     onDelete = { messages ->
                         beginRemoval(messages, MailRemovalKind.TRASH)
                         thread = null
+                        if (sheetPresentation) host.ui().closePage()
                     },
                 )
             }

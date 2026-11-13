@@ -13,6 +13,8 @@ internal object WechatCli {
     const val INSTALL_DIR = "/root/projects/wechat-cli"
     const val BIN_PATH = "/usr/local/bin/wechat"
     const val DATA_DIR = "/root/.wechat"
+    const val FILE_PREFIX = "文件："
+    const val STDOUT_MARKER = "stdout"
 
     val DATE_PATTERN = Regex("""^\d{4}-\d{2}-\d{2}$""")
     val NODE_VERSION = Regex("""v?\d+\.\d+\.\d+""")
@@ -65,6 +67,19 @@ internal object WechatCli {
     }
 
     fun cleanupCommand(): String = "rm -rf $INSTALL_DIR $BIN_PATH"
+
+    fun publishCommand(exportPath: String, targetDir: String): String = buildString {
+        appendLine("set -e")
+        appendLine("mkdir -p ${shellQuote(targetDir)}")
+        appendLine("cp -f ${shellQuote(exportPath)} ${shellQuote(targetDir)}/")
+    }
+
+    fun parseExportPath(output: String): String? = output.lineSequence()
+        .map { it.trim() }
+        .firstOrNull { it.startsWith(FILE_PREFIX) }
+        ?.removePrefix(FILE_PREFIX)
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() && it != STDOUT_MARKER }
 
     fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 

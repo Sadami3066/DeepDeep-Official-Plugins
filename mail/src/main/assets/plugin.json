@@ -1,8 +1,8 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.mail",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "apiLevel": 6,
-  "minHostVersion": "1.0.7",
+  "minHostVersion": "1.0.8",
   "ui": {
     "apiLevel": 2
   },
@@ -25,14 +25,14 @@
     "en": "Mail"
   },
   "summary": {
-    "default": "接入 IMAP/SMTP 邮箱，让 DeepDeep 读信、找邮件、起草回复",
-    "zh": "接入 IMAP/SMTP 邮箱，让 DeepDeep 读信、找邮件、起草回复",
-    "en": "Connect IMAP/SMTP mailboxes so DeepDeep can read, search, and draft replies"
+    "default": "接入 IMAP/SMTP 邮箱，让 DeepDeep 读信、找邮件、起草与发送",
+    "zh": "接入 IMAP/SMTP 邮箱，让 DeepDeep 读信、找邮件、起草与发送",
+    "en": "Connect IMAP/SMTP mailboxes so DeepDeep can read, search, draft and send"
   },
   "description": {
-    "default": "用授权码或应用专用密码接入 QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义 IMAP/SMTP 邮箱。插件提供邮件列表、会话阅读、写信与账户管理，并让 Agent 搜索、阅读、归档邮件、起草回复；发送前由你确认。",
-    "zh": "用授权码或应用专用密码接入 QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义 IMAP/SMTP 邮箱。插件提供邮件列表、会话阅读、写信与账户管理，并让 Agent 搜索、阅读、归档邮件、起草回复；发送前由你确认。",
-    "en": "Connect QQ, 163, 126, Tencent Exmail, Alibaba Mail, Gmail, iCloud, Fastmail, Yahoo, Zoho or any custom IMAP/SMTP mailbox with an authorization code or app password. The plugin provides message list, conversation reading, composing and account management, and lets the agent search, read, archive and draft replies; you confirm before anything is sent."
+    "default": "用授权码或应用专用密码接入 QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义 IMAP/SMTP 邮箱。插件提供邮件列表、会话阅读、写信与账户管理，并让 Agent 搜索、阅读、归档邮件、起草回复；你明确要求时可以让 Agent 直接发送。",
+    "zh": "用授权码或应用专用密码接入 QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义 IMAP/SMTP 邮箱。插件提供邮件列表、会话阅读、写信与账户管理，并让 Agent 搜索、阅读、归档邮件、起草回复；你明确要求时可以让 Agent 直接发送。",
+    "en": "Connect QQ, 163, 126, Tencent Exmail, Alibaba Mail, Gmail, iCloud, Fastmail, Yahoo, Zoho or any custom IMAP/SMTP mailbox with an authorization code or app password. The plugin provides message list, conversation reading, composing and account management, and lets the agent search, read, archive and draft replies; when you ask it to send, it can send directly."
   },
   "icon": "asset:icon.png",
   "publisher": {
@@ -43,6 +43,7 @@
       "mail_search",
       "mail_read",
       "mail_draft",
+      "mail_send",
       "mail_mark",
       "mail_archive",
       "mail_save_attachment"

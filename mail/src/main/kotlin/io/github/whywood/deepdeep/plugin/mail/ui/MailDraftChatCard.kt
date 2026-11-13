@@ -82,8 +82,7 @@ internal fun MailDraftChatCard(
     }
 
     fun editDraft() {
-        MailCardNavigation.editDraft(payload.draftId)
-        host.openMailPage()
+        host.openMailDraftPage(payload.draftId)
     }
 
     fun sendDraft() {

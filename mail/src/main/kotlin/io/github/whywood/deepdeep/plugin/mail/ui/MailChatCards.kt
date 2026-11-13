@@ -69,8 +69,7 @@ internal fun MailSearchChatCard(host: PluginHost, state: CustomMessageSlotState)
             payload.items.forEachIndexed { index, item ->
                 if (index > 0) DdRowDivider(leadingInset = 32.dp)
                 MailSearchResultRow(host = host, item = item, now = now) {
-                    MailCardNavigation.openThread(item.accountId, item.messageId, item.threadId)
-                    host.openMailPage()
+                    host.openMailThreadSheet(item.accountId, item.messageId, item.threadId)
                 }
             }
             DdHairline()
@@ -233,8 +232,7 @@ internal fun MailReadChatCard(host: PluginHost, state: CustomMessageSlotState) {
         MailChatCardFooter(
             actionLabel = host.t("打开邮件", "Open message"),
             onAction = {
-                MailCardNavigation.openThread(payload.accountId, payload.messageId, payload.threadId)
-                host.openMailPage()
+                host.openMailThreadSheet(payload.accountId, payload.messageId, payload.threadId)
             },
         )
     }

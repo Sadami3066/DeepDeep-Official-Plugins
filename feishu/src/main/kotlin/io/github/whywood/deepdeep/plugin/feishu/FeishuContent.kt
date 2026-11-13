@@ -1,10 +1,15 @@
 package io.github.whywood.deepdeep.plugin.feishu
 
 import io.github.whywood.deepdeep.plugin.api.LocalizedText
+import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.localizedText
 
 internal fun literal(zh: String, en: String, default: String = zh): LocalizedText =
     localizedText(mapOf("default" to default, "zh" to zh, "en" to en))
+
+internal fun PluginHost.t(zh: String, en: String): String = text(literal(zh, en))
+
+internal fun PluginHost.tf(zh: String, en: String, vararg args: Any): String = text(literal(zh, en), *args)
 
 internal const val FEISHU_VERSION = "1.0.98"
 internal const val FEISHU_SKILL_ID = "deepdeep-feishu"
@@ -21,7 +26,6 @@ internal val DOWNLOAD_URLS = listOf(
 )
 
 internal const val APP_CONSOLE_URL = "https://open.feishu.cn/app"
-internal const val SHOWN_SCOPE_LIMIT = 3
 internal const val STAGING_DIR = "install-staging"
 internal const val STATE_FILE = "state.json"
 
@@ -36,8 +40,8 @@ internal const val LOGOUT_TIMEOUT_MS = 60_000L
 internal const val CLEANUP_TIMEOUT_MS = 30_000L
 
 internal val UNAVAILABLE_LINUX = literal(
-    "需要 arm64 设备并先安装并启用 Linux 运行环境",
-    "Requires an arm64 device with the Linux environment installed and enabled",
+    "飞书连接需要先安装并启用 Linux 运行环境",
+    "Feishu needs the Linux environment installed and enabled",
 )
 
 internal val STAGE_DOWNLOADING = literal("正在下载飞书 CLI…", "Downloading Feishu CLI…")
@@ -50,18 +54,10 @@ internal val STAGE_CREATE_APP = literal(
 internal val STAGE_AUTH = literal("在浏览器中授权飞书账号", "Authorize your Feishu account in the browser")
 internal val STAGE_FINISHING = literal("正在完成登录…", "Finishing sign-in…")
 internal val STAGE_SIGNING_OUT = literal("正在退出登录…", "Signing out…")
-
-internal val HINT_CREATE_APP = literal(
-    "在浏览器完成创建后回到这里，会自动继续登录。",
-    "Come back after finishing in the browser; sign-in continues automatically.",
-)
-internal val HINT_AUTH = literal(
-    "在浏览器完成授权后会自动继续，无需复制链接。",
-    "Come back after authorizing; no link copying needed.",
-)
+internal val STAGE_CANCELLING = literal("正在取消…", "Cancelling…")
 
 internal val ERROR_LINUX = literal(
-    "Linux 运行环境不可用：请先安装并启用 Linux 环境。",
+    "Linux 运行环境不可用：请先安装并启用 Linux 运行环境。",
     "The Linux environment is unavailable: install and enable it first.",
 )
 internal val ERROR_DOWNLOAD = literal("下载安装包失败：%s", "Install package download failed: %s")
@@ -85,20 +81,9 @@ internal val NOTIFY_CLI_BODY = literal(
 internal val SNACKBAR_INSTALL_DONE = literal("飞书 CLI 安装完成", "Feishu CLI installed")
 internal val SNACKBAR_CONNECTED = literal("飞书已连接", "Feishu connected")
 internal val SNACKBAR_LOGGED_OUT = literal("已退出飞书登录", "Signed out of Feishu")
-
-internal val CONFIRM_LOGOUT_TITLE = literal("退出飞书登录？", "Sign out of Feishu?")
-internal val CONFIRM_LOGOUT_BODY = literal(
-    "退出后需要重新授权才能继续使用飞书能力。",
-    "You will need to authorize again to use Feishu.",
-)
-internal val CONFIRM_LOGOUT_OK = literal("退出登录", "Sign out")
-internal val CONFIRM_REAUTH_TITLE = literal("重新授权飞书账号？", "Reauthorize the Feishu account?")
-internal val CONFIRM_REAUTH_BODY = literal(
-    "当前登录会切换到新的飞书账号。",
-    "The current sign-in will switch to a new Feishu account.",
-)
-internal val CONFIRM_REAUTH_OK = literal("重新授权", "Reauthorize")
-internal val CONFIRM_CANCEL = literal("取消", "Cancel")
+internal val SNACKBAR_CANCELLED = literal("已取消", "Cancelled")
+internal val SNACKBAR_LINK_COPIED = literal("授权链接已复制", "Authorization link copied")
+internal val ERROR_COPY = literal("复制失败，请重试。", "Couldn't copy the link. Try again.")
 
 internal const val LARK_CLI_BACKUP_PATH = "/usr/local/bin/.lark-cli.old"
 internal const val LARK_CLI_TEMP_PATH = "/usr/local/bin/.lark-cli.new"
