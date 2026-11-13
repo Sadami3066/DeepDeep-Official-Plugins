@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -621,8 +622,10 @@ private fun MailThreadMessageCard(
         ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = DdSpacing.Lg, vertical = DdSpacing.Md)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    DdAvatar(
-                        initials = mailInitial(message.fromName, message.fromAddress),
+                    SenderAvatar(
+                        host = host,
+                        address = message.fromAddress,
+                        name = message.fromName,
                         size = 34.dp,
                     )
                     Spacer(Modifier.width(DdSpacing.Md))
@@ -742,16 +745,28 @@ private fun MailMessageContent(
             }
         }
     }
-    DdHtmlBlocks(
-        html = html,
-        modifier = Modifier.fillMaxWidth(),
-        loader = loader,
-        onLinkClick = onLinkClick,
-        onImageClick = onImageClick,
-        imageLabel = host.t("图片", "Image"),
-        style = DdType.body,
-        color = colors.ink,
-    )
+    val webHtml by produceState<String?>(initialValue = null, detail) {
+        value = runCatching { prepareMailWebHtml(repository, detail) }.getOrNull()
+    }
+    val prepared = webHtml
+    if (!prepared.isNullOrBlank()) {
+        MailHtmlWebView(
+            html = prepared,
+            modifier = Modifier.fillMaxWidth(),
+            onOpenUrl = onLinkClick,
+        )
+    } else {
+        DdHtmlBlocks(
+            html = html,
+            modifier = Modifier.fillMaxWidth(),
+            loader = loader,
+            onLinkClick = onLinkClick,
+            onImageClick = onImageClick,
+            imageLabel = host.t("图片", "Image"),
+            style = DdType.body,
+            color = colors.ink,
+        )
+    }
     val attachments = remember(detail) { detail.attachments.filter { !it.inline } }
     if (attachments.isNotEmpty()) {
         Spacer(Modifier.height(DdSpacing.Md))

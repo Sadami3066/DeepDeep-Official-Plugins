@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.mail"
         minSdk = 29
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.4.0"
+        versionCode = 5
+        versionName = "1.4.1"
     }
 
     compileOptions {
