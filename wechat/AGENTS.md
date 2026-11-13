@@ -6,7 +6,7 @@
 
 | 文件 | 职责 |
 |---|---|
-| `src/main/assets/plugin.json` | 清单：id/version 0.5.0/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.0.8/capabilities（`device`/`linux`/`media`/`notifications`/`settings`/`ui`）/icon/entryClass/provides（skills `deepdeep-wechat`、page `main`） |
+| `src/main/assets/plugin.json` | 清单：id/version 0.5.1/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.0.8/capabilities（`device`/`linux`/`media`/`notifications`/`settings`/`ui`）/icon/entryClass/provides（skills `deepdeep-wechat`、page `main`） |
 | `src/main/assets/wechat-cli/**` | 随包 Node CLI（`bin/wechat.mjs` 与 `src/lib/**`），同步、解密、导出微信记录 |
 | `src/main/kotlin/.../WechatCli.kt` | 安装路径、Node 版本要求、状态与同步/导出/导出文件发布命令拼装、`/data/user/0` → `/data/data` 路径归一 |
 | `src/main/kotlin/.../WechatPlugin.kt` | `DeepDeepPlugin` 入口：availability（arm64、Linux 可用、数据可读）/ skills / promptSections / ui（页面带 `icon.png`）/ 卸载清理；导出后把 Markdown 拷到 `host.dataDir/exports` 供打开与分享 |

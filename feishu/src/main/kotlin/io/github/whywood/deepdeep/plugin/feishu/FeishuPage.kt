@@ -101,6 +101,11 @@ private fun StatusSummary(host: PluginHost, state: FeishuPageState, linuxAvailab
     }
     val unknownTone = if (checking) DdStatusTone.NEUTRAL else DdStatusTone.WARNING
     DdGroupCard {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = DdSpacing.Card, vertical = DdSpacing.Xs),
+        ) {
         DdStatusRow(
             label = host.t("运行环境", "Runtime"),
             value = if (linuxAvailable) host.t("已就绪", "Ready") else host.t("不可用", "Unavailable"),
@@ -149,6 +154,7 @@ private fun StatusSummary(host: PluginHost, state: FeishuPageState, linuxAvailab
             },
             busy = checking && !checked,
         )
+        }
     }
 }
 

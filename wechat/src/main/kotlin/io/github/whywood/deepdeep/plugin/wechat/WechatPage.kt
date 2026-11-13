@@ -374,6 +374,11 @@ private fun StatusSummary(host: PluginHost, status: WechatStatus?, refreshing: B
     val placeholder = if (checking) host.text(TEXT_CHECKING) else host.text(TEXT_CHECK_FAILED)
     val placeholderTone = if (checking) DdStatusTone.NEUTRAL else DdStatusTone.WARNING
     DdGroupCard {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = DdSpacing.Card, vertical = DdSpacing.Xs),
+        ) {
         DdStatusRow(
             label = host.text(TEXT_RUNTIME),
             value = when {
@@ -437,6 +442,7 @@ private fun StatusSummary(host: PluginHost, status: WechatStatus?, refreshing: B
             },
             busy = refreshing,
         )
+        }
     }
 }
 

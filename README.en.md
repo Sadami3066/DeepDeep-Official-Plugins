@@ -12,10 +12,10 @@ This repository contains seven official plugins, published by `milous`:
 
 | Module | Plugin | Version | What it does | For |
 |---|---|---|---|---|
-| `feishu` | Feishu | 2.2.0 | Read and write messages, calendar, docs, drive, mail and tasks through the official `lark-cli` | Office users who work in Feishu every day |
+| `feishu` | Feishu | 2.2.1 | Read and write messages, calendar, docs, drive, mail and tasks through the official `lark-cli` | Office users who work in Feishu every day |
 | `wecom` | WeCom | 2.2.0 | Operate messages, mail, docs, schedules and to-dos through the official `wecom-cli` | Teams that use WeCom |
 | `sysu` | SYSU CLI | 2.2.0 | Run the Node.js `sysu` CLI inside the Linux environment: timetable, grades, assignments, course files, venue booking, campus network fees and SSO tickets | Students and staff at Sun Yat-sen University |
-| `wechat` | WeChat Export | 0.5.0 | Sync and decrypt the local WeChat database, export complete chat records for a date range and let the agent summarize | Users who need a complete WeChat export |
+| `wechat` | WeChat Export | 0.5.1 | Sync and decrypt the local WeChat database, export complete chat records for a date range and let the agent summarize | Users who need a complete WeChat export |
 | `micloud` | Xiaomi Cloud | 2.2.0 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
 | `mail` | Mail | 1.4.0 | Connect an IMAP/SMTP mailbox with an authorization code: inbox, conversations, composing with attachments, account management and in-chat mail cards, with agent search, reading, archiving, drafting and sending | Users of standard IMAP/SMTP mailboxes such as QQ, 163, Gmail or iCloud |
 | `themes` | Themes | 1.0.0 | Provides eight light and dark colour themes that can be switched from the host appearance settings | Users who want a different visual mood |
