@@ -1,0 +1,40 @@
+{
+  "id": "io.github.whywood.deepdeep.plugin.themes",
+  "version": "1.0.0",
+  "apiLevel": 6,
+  "minHostVersion": "1.0.8",
+  "capabilities": [],
+  "entryClass": "io.github.whywood.deepdeep.plugin.themes.ThemesPlugin",
+  "name": {
+    "default": "主题",
+    "zh": "主题",
+    "en": "Themes"
+  },
+  "summary": {
+    "default": "八套精选配色，为 DeepDeep 换一种气质",
+    "zh": "八套精选配色，为 DeepDeep 换一种气质",
+    "en": "Eight curated palettes that give DeepDeep a different mood"
+  },
+  "description": {
+    "default": "为主题库加入海盐、苔原、晚霞、樱、墨玉、夜航、咖啡与石墨八套主题，四浅四深；文字、按钮与代码在每套主题下都清晰可读。",
+    "zh": "为主题库加入海盐、苔原、晚霞、樱、墨玉、夜航、咖啡与石墨八套主题，四浅四深；文字、按钮与代码在每套主题下都清晰可读。",
+    "en": "Adds eight themes to the library — Harbor, Tundra, Dusk, Sakura, Jade, Nightfall, Mocha and Graphite — four light and four dark, with readable text, buttons and code in every one."
+  },
+  "publisher": {
+    "name": "milous"
+  },
+  "provides": {
+    "themes": [
+      "harbor",
+      "tundra",
+      "dusk",
+      "sakura",
+      "jade",
+      "nightfall",
+      "mocha",
+      "graphite"
+    ]
+  },
+  "defaultEnabled": true,
+  "icon": "asset:icon.png"
+}

@@ -16,4 +16,5 @@ fi
   :sysu:verifyPlugin \
   :wechat:verifyPlugin \
   :micloud:verifyPlugin \
-  :mail:verifyPlugin
+  :mail:verifyPlugin \
+  :themes:verifyPlugin
