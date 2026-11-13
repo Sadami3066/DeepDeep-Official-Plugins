@@ -1,6 +1,6 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.mail",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "apiLevel": 6,
   "minHostVersion": "1.0.8",
   "ui": {

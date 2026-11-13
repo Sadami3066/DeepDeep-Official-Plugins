@@ -24,6 +24,16 @@ class MailHtmlPrepTest {
     }
 
     @Test
+    fun stripsUnclosedOrRemoteScriptTags() {
+        val html = """<script src="https://evil.example/x.js"></script><script>alert(1)"""
+
+        val sanitized = MailHtmlPrep.sanitize(html)
+
+        assertFalse(sanitized.contains("<script", ignoreCase = true))
+        assertFalse(sanitized.contains("</script", ignoreCase = true))
+    }
+
+    @Test
     fun rewritesCidAttributesAndCssUrls() {
         val html = """
             <img src="cid:logo%401">

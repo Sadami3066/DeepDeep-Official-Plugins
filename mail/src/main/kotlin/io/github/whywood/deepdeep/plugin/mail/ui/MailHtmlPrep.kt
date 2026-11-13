@@ -8,7 +8,10 @@ internal object MailHtmlPrep {
 
     private val doCall = Regex("^(https?|mailto|tel):", RegexOption.IGNORE_CASE)
     private val script = Regex("(?is)<script\\b[^>]*>.*?</script\\s*>")
+    private val scriptTag = Regex("(?i)<script\\b[^>]*>")
+    private val scriptClose = Regex("(?i)</script\\s*>")
     private val framed = Regex("(?is)<(iframe|object|embed|form|frame|frameset)\\b[^>]*>.*?</\\1\\s*>")
+    private val embeddedTag = Regex("(?i)</?(iframe|object|embed|form|frame|frameset)\\b[^>]*>")
     private val link = Regex("(?is)<link\\b[^>]*>")
     private val meta = Regex("(?is)<meta\\b[^>]*>")
     private val base = Regex("(?is)<base\\b[^>]*>")
@@ -35,7 +38,10 @@ internal object MailHtmlPrep {
     fun sanitize(html: String): String {
         var value = html
             .replace(script, "")
+            .replace(scriptTag, "")
+            .replace(scriptClose, "")
             .replace(framed, "")
+            .replace(embeddedTag, "")
             .replace(link, "")
             .replace(meta, "")
             .replace(base, "")
