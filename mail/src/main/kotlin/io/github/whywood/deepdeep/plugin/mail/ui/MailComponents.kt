@@ -38,7 +38,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.github.whywood.deepdeep.design.DdDialog
 import io.github.whywood.deepdeep.design.DdElevation
 import io.github.whywood.deepdeep.design.DdIcon
@@ -55,40 +54,6 @@ import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
-
-@Composable
-internal fun MailAvatar(
-    initials: String,
-    color: Color,
-    size: Dp,
-    modifier: Modifier = Modifier,
-    contentDescription: String? = null,
-    onClick: (() -> Unit)? = null,
-) {
-    val colors = deepDeepColors()
-    val base = if (color.alpha <= 0f) colors.accent else color
-    val background = base.copy(alpha = 0.14f)
-    val textStyle = DdType.label.copy(fontSize = (size.value * 0.36f).sp)
-    val label = initials.take(2).ifEmpty { "?" }
-    if (onClick != null) {
-        DdPressable(
-            onClick = onClick,
-            modifier = modifier.size(size),
-            shape = CircleShape,
-            background = background,
-            contentDescription = contentDescription,
-        ) {
-            Text(text = label, style = textStyle, color = base)
-        }
-    } else {
-        Box(
-            modifier = modifier.size(size).clip(CircleShape).background(background),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = label, style = textStyle, color = base)
-        }
-    }
-}
 
 @Composable
 internal fun MailUnreadDot(

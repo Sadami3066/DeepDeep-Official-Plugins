@@ -1,8 +1,8 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.mail",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "apiLevel": 6,
-  "minHostVersion": "1.0.5",
+  "minHostVersion": "1.0.6",
   "ui": {
     "apiLevel": 2
   },
@@ -13,7 +13,10 @@
     "logs",
     "app",
     "ui",
-    "chat"
+    "chat",
+    "background",
+    "settings",
+    "media"
   ],
   "entryClass": "io.github.whywood.deepdeep.plugin.mail.MailPlugin",
   "name": {
@@ -41,7 +44,8 @@
       "mail_read",
       "mail_draft",
       "mail_mark",
-      "mail_archive"
+      "mail_archive",
+      "mail_save_attachment"
     ],
     "skills": [],
     "uiSlots": [
@@ -53,5 +57,8 @@
       "mail"
     ]
   },
-  "defaultEnabled": true
+  "defaultEnabled": true,
+  "components": {
+    "background": true
+  }
 }

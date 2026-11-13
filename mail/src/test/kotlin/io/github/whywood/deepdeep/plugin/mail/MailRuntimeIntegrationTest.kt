@@ -1,5 +1,11 @@
 package io.github.whywood.deepdeep.plugin.mail
 
+import io.github.whywood.deepdeep.plugin.api.BackgroundTaskEvent
+import io.github.whywood.deepdeep.plugin.api.NotificationActionEvent
+import io.github.whywood.deepdeep.plugin.api.PluginBackgroundKind
+import io.github.whywood.deepdeep.plugin.api.PluginRunSignal
+import io.github.whywood.deepdeep.plugin.api.PluginToolCall
+import io.github.whywood.deepdeep.plugin.api.PluginToolResult
 import io.github.whywood.deepdeep.plugin.mail.mime.MailMimeParser
 import io.github.whywood.deepdeep.plugin.mail.store.MailAccountIndex
 import io.github.whywood.deepdeep.plugin.mail.store.MailFolderIndex
@@ -13,11 +19,21 @@ import io.github.whywood.deepdeep.plugin.mail.transport.MailTransport
 import io.github.whywood.deepdeep.plugin.mail.transport.SmtpClient
 import io.github.whywood.deepdeep.plugin.mail.transport.SmtpCredentials
 import io.github.whywood.deepdeep.plugin.mail.transport.SmtpEndpoint
+import io.github.whywood.deepdeep.plugin.mail.tools.MAIL_OPEN_ACTION_ID
+import io.github.whywood.deepdeep.plugin.mail.tools.MAIL_SYNC_TASK_ID
+import io.github.whywood.deepdeep.plugin.mail.tools.mailHooks
+import io.github.whywood.deepdeep.plugin.mail.tools.mailNotificationPayload
+import io.github.whywood.deepdeep.plugin.mail.tools.mailTools
 import io.github.whywood.deepdeep.plugin.mail.transport.SmtpSecurity
 import java.io.File
 import java.io.RandomAccessFile
 import java.net.ServerSocket
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -399,6 +415,10 @@ class MailRuntimeIntegrationTest {
             assertEquals("mail-unread-$accountId", notification.id)
             assertTrue(notification.body.contains("新邮件"))
             assertEquals(2, rig.runtime.state.value.unreadByAccount[accountId])
+            assertEquals(MAIL_OPEN_ACTION_ID, notification.actions.single().id)
+            assertTrue(notification.actions.single().label.contains("打开邮件"))
+            assertTrue(notification.payload["threadId"]?.jsonPrimitive?.contentOrNull.orEmpty().isNotBlank())
+            assertEquals(accountId, notification.payload["accountId"]?.jsonPrimitive?.contentOrNull)
 
             inbox.messages += fixtureMessage(3, "another mail", "more content")
             assertTrue(rig.runtime.reauthorize(accountId, "secret").ok)
@@ -683,6 +703,162 @@ class MailRuntimeIntegrationTest {
             runBlocking { runtime.stop() }
             host.close()
         }
+    }
+
+    @Test
+    fun startSchedulesBackgroundSyncAndStopCancels() = runBlocking {
+        val rig = createRig(listOf(FakeFolder("INBOX")))
+        try {
+            rig.runtime.start()
+            awaitUntil { rig.host.backgroundSchedules.isNotEmpty() }
+            val schedule = rig.host.backgroundSchedules.single()
+            assertEquals(MAIL_SYNC_TASK_ID, schedule.id)
+            assertEquals(PluginBackgroundKind.PERIODIC, schedule.kind)
+            assertEquals(15L * 60_000L, schedule.intervalMs)
+            assertTrue(schedule.requiresNetwork)
+            rig.runtime.stop()
+            assertTrue(rig.host.backgroundCancelled.contains(MAIL_SYNC_TASK_ID))
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    @Test
+    fun settingsPersistLastSyncAcrossRuntimeInstances() = runBlocking {
+        val inbox = FakeFolder("INBOX", messages = mutableListOf(fixtureMessage(1, "first", "one")))
+        val rig = createRig(listOf(inbox))
+        var secondHost: FakePluginHost? = null
+        var secondRuntime: MailRuntime? = null
+        try {
+            val accountId = rig.connectAccount(expectedMessages = 1)
+            val syncedAt = rig.runtime.state.value.lastSyncByAccount.getValue(accountId)
+            assertEquals(syncedAt.toString(), rig.host.settingsValues["sync.lastAt.$accountId"])
+            rig.runtime.stop()
+
+            secondHost = FakePluginHost(rig.host.dataDir, settingsSnapshot = rig.host.settingsValues.toMap())
+            secondRuntime = MailRuntime(secondHost, PlainTextMailTransport)
+            secondRuntime.start()
+            assertEquals(syncedAt, secondRuntime.state.value.lastSyncByAccount[accountId])
+            assertNotNull(secondRuntime.state.value.lastSyncAt)
+        } finally {
+            secondRuntime?.let { runtime -> runBlocking { runtime.stop() } }
+            secondHost?.close()
+            closeRig(rig)
+        }
+    }
+
+    @Test
+    fun backgroundTaskHookTriggersIncrementalSync() = runBlocking {
+        val inbox = FakeFolder("INBOX", messages = mutableListOf(fixtureMessage(1, "first", "one")))
+        val rig = createRig(listOf(inbox))
+        try {
+            rig.connectAccount(expectedMessages = 1)
+            inbox.messages += fixtureMessage(2, "new mail", "new content")
+            val hooks = mailHooks(rig.host, rig.runtime)
+            hooks.backgroundTask(
+                FakeBackgroundTaskEvent(MAIL_SYNC_TASK_ID, PluginBackgroundKind.PERIODIC, System.currentTimeMillis()),
+            )
+            awaitUntil { rig.runtime.state.value.messages.any { it.uid == 2L } }
+            hooks.backgroundTask(FakeBackgroundTaskEvent("other", PluginBackgroundKind.PERIODIC, 1L))
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    @Test
+    fun notificationActionOpensMailPage() = runBlocking {
+        val inbox = FakeFolder("INBOX", messages = mutableListOf(fixtureMessage(1, "first", "one")))
+        val rig = createRig(listOf(inbox))
+        try {
+            rig.connectAccount(expectedMessages = 1)
+            val hooks = mailHooks(rig.host, rig.runtime)
+            hooks.notificationAction(
+                FakeNotificationActionEvent(
+                    "mail-unread-x",
+                    MAIL_OPEN_ACTION_ID,
+                    mailNotificationPayload("thread-1", rig.runtime.accounts().single().id, "msg-1"),
+                ),
+            )
+            val page = rig.host.uiPages.single()
+            assertEquals("mail", page.pageId)
+            assertEquals(false, page.newTask)
+            assertEquals("thread-1", page.arguments["threadId"]?.jsonPrimitive?.contentOrNull)
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    @Test
+    fun toolsSaveAttachmentToDownloadsAndShareToChat() = runBlocking {
+        val inbox = FakeFolder(
+            "INBOX",
+            messages = mutableListOf(fixtureMessage(1, "with attachment", "hello", withAttachment = true)),
+        )
+        val rig = createRig(listOf(inbox))
+        try {
+            val accountId = rig.connectAccount(expectedMessages = 1)
+            val summary = rig.runtime.state.value.messages.single()
+            val detail = rig.runtime.message(accountId, summary.id)
+            assertNotNull(detail)
+            val attachment = detail!!.attachments.single()
+            val tools = mailTools(rig.host, rig.runtime).tools.associateBy { it.name }
+            val readCall = FakeToolCall(
+                callId = "call-read",
+                args = buildJsonObject { put("message_id", summary.id) },
+                sessionId = "session-1",
+            )
+            val readResult = tools.getValue("mail_read").execute(readCall)
+            assertFalse(readResult.isError)
+            assertTrue(readResult.text.orEmpty().contains(attachment.id))
+            assertEquals(1, rig.host.chatAttachments.size)
+            val shared = rig.host.chatAttachments.single()
+            assertEquals("session-1", shared.sessionId)
+            assertEquals(false, shared.triggerTurn)
+            assertEquals(1, shared.attachments.size)
+            assertTrue(File(shared.attachments.single().path).isFile)
+
+            tools.getValue("mail_read").execute(readCall)
+            assertEquals(1, rig.host.chatAttachments.size)
+
+            val saveResult = tools.getValue("mail_save_attachment").execute(
+                FakeToolCall(
+                    callId = "call-save",
+                    args = buildJsonObject {
+                        put("message_id", summary.id)
+                        put("attachment_id", attachment.id)
+                    },
+                    sessionId = "session-1",
+                ),
+            )
+            assertFalse(saveResult.isError)
+            assertEquals(1, rig.host.mediaSaved.size)
+            assertEquals(attachment.name, rig.host.mediaSaved.single().name)
+            assertEquals(attachment.mimeType, rig.host.mediaSaved.single().mimeType)
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    private class FakeBackgroundTaskEvent(
+        override val taskId: String,
+        override val kind: PluginBackgroundKind,
+        override val firedAtMs: Long,
+    ) : BackgroundTaskEvent
+
+    private class FakeNotificationActionEvent(
+        override val notificationId: String,
+        override val actionId: String,
+        override val payload: JsonObject,
+    ) : NotificationActionEvent
+
+    private class FakeToolCall(
+        override val callId: String,
+        override val args: JsonObject,
+        override val sessionId: String,
+    ) : PluginToolCall {
+        override val signal: PluginRunSignal? = null
+
+        override fun partial(result: PluginToolResult) = Unit
     }
 
     private suspend fun Rig.connectAccount(expectedMessages: Int): String {

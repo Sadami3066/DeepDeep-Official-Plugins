@@ -113,7 +113,7 @@ internal object SyncPolicy {
     const val PREFETCH_TOTAL_BYTES = 24L * 1024 * 1024
     const val MAX_MESSAGE_BODY_BYTES = 48L * 1024 * 1024
     const val MAX_ATTACHMENT_BYTES = 32L * 1024 * 1024
-    const val REFRESH_INTERVAL_MS = 5 * 60 * 1000L
+    const val BACKGROUND_SYNC_INTERVAL_MS = 15 * 60 * 1000L
     const val REFRESH_DEBOUNCE_MS = 30 * 1000L
     const val NOTIFY_THROTTLE_MS = 30 * 60 * 1000L
 

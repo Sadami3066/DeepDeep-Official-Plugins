@@ -2,12 +2,37 @@ package io.github.whywood.deepdeep.plugin.mail.ui
 
 import io.github.whywood.deepdeep.plugin.mail.MailDraft
 import io.github.whywood.deepdeep.plugin.mail.MailMessageSummary
+import io.github.whywood.deepdeep.plugin.mail.tools.MAIL_ARG_ACCOUNT_ID
+import io.github.whywood.deepdeep.plugin.mail.tools.MAIL_ARG_MESSAGE_ID
+import io.github.whywood.deepdeep.plugin.mail.tools.MAIL_ARG_THREAD_ID
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 internal data class MailThreadRequest(
     val accountId: String,
     val threadId: String,
     val messageId: String,
 )
+
+internal const val MAIL_ARG_DRAFT_ID = "draftId"
+
+internal data class MailPageArguments(
+    val accountId: String? = null,
+    val threadId: String? = null,
+    val messageId: String? = null,
+    val draftId: String? = null,
+)
+
+internal fun parseMailPageArguments(arguments: JsonObject): MailPageArguments = MailPageArguments(
+    accountId = arguments.pageArgument(MAIL_ARG_ACCOUNT_ID),
+    threadId = arguments.pageArgument(MAIL_ARG_THREAD_ID),
+    messageId = arguments.pageArgument(MAIL_ARG_MESSAGE_ID),
+    draftId = arguments.pageArgument(MAIL_ARG_DRAFT_ID),
+)
+
+private fun JsonObject.pageArgument(name: String): String? =
+    (this[name] as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
 
 internal data class MailComposeRequest(
     val accountId: String,

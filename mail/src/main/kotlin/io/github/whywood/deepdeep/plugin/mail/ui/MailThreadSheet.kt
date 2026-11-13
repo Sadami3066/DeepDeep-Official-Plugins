@@ -27,19 +27,22 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.whywood.deepdeep.design.DdAvatar
+import io.github.whywood.deepdeep.design.DdFileRow
+import io.github.whywood.deepdeep.design.DdGroupCard
 import io.github.whywood.deepdeep.design.DdHairline
+import io.github.whywood.deepdeep.design.DdHtmlText
 import io.github.whywood.deepdeep.design.DdIcon
 import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdListRow
+import io.github.whywood.deepdeep.design.DdImageViewer
 import io.github.whywood.deepdeep.design.DdLoadingBlock
 import io.github.whywood.deepdeep.design.DdPressable
 import io.github.whywood.deepdeep.design.DdRadius
+import io.github.whywood.deepdeep.design.DdRowDivider
 import io.github.whywood.deepdeep.design.DdSheet
 import io.github.whywood.deepdeep.design.DdSpinner
-import io.github.whywood.deepdeep.design.DdText
 import io.github.whywood.deepdeep.design.DdTextAction
 import io.github.whywood.deepdeep.design.DdType
 import io.github.whywood.deepdeep.design.deepDeepColors
@@ -84,6 +87,7 @@ internal fun MailThreadSheet(
     var fallback by remember(request) { mutableStateOf<MailDetailState?>(null) }
     var attachmentBusyId by remember { mutableStateOf<String?>(null) }
     var attachmentError by remember { mutableStateOf<String?>(null) }
+    var viewerPath by remember { mutableStateOf<String?>(null) }
     var fallbackAttempt by remember { mutableIntStateOf(0) }
 
     fun loadDetail(messageId: String, force: Boolean = false) {
@@ -116,7 +120,7 @@ internal fun MailThreadSheet(
         }
     }
 
-    fun shareAttachment(messageId: String, attachment: MailAttachment) {
+    fun openAttachment(messageId: String, attachment: MailAttachment) {
         if (attachmentBusyId != null) return
         attachmentError = null
         attachmentBusyId = attachment.id
@@ -125,7 +129,11 @@ internal fun MailThreadSheet(
             attachmentBusyId = null
             val path = result.getOrNull()
             if (!path.isNullOrBlank()) {
-                host.ui().share(shareRequest(filePath = path, mimeType = attachment.mimeType))
+                if (isImageAttachment(attachment.mimeType, attachment.name)) {
+                    viewerPath = path
+                } else {
+                    host.ui().share(shareRequest(filePath = path, mimeType = attachment.mimeType))
+                }
             } else {
                 attachmentError = result.exceptionOrNull()?.let { error ->
                     host.readableError(
@@ -237,10 +245,6 @@ internal fun MailThreadSheet(
             ?: ""
         displaySubject(subject, host.t("（无主题）", "(No subject)"))
     }
-    val accountColor = remember(account) {
-        val color = Color(account?.color ?: 0)
-        if (color.alpha <= 0f) Color.Transparent else color
-    }
     val latestDetailState = if (messages.isEmpty()) {
         fallback
     } else {
@@ -262,12 +266,11 @@ internal fun MailThreadSheet(
                     FallbackMessage(
                         host = host,
                         state = fallback,
-                        accountColor = accountColor,
                         chinese = chinese,
                         attachmentBusyId = attachmentBusyId,
                         onRetry = { fallbackAttempt++ },
                         onAttachment = { messageId, attachment ->
-                            shareAttachment(messageId, attachment)
+                            openAttachment(messageId, attachment)
                         },
                     )
                 } else {
@@ -281,7 +284,6 @@ internal fun MailThreadSheet(
                             ThreadMessage(
                                 host = host,
                                 message = message,
-                                accountColor = accountColor,
                                 chinese = chinese,
                                 expanded = isExpanded,
                                 detailState = details[message.id],
@@ -294,7 +296,7 @@ internal fun MailThreadSheet(
                                     }
                                 },
                                 onRetry = { loadDetail(message.id, force = true) },
-                                onAttachment = { attachment -> shareAttachment(message.id, attachment) },
+                                onAttachment = { attachment -> openAttachment(message.id, attachment) },
                             )
                         }
                     }
@@ -329,13 +331,20 @@ internal fun MailThreadSheet(
             }
         }
     }
+
+    viewerPath?.let { path ->
+        DdImageViewer(
+            path = path,
+            onDismiss = { viewerPath = null },
+            contentDescription = host.t("图片附件", "Image attachment"),
+        )
+    }
 }
 
 @Composable
 private fun FallbackMessage(
     host: PluginHost,
     state: MailDetailState?,
-    accountColor: Color,
     chinese: Boolean,
     attachmentBusyId: String?,
     onRetry: () -> Unit,
@@ -363,7 +372,6 @@ private fun FallbackMessage(
             MailMessageBody(
                 host = host,
                 detail = detail,
-                accountColor = accountColor,
                 chinese = chinese,
                 showHeader = true,
                 attachmentBusyId = attachmentBusyId,
@@ -377,7 +385,6 @@ private fun FallbackMessage(
 private fun ThreadMessage(
     host: PluginHost,
     message: MailMessageSummary,
-    accountColor: Color,
     chinese: Boolean,
     expanded: Boolean,
     detailState: MailDetailState?,
@@ -400,9 +407,8 @@ private fun ThreadMessage(
                     .padding(vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                MailAvatar(
+                DdAvatar(
                     initials = mailInitial(message.fromName, message.fromAddress),
-                    color = accountColor,
                     size = 28.dp,
                 )
                 Spacer(Modifier.width(10.dp))
@@ -436,7 +442,7 @@ private fun ThreadMessage(
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         when (detailState) {
             null, is MailDetailState.Loading -> {
-                MessageHeader(host, message, accountColor, chinese)
+                MessageHeader(host, message, chinese)
                 DdLoadingBlock(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
                     text = host.t("正在加载邮件", "Loading mail"),
@@ -444,7 +450,7 @@ private fun ThreadMessage(
             }
 
             is MailDetailState.Failed -> {
-                MessageHeader(host, message, accountColor, chinese)
+                MessageHeader(host, message, chinese)
                 Column(Modifier.padding(top = 8.dp)) {
                     Text(text = detailState.message, style = DdType.bodySmall, color = colors.danger)
                     DdTextAction(text = host.t("重试", "Retry"), onClick = onRetry, color = colors.accent)
@@ -454,7 +460,6 @@ private fun ThreadMessage(
             is MailDetailState.Loaded -> MailMessageBody(
                 host = host,
                 detail = detailState.detail,
-                accountColor = accountColor,
                 chinese = chinese,
                 showHeader = true,
                 attachmentBusyId = attachmentBusyId,
@@ -468,14 +473,12 @@ private fun ThreadMessage(
 private fun MessageHeader(
     host: PluginHost,
     message: MailMessageSummary,
-    accountColor: Color,
     chinese: Boolean,
 ) {
     val colors = deepDeepColors()
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        MailAvatar(
+        DdAvatar(
             initials = mailInitial(message.fromName, message.fromAddress),
-            color = accountColor,
             size = 32.dp,
         )
         Spacer(Modifier.width(10.dp))
@@ -511,7 +514,6 @@ private fun MessageHeader(
 private fun MailMessageBody(
     host: PluginHost,
     detail: MailMessageDetail,
-    accountColor: Color,
     chinese: Boolean,
     showHeader: Boolean,
     attachmentBusyId: String?,
@@ -520,24 +522,34 @@ private fun MailMessageBody(
     val colors = deepDeepColors()
     Column(Modifier.fillMaxWidth()) {
         if (showHeader) {
-            MessageHeader(host, detail.summary, accountColor, chinese)
+            MessageHeader(host, detail.summary, chinese)
         }
-        val body = rememberMailBody(host, detail)
+        val html = remember(detail) { mailBodyHtml(detail) }
+        val onLinkClick = remember<(String) -> Unit>(host) {
+            { url -> runCatching { host.ui().openUrl(url) } }
+        }
         Box(Modifier.fillMaxWidth().padding(top = 10.dp)) {
-            DdText(
-                text = body,
+            DdHtmlText(
+                html = html,
+                modifier = Modifier.fillMaxWidth(),
+                onLinkClick = onLinkClick,
+                imageLabel = host.t("含图片", "Image"),
                 style = DdType.body,
                 color = colors.ink,
             )
         }
         if (detail.attachments.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                detail.attachments.forEach { attachment ->
-                    DdListRow(
-                        title = attachment.name.ifBlank { host.t("附件", "Attachment") },
+            DdGroupCard {
+                detail.attachments.forEachIndexed { index, attachment ->
+                    DdFileRow(
+                        name = attachment.name.ifBlank { host.t("附件", "Attachment") },
                         subtitle = formatFileSize(attachment.sizeBytes).takeIf { it.isNotBlank() },
-                        leadingIcon = DdIcons.Paperclip,
+                        icon = if (isImageAttachment(attachment.mimeType, attachment.name)) {
+                            DdIcons.Image
+                        } else {
+                            DdIcons.Paperclip
+                        },
                         onClick = { onAttachment(attachment) },
                         trailing = {
                             if (attachmentBusyId == attachment.id) {
@@ -547,6 +559,7 @@ private fun MailMessageBody(
                             }
                         },
                     )
+                    if (index < detail.attachments.lastIndex) DdRowDivider(leadingInset = 36.dp)
                 }
             }
         }

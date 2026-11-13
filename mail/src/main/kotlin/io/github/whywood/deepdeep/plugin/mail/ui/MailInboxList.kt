@@ -20,19 +20,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.whywood.deepdeep.design.DdAvatar
 import io.github.whywood.deepdeep.design.DdIcon
 import io.github.whywood.deepdeep.design.DdIcons
 import io.github.whywood.deepdeep.design.DdPressable
+import io.github.whywood.deepdeep.design.DdPullToRefresh
 import io.github.whywood.deepdeep.design.DdRadius
 import io.github.whywood.deepdeep.design.DdRowDivider
 import io.github.whywood.deepdeep.design.DdSectionLabel
@@ -58,7 +58,6 @@ internal fun MailThreadList(
     host: PluginHost,
     rows: List<MailThreadRow>,
     now: Long,
-    accounts: List<MailAccount>,
     archiveAccountIds: Set<String>,
     refreshing: Boolean,
     swipeEnabled: Boolean,
@@ -75,7 +74,6 @@ internal fun MailThreadList(
     val entries = remember(rows, now, todayLabel, yesterdayLabel, earlierLabel) {
         buildEntries(rows, now, todayLabel, yesterdayLabel, earlierLabel)
     }
-    val accountsById = remember(accounts) { accounts.associateBy { it.id } }
     val listContent: @Composable () -> Unit = {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -90,7 +88,6 @@ internal fun MailThreadList(
 
                     is MailListEntry.Row -> {
                         val row = entry.row
-                        val account = accountsById[row.accountId]
                         val canArchive = archiveAccountIds.contains(row.accountId)
                         Column(Modifier.fillMaxWidth()) {
                             if (swipeEnabled) {
@@ -107,7 +104,6 @@ internal fun MailThreadList(
                                     MailThreadItem(
                                         host = host,
                                         row = row,
-                                        accountColor = accountColor(account),
                                         now = now,
                                         chinese = chinese,
                                         onClick = {
@@ -119,7 +115,6 @@ internal fun MailThreadList(
                                 MailThreadItem(
                                     host = host,
                                     row = row,
-                                    accountColor = accountColor(account),
                                     now = now,
                                     chinese = chinese,
                                     onClick = { onOpen(row) },
@@ -133,7 +128,7 @@ internal fun MailThreadList(
         }
     }
     if (onRefresh != null) {
-        PullToRefreshBox(
+        DdPullToRefresh(
             isRefreshing = refreshing,
             onRefresh = onRefresh,
             modifier = modifier.fillMaxSize(),
@@ -149,7 +144,6 @@ internal fun MailThreadList(
 private fun MailThreadItem(
     host: PluginHost,
     row: MailThreadRow,
-    accountColor: Color,
     now: Long,
     chinese: Boolean,
     onClick: () -> Unit,
@@ -169,9 +163,8 @@ private fun MailThreadItem(
             modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
             verticalAlignment = Alignment.Top,
         ) {
-            MailAvatar(
+            DdAvatar(
                 initials = mailInitial(latest.fromName, latest.fromAddress),
-                color = accountColor,
                 size = 40.dp,
             )
             Spacer(Modifier.width(12.dp))
@@ -274,9 +267,8 @@ internal fun MailAccountSwitcher(
                 selected = selectedAccountId == account.id,
                 contentDescription = account.email,
             ) {
-                MailAvatar(
+                DdAvatar(
                     initials = mailInitial(account.displayName, account.email),
-                    color = accountColor(account),
                     size = 34.dp,
                     contentDescription = account.email,
                     onClick = { onSelect(account.id) },
@@ -309,11 +301,6 @@ private fun MailAccountSwitchItem(
             content()
         }
     }
-}
-
-private fun accountColor(account: MailAccount?): Color {
-    val color = Color(account?.color ?: 0)
-    return if (color.alpha <= 0f) Color.Transparent else color
 }
 
 private fun buildEntries(

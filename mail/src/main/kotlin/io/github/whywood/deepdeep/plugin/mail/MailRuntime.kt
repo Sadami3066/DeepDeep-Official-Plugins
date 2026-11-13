@@ -1,8 +1,10 @@
 package io.github.whywood.deepdeep.plugin.mail
 
+import io.github.whywood.deepdeep.plugin.api.NotificationChannel
+import io.github.whywood.deepdeep.plugin.api.PluginBackgroundKind
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.localizedText
-import io.github.whywood.deepdeep.plugin.api.pluginNotification
+import io.github.whywood.deepdeep.plugin.api.pluginNotificationWithActions
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeException
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeFailure
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeLimits
@@ -32,6 +34,9 @@ import io.github.whywood.deepdeep.plugin.mail.transport.MailTexts
 import io.github.whywood.deepdeep.plugin.mail.transport.MailTimeoutException
 import io.github.whywood.deepdeep.plugin.mail.transport.MailTransport
 import io.github.whywood.deepdeep.plugin.mail.transport.SecureMailTransport
+import io.github.whywood.deepdeep.plugin.mail.tools.MAIL_SYNC_TASK_ID
+import io.github.whywood.deepdeep.plugin.mail.tools.mailNotificationPayload
+import io.github.whywood.deepdeep.plugin.mail.tools.mailOpenAction
 import io.github.whywood.deepdeep.plugin.mail.transport.SmtpCredentials
 import java.io.File
 import java.security.MessageDigest
@@ -39,12 +44,10 @@ import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -218,11 +221,16 @@ internal class MailRuntime(
             val loadedDrafts = store.drafts()
             store.retainDraftData(loadedDrafts.map { it.id }.toSet())
             store.cleanupOutgoingTemp()
+            val settings = runCatching { host.settings().snapshot() }.getOrDefault(emptyMap())
             LoadedState(
                 accounts = loadedAccounts,
                 servers = store.servers().associateBy { it.accountId },
                 indexes = loadedAccounts.associate { it.id to store.index(it.id) },
                 drafts = loadedDrafts,
+                lastSyncAt = settings[SETTING_LAST_SYNC_AT]?.toLongOrNull(),
+                lastSyncByAccount = loadedAccounts.mapNotNull { account ->
+                    settings["$SETTING_LAST_SYNC_PREFIX${account.id}"]?.toLongOrNull()?.let { account.id to it }
+                }.toMap(),
             )
         }
         stateMutex.withLock {
@@ -231,10 +239,12 @@ internal class MailRuntime(
             servers = loaded.servers
             indexes = loaded.indexes.toMutableMap()
             drafts = loaded.drafts
+            lastSyncByAccount = loaded.lastSyncByAccount
             started = true
             publishLocked()
-            _state.update { it.copy(loading = false) }
+            _state.update { it.copy(loading = false, lastSyncAt = loaded.lastSyncAt) }
         }
+        scheduleBackgroundSync()
         syncJob = host.scope.launch {
             try {
                 refreshInternal(force = true)
@@ -242,17 +252,6 @@ internal class MailRuntime(
                 throw cancelled
             } catch (error: Throwable) {
                 report(error)
-            }
-            while (isActive) {
-                delay(SyncPolicy.REFRESH_INTERVAL_MS)
-                if (!stateMutex.withLock { started }) break
-                try {
-                    refreshInternal(force = false)
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (error: Throwable) {
-                    report(error)
-                }
             }
         }
     }
@@ -262,6 +261,45 @@ internal class MailRuntime(
         syncJob = null
         stateMutex.withLock { started = false }
         _state.update { it.copy(syncing = false) }
+        cancelBackgroundSync()
+    }
+
+    internal suspend fun runBackgroundSync() {
+        if (!stateMutex.withLock { started }) return
+        if (_state.value.syncing) return
+        try {
+            refreshInternal(force = true)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            report(error)
+            markSyncFailure(safeDescribe(error))
+        }
+    }
+
+    private suspend fun scheduleBackgroundSync() {
+        try {
+            host.background().schedule(
+                id = MAIL_SYNC_TASK_ID,
+                kind = PluginBackgroundKind.PERIODIC,
+                intervalMs = SyncPolicy.BACKGROUND_SYNC_INTERVAL_MS,
+                requiresNetwork = true,
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            report(error)
+        }
+    }
+
+    private suspend fun cancelBackgroundSync() {
+        try {
+            host.background().cancel(MAIL_SYNC_TASK_ID)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            report(error)
+        }
     }
 
     private suspend fun testConnectionInternal(input: MailAccountInput): MailConnectionTest {
@@ -355,6 +393,7 @@ internal class MailRuntime(
             publishLocked()
         }
         host.secrets().remove(secretKey(accountId))
+        removeSyncSetting(accountId)
     }
 
     private suspend fun reauthorizeInternal(accountId: String, password: String): MailConnectionTest {
@@ -930,6 +969,7 @@ internal class MailRuntime(
             publishLocked()
             capped.map { it.id }.toSet()
         }
+        persistSyncSetting(account.id, now)
         notifyNewMail(account, newUnread.filter { it.id in keptIds && it.folderRole == MailFolderRole.INBOX })
     }
 
@@ -963,7 +1003,21 @@ internal class MailRuntime(
                     },
                 ),
             )
-            host.notifications().notify(pluginNotification("mail-unread-${account.id}", title, body))
+            val latestId = latest?.id.orEmpty()
+            host.notifications().notifyChecked(
+                pluginNotificationWithActions(
+                    id = "mail-unread-${account.id}",
+                    title = title,
+                    body = body,
+                    channel = NotificationChannel.DEFAULT,
+                    actions = listOf(mailOpenAction(host)),
+                    payload = mailNotificationPayload(
+                        threadId = latest?.threadId.orEmpty(),
+                        accountId = account.id,
+                        messageId = latestId,
+                    ),
+                ),
+            )
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
@@ -1289,6 +1343,28 @@ internal class MailRuntime(
     private fun localizedFailure(error: Throwable): MailLocalizedException =
         MailLocalizedException(safeDescribe(error), error)
 
+    private suspend fun persistSyncSetting(accountId: String, now: Long) {
+        try {
+            val settings = host.settings()
+            settings.put("$SETTING_LAST_SYNC_PREFIX$accountId", now.toString())
+            settings.put(SETTING_LAST_SYNC_AT, now.toString())
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            report(error)
+        }
+    }
+
+    private suspend fun removeSyncSetting(accountId: String) {
+        try {
+            host.settings().remove("$SETTING_LAST_SYNC_PREFIX$accountId")
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            report(error)
+        }
+    }
+
     private fun safeDescribe(error: Throwable): String =
         runCatching { texts.describeAny(error) }.getOrElse { fallbackErrorText }
 
@@ -1322,6 +1398,8 @@ internal class MailRuntime(
         val servers: Map<String, MailServerSettings>,
         val indexes: Map<String, MailAccountIndex>,
         val drafts: List<MailDraft>,
+        val lastSyncAt: Long? = null,
+        val lastSyncByAccount: Map<String, Long> = emptyMap(),
     )
 
     private data class FolderSync(
@@ -1331,6 +1409,8 @@ internal class MailRuntime(
     )
 
     private companion object {
+        const val SETTING_LAST_SYNC_AT = "sync.lastAt"
+        const val SETTING_LAST_SYNC_PREFIX = "sync.lastAt."
         const val FALLBACK_ERROR_ZH = "操作没有完成，请稍后重试。"
         const val FALLBACK_ERROR_EN = "The action did not finish. Try again later."
         val EMAIL = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")

@@ -23,8 +23,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import io.github.whywood.deepdeep.design.DdAvatar
 import io.github.whywood.deepdeep.design.DdEmptyState
 import io.github.whywood.deepdeep.design.DdIconButton
 import io.github.whywood.deepdeep.design.DdIcons
@@ -34,8 +34,10 @@ import io.github.whywood.deepdeep.design.DdSearchField
 import io.github.whywood.deepdeep.design.DdSegmented
 import io.github.whywood.deepdeep.design.DdTextAction
 import io.github.whywood.deepdeep.design.deepDeepColors
+import io.github.whywood.deepdeep.plugin.api.LocalPluginPageContext
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.mail.MailAccount
+import io.github.whywood.deepdeep.plugin.mail.MailDraft
 import io.github.whywood.deepdeep.plugin.mail.MailFolderRole
 import io.github.whywood.deepdeep.plugin.mail.MailRepository
 import kotlinx.coroutines.delay
@@ -66,6 +68,12 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
     var refreshError by remember { mutableStateOf<String?>(null) }
     var pullRefreshing by remember { mutableStateOf(false) }
     var cardRequest by remember { mutableStateOf<MailCardNavigation.Request?>(null) }
+    val pageContext = LocalPluginPageContext.current
+    val pageArguments = remember(pageContext) {
+        pageContext?.arguments?.let(::parseMailPageArguments)
+    }
+    val pageArgumentsKey = remember(pageArguments) { pageArguments?.toString().orEmpty() }
+    var pageArgumentsHandled by rememberSaveable(pageArgumentsKey) { mutableStateOf(false) }
 
     val accounts = state.accounts
     val activeAccountId = selectedAccountId?.takeIf { id -> accounts.any { it.id == id } }
@@ -148,6 +156,15 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
         commitRemoval(failed.removal)
     }
 
+    fun composeRequestForDraft(draft: MailDraft): MailComposeRequest = MailComposeRequest(
+        accountId = draft.accountId,
+        to = draft.to,
+        cc = draft.cc,
+        subject = draft.subject,
+        body = draft.body,
+        draft = draft,
+    )
+
     fun openCompose(request: MailComposeRequest? = null, returnTo: MailOverlay? = null) {
         val accountId = request?.accountId?.takeIf { it.isNotBlank() }
             ?: activeAccountId
@@ -187,19 +204,44 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
                         )
                     }
                 } else {
-                    overlay = MailOverlay.Compose(
-                        request = MailComposeRequest(
-                            accountId = draft.accountId,
-                            to = draft.to,
-                            cc = draft.cc,
-                            subject = draft.subject,
-                            body = draft.body,
-                            draft = draft,
-                        ),
-                        returnTo = null,
-                    )
+                    overlay = MailOverlay.Compose(request = composeRequestForDraft(draft), returnTo = null)
                 }
             }
+        }
+    }
+
+    LaunchedEffect(pageArguments, state.loading, state.messages, state.drafts) {
+        val arguments = pageArguments ?: return@LaunchedEffect
+        if (pageArgumentsHandled || state.loading) return@LaunchedEffect
+        val draftId = arguments.draftId
+        if (draftId != null) {
+            pageArgumentsHandled = true
+            val draft = state.drafts.firstOrNull { it.id == draftId }
+            if (draft == null) {
+                runCatching {
+                    host.ui().toast(
+                        host.t("这份草稿已不在草稿箱中。", "This draft is no longer in your drafts."),
+                    )
+                }
+            } else {
+                overlay = MailOverlay.Compose(request = composeRequestForDraft(draft), returnTo = null)
+            }
+            return@LaunchedEffect
+        }
+        val threadId = arguments.threadId ?: return@LaunchedEffect
+        val accountId = arguments.accountId
+        val messageId = arguments.messageId
+        if (messageId != null && accountId != null) {
+            pageArgumentsHandled = true
+            overlay = MailOverlay.Thread(MailThreadRequest(accountId, threadId, messageId))
+            return@LaunchedEffect
+        }
+        val match = state.messages
+            .filter { it.threadId == threadId && (accountId == null || it.accountId == accountId) }
+            .maxByOrNull { it.dateMillis }
+        if (match != null) {
+            pageArgumentsHandled = true
+            overlay = MailOverlay.Thread(MailThreadRequest(match.accountId, match.threadId, match.id))
         }
     }
 
@@ -356,7 +398,6 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
                         host = host,
                         searchState = searchState,
                         rows = searchRows,
-                        accounts = accounts,
                         now = now,
                         chinese = chinese,
                         onlyUnread = onlyUnread,
@@ -379,7 +420,6 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
                         host = host,
                         rows = inboxRows,
                         now = now,
-                        accounts = accounts,
                         archiveAccountIds = state.archiveAccountIds,
                         refreshing = pullRefreshing,
                         swipeEnabled = true,
@@ -520,9 +560,8 @@ private fun MailTopActions(
             tint = colors.ink,
         )
         if (activeAccount != null) {
-            MailAvatar(
+            DdAvatar(
                 initials = mailInitial(activeAccount.displayName, activeAccount.email),
-                color = Color(activeAccount.color),
                 size = 36.dp,
                 contentDescription = host.t("账户", "Accounts"),
                 onClick = onAccounts,
@@ -587,7 +626,6 @@ private fun MailSearchContent(
     host: PluginHost,
     searchState: MailSearchState,
     rows: List<MailThreadRow>,
-    accounts: List<MailAccount>,
     now: Long,
     chinese: Boolean,
     onlyUnread: Boolean,
@@ -642,7 +680,6 @@ private fun MailSearchContent(
                 host = host,
                 rows = rows,
                 now = now,
-                accounts = accounts,
                 archiveAccountIds = emptySet(),
                 refreshing = false,
                 swipeEnabled = false,

@@ -1,10 +1,14 @@
 package io.github.whywood.deepdeep.plugin.mail.tools
 
+import io.github.whywood.deepdeep.plugin.api.ChatAttachment
 import io.github.whywood.deepdeep.plugin.api.Contributions
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.PluginHooks
 import io.github.whywood.deepdeep.plugin.api.PluginTool
 import io.github.whywood.deepdeep.plugin.api.PluginToolCall
 import io.github.whywood.deepdeep.plugin.api.PluginToolResult
+import io.github.whywood.deepdeep.plugin.api.chatAttachment
+import io.github.whywood.deepdeep.plugin.api.chatMessageOptions
 import io.github.whywood.deepdeep.plugin.api.contributions
 import io.github.whywood.deepdeep.plugin.api.localizedText
 import io.github.whywood.deepdeep.plugin.api.pluginTool
@@ -20,6 +24,7 @@ import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeLimits
 import io.github.whywood.deepdeep.plugin.mail.ui.displayPreview
 import io.github.whywood.deepdeep.plugin.mail.ui.readableError
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -51,15 +56,26 @@ private fun guardedExecute(
     }
 }
 
-fun mailTools(host: PluginHost, repository: MailRepository): Contributions = contributions(
+fun mailTools(
+    host: PluginHost,
+    repository: MailRepository,
+    hooks: PluginHooks = PluginHooks.None,
+): Contributions = contributions(
     tools = listOf(
         searchTool(host, repository),
         readTool(host, repository),
+        saveAttachmentTool(host, repository),
         draftTool(host, repository),
         markTool(host, repository),
         archiveTool(host, repository),
     ),
+    hooks = hooks,
 )
+
+private val sharedAttachmentKeys = ConcurrentHashMap.newKeySet<String>()
+
+private const val MAX_CHAT_ATTACHMENTS = 3
+private const val MAX_CHAT_ATTACHMENT_BYTES = 10L * 1024 * 1024
 
 private fun searchTool(host: PluginHost, repository: MailRepository): PluginTool = pluginTool(
     name = "mail_search",
@@ -84,6 +100,19 @@ private fun readTool(host: PluginHost, repository: MailRepository): PluginTool =
         "message_id" to stringProperty("mail_search 返回的邮件 id"),
     ),
     execute = guardedExecute(host) { call -> read(host, repository, call) },
+)
+
+private fun saveAttachmentTool(host: PluginHost, repository: MailRepository): PluginTool = pluginTool(
+    name = "mail_save_attachment",
+    label = "保存附件",
+    description = "把一封邮件的附件保存到手机的下载目录，返回保存结果。附件 id 见 mail_read 输出。",
+    parameters = parameters(
+        required = listOf("message_id", "attachment_id"),
+        "message_id" to stringProperty("邮件 id"),
+        "attachment_id" to stringProperty("mail_read 返回的附件 id，例如 att-0"),
+        "account" to stringProperty("邮箱地址或账号 id，可留空"),
+    ),
+    execute = guardedExecute(host) { call -> saveAttachment(host, repository, call) },
 )
 
 private fun draftTool(host: PluginHost, repository: MailRepository): PluginTool = pluginTool(
@@ -210,11 +239,14 @@ private suspend fun read(
     val detail = repository.message(resolved.first.id, resolved.second)
         ?: return textResult("读取邮件失败，可能已被删除或移动。", isError = true)
     postReadCard(host, call, detail)
+    shareAttachmentsToChat(host, repository, call, detail)
     val summary = detail.summary
     val attachments = if (detail.attachments.isEmpty()) {
         ""
     } else {
-        detail.attachments.joinToString("\n") { "附件：${it.name}（${it.mimeType}，${it.sizeBytes} 字节）" }
+        detail.attachments.joinToString("\n") { attachment ->
+            "附件：${attachment.name}（${attachment.mimeType}，${attachment.sizeBytes} 字节，id=${attachment.id}）"
+        }
     }
     return textResult(
         buildString {
@@ -228,6 +260,87 @@ private suspend fun read(
             append(detail.textBody.ifBlank { "（正文为空）" })
         },
     )
+}
+
+private suspend fun shareAttachmentsToChat(
+    host: PluginHost,
+    repository: MailRepository,
+    call: PluginToolCall,
+    detail: MailMessageDetail,
+) {
+    val sessionId = call.sessionId
+    if (sessionId.isBlank() || detail.attachments.isEmpty()) return
+    val dedupeKey = "$sessionId:${detail.summary.id}"
+    if (!sharedAttachmentKeys.add(dedupeKey)) return
+    val attachments = mutableListOf<ChatAttachment>()
+    for (attachment in detail.attachments.take(MAX_CHAT_ATTACHMENTS)) {
+        if (attachment.sizeBytes > MAX_CHAT_ATTACHMENT_BYTES) continue
+        val path = try {
+            repository.loadAttachment(detail.summary.accountId, detail.summary.id, attachment.id)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            runCatching { host.logs().warn("mail attachment chat share failed", error) }
+            null
+        } ?: continue
+        attachments += chatAttachment(path, attachment.mimeType, attachment.name)
+    }
+    if (attachments.isEmpty()) return
+    val subject = detail.summary.subject.ifBlank { host.cardText("（无主题）", "(No subject)") }
+    val text = host.cardText("邮件「%s」的附件：", "Attachments from “%s”:", subject)
+    try {
+        host.chat().sendMessageWithAttachments(
+            sessionId = sessionId,
+            text = text,
+            attachments = attachments,
+            options = chatMessageOptions(triggerTurn = false),
+        )
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Throwable) {
+        runCatching { host.logs().warn("mail attachment chat share failed", error) }
+    }
+}
+
+private suspend fun saveAttachment(
+    host: PluginHost,
+    repository: MailRepository,
+    call: PluginToolCall,
+): PluginToolResult {
+    val attachmentId = call.args.str("attachment_id").trim()
+    if (attachmentId.isEmpty()) return textResult("请提供附件 id。", isError = true)
+    val resolved = resolveMessage(repository, call.args.str("message_id"))
+        ?: return textResult("找不到这封邮件，请先 mail_read 获取最新附件 id。", isError = true)
+    val detail = repository.message(resolved.first.id, resolved.second)
+        ?: return textResult("读取邮件失败，可能已被删除或移动。", isError = true)
+    val attachment = detail.attachments.firstOrNull { it.id == attachmentId }
+        ?: return textResult("这封邮件没有找到该附件，请重新读取邮件。", isError = true)
+    val localPath = try {
+        repository.loadAttachment(resolved.first.id, resolved.second, attachment.id)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Throwable) {
+        null
+    } ?: return textResult("附件读取失败，请稍后重试。", isError = true)
+    val saved = try {
+        host.media().saveFileToDownloads(localPath, attachment.name, attachment.mimeType)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Throwable) {
+        runCatching { host.logs().warn("mail attachment save failed", error) }
+        null
+    }
+    return if (saved.isNullOrBlank()) {
+        textResult(
+            host.toolText(
+                "保存附件失败，请稍后重试。",
+                "Couldn't save the attachment. Try again.",
+            ),
+            isError = true,
+        )
+    } else {
+        textResult("附件「${attachment.name}」已保存到下载目录。")
+    }
 }
 
 private suspend fun postReadCard(host: PluginHost, call: PluginToolCall, detail: MailMessageDetail) {

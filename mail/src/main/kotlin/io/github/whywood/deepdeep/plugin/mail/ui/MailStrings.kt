@@ -107,6 +107,15 @@ internal fun formatFileSize(bytes: Long): String = when {
     else -> String.format(Locale.ROOT, "%.1f MB", bytes / (1024.0 * 1024.0))
 }
 
+private val ImageExtensions = setOf(
+    "jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif", "avif", "svg",
+)
+
+internal fun isImageAttachment(mimeType: String, name: String): Boolean {
+    if (mimeType.startsWith("image/", ignoreCase = true)) return true
+    return name.substringAfterLast('.', "").lowercase() in ImageExtensions
+}
+
 internal fun PluginHost.readableError(
     error: Throwable,
     fallbackZh: String = "操作失败，请重试",

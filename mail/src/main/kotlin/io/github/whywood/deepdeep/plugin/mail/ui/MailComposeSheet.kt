@@ -1,10 +1,5 @@
 package io.github.whywood.deepdeep.plugin.mail.ui
 
-import android.content.Context
-import android.net.Uri
-import android.provider.OpenableColumns
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -34,16 +30,21 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import io.github.whywood.deepdeep.design.DdChip
+import io.github.whywood.deepdeep.design.DdFileRow
+import io.github.whywood.deepdeep.design.DdGroupCard
 import io.github.whywood.deepdeep.design.DdHairline
 import io.github.whywood.deepdeep.design.DdIconButton
 import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdListRow
+import io.github.whywood.deepdeep.design.DdImage
+import io.github.whywood.deepdeep.design.DdImageViewer
+import io.github.whywood.deepdeep.design.DdPressable
 import io.github.whywood.deepdeep.design.DdPrimaryButton
+import io.github.whywood.deepdeep.design.DdRowDivider
+import io.github.whywood.deepdeep.design.DdShapes
 import io.github.whywood.deepdeep.design.DdSheet
 import io.github.whywood.deepdeep.design.DdSpinner
 import io.github.whywood.deepdeep.design.DdTextAction
@@ -52,22 +53,15 @@ import io.github.whywood.deepdeep.design.DdTextField
 import io.github.whywood.deepdeep.design.DdType
 import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.uiFilePickRequest
 import io.github.whywood.deepdeep.plugin.mail.DraftAttachment
 import io.github.whywood.deepdeep.plugin.mail.MailDraft
 import io.github.whywood.deepdeep.plugin.mail.MailRepository
 import io.github.whywood.deepdeep.plugin.mail.MailSendResult
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeLimits
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-
-private const val PickedCacheDirectory = "mail-picked-attachments"
-private const val CopyBufferBytes = 64 * 1024
 
 private val AttachmentTotalLimit = "${MailComposeLimits.MAX_TOTAL_ATTACHMENT_BYTES / (1024L * 1024L)} MB"
 
@@ -85,39 +79,6 @@ private val DraftAttachmentListSaver = listSaver<List<DraftAttachment>, String>(
     },
 )
 
-private fun Context.pickedName(uri: Uri): String? = runCatching {
-    contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-        if (cursor.moveToFirst() && !cursor.isNull(0)) {
-            cursor.getString(0)?.trim()?.takeIf { it.isNotEmpty() }
-        } else {
-            null
-        }
-    }
-}.getOrNull()
-
-private fun Context.pickedSize(uri: Uri): Long? = runCatching {
-    contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
-        if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getLong(0).takeIf { it > 0L } else null
-    }
-}.getOrNull()
-
-private suspend fun copyPickedToCache(context: Context, uri: Uri, name: String): File = withContext(Dispatchers.IO) {
-    val directory = File(context.cacheDir, PickedCacheDirectory)
-    directory.mkdirs()
-    val safeName = name.replace(Regex("[\\\\/:*?\"<>|\\s]"), "_").take(80).ifBlank { "attachment" }
-    val target = File(directory, "${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(6)}-$safeName")
-    try {
-        val input = context.contentResolver.openInputStream(uri) ?: throw IOException()
-        input.use { source ->
-            FileOutputStream(target).use { output -> source.copyTo(output, CopyBufferBytes) }
-        }
-        target
-    } catch (error: Throwable) {
-        target.delete()
-        throw error
-    }
-}
-
 private fun attachmentFailure(host: PluginHost, name: String, message: String): String =
     host.tf("%s：%s", "%s: %s", name, message)
 
@@ -131,7 +92,6 @@ internal fun MailComposeSheet(
     val state by repository.state.collectAsState()
     val colors = deepDeepColors()
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
     val accounts = state.accounts
 
     var accountId by rememberSaveable(request) { mutableStateOf(request.accountId) }
@@ -156,6 +116,7 @@ internal fun MailComposeSheet(
     var sending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmEmptySubject by remember { mutableStateOf(false) }
+    var viewerPath by remember { mutableStateOf<String?>(null) }
     val finishedState = remember { mutableStateOf(false) }
     var finished by finishedState
     val dirtyState = remember { mutableStateOf(false) }
@@ -286,56 +247,57 @@ internal fun MailComposeSheet(
         }
     }
 
-    fun importPicked(uris: List<Uri>) {
-        if (uris.isEmpty() || !canEditAttachments) return
+    fun pickAttachments() {
+        if (!canEditAttachments) return
         importing = true
         error = null
         scope.launch {
+            val picked = try {
+                host.ui().pickFiles(uiFilePickRequest(mimeTypes = listOf("*/*"), multiple = true))
+            } catch (cancelled: CancellationException) {
+                importing = false
+                throw cancelled
+            } catch (failure: Throwable) {
+                importing = false
+                error = host.readableError(
+                    failure,
+                    fallbackZh = "无法打开文件选择器。",
+                    fallbackEn = "Couldn't open the file picker.",
+                )
+                return@launch
+            }
+            if (picked.isEmpty()) {
+                importing = false
+                return@launch
+            }
             val failures = mutableListOf<String>()
-            uris.forEach { uri ->
-                val displayName = context.pickedName(uri)
-                    ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
-                    ?: host.t("附件", "Attachment")
-                val knownSize = context.pickedSize(uri)
-                if (knownSize != null && knownSize > MailComposeLimits.MAX_ATTACHMENT_BYTES) {
+            picked.forEach { file ->
+                val name = file.name.ifBlank { host.t("附件", "Attachment") }
+                if (file.sizeBytes > 0L && file.sizeBytes > MailComposeLimits.MAX_ATTACHMENT_BYTES) {
                     failures += attachmentFailure(
                         host,
-                        displayName,
+                        name,
                         host.t("单个附件不能超过 20 MB。", "Each attachment must be 20 MB or smaller."),
                     )
                     return@forEach
                 }
                 if (
-                    knownSize != null &&
-                    attachments.sumOf { it.sizeBytes } + knownSize > MailComposeLimits.MAX_TOTAL_ATTACHMENT_BYTES
+                    file.sizeBytes > 0L &&
+                    attachments.sumOf { it.sizeBytes } + file.sizeBytes > MailComposeLimits.MAX_TOTAL_ATTACHMENT_BYTES
                 ) {
                     failures += attachmentFailure(
                         host,
-                        displayName,
+                        name,
                         host.t("附件总大小不能超过 25 MB。", "Attachments must total 25 MB or less."),
                     )
                     return@forEach
                 }
-                val mimeType = runCatching { context.contentResolver.getType(uri) }.getOrNull().orEmpty()
-                val temporary = try {
-                    copyPickedToCache(context, uri, displayName)
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (failure: Throwable) {
-                    failures += attachmentFailure(
-                        host,
-                        displayName,
-                        host.t("无法读取所选文件，请重新选择。", "That file could not be read. Choose it again."),
-                    )
-                    null
-                }
-                if (temporary == null) return@forEach
                 try {
                     val attachment = repository.importDraftAttachment(
                         draftId = draftId,
-                        sourcePath = temporary.absolutePath,
-                        name = displayName,
-                        mimeType = mimeType,
+                        sourcePath = file.path,
+                        name = name,
+                        mimeType = file.mimeType.orEmpty(),
                     )
                     attachments = attachments + attachment
                     dirty = true
@@ -344,24 +306,18 @@ internal fun MailComposeSheet(
                 } catch (failure: Throwable) {
                     failures += attachmentFailure(
                         host,
-                        displayName,
+                        name,
                         host.readableError(
                             failure,
                             fallbackZh = "无法添加附件，请重试。",
                             fallbackEn = "Couldn't add the attachment. Try again.",
                         ),
                     )
-                } finally {
-                    temporary.delete()
                 }
             }
             importing = false
             if (failures.isNotEmpty()) error = failures.distinct().take(3).joinToString("\n")
         }
-    }
-
-    val pickAttachments = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        importPicked(uris)
     }
 
     val draftSnapshot = rememberUpdatedState(buildDraft)
@@ -499,29 +455,47 @@ internal fun MailComposeSheet(
                             )
                         }
                     }
-                    attachments.forEach { attachment ->
-                        DdListRow(
-                            title = attachment.name,
-                            subtitle = formatFileSize(attachment.sizeBytes).takeIf { it.isNotBlank() },
-                            leadingIcon = DdIcons.Paperclip,
-                            trailing = {
-                                DdIconButton(
-                                    icon = DdIcons.Close,
-                                    onClick = { removeAttachment(attachment) },
-                                    contentDescription = host.t("移除附件", "Remove attachment"),
-                                    size = 36.dp,
-                                    iconSize = 15.dp,
-                                    tint = if (canEditAttachments) {
-                                        colors.inkTertiary
-                                    } else {
-                                        colors.inkTertiary.copy(alpha = 0.35f)
-                                    },
-                                    enabled = canEditAttachments,
-                                )
-                            },
-                        )
-                    }
                     if (attachments.isNotEmpty()) {
+                        DdGroupCard {
+                            attachments.forEachIndexed { index, attachment ->
+                                val image = isImageAttachment(attachment.mimeType, attachment.name)
+                                DdFileRow(
+                                    name = attachment.name,
+                                    subtitle = formatFileSize(attachment.sizeBytes).takeIf { it.isNotBlank() },
+                                    icon = if (image) DdIcons.Image else DdIcons.Paperclip,
+                                    trailing = {
+                                        if (image) {
+                                            DdPressable(
+                                                onClick = { viewerPath = attachment.path },
+                                                shape = DdShapes.Medium,
+                                                contentDescription = host.t("预览图片", "Preview image"),
+                                            ) {
+                                                DdImage(
+                                                    path = attachment.path,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(34.dp),
+                                                )
+                                            }
+                                            Spacer(Modifier.width(4.dp))
+                                        }
+                                        DdIconButton(
+                                            icon = DdIcons.Close,
+                                            onClick = { removeAttachment(attachment) },
+                                            contentDescription = host.t("移除附件", "Remove attachment"),
+                                            size = 36.dp,
+                                            iconSize = 15.dp,
+                                            tint = if (canEditAttachments) {
+                                                colors.inkTertiary
+                                            } else {
+                                                colors.inkTertiary.copy(alpha = 0.35f)
+                                            },
+                                            enabled = canEditAttachments,
+                                        )
+                                    },
+                                )
+                                if (index < attachments.lastIndex) DdRowDivider(leadingInset = 36.dp)
+                            }
+                        }
                         Text(
                             text = host.tf(
                                 "共 %s，上限 %s",
@@ -529,7 +503,7 @@ internal fun MailComposeSheet(
                                 formatFileSize(totalAttachmentBytes),
                                 AttachmentTotalLimit,
                             ),
-                            modifier = Modifier.padding(start = 2.dp, top = 4.dp),
+                            modifier = Modifier.padding(start = 16.dp, top = 6.dp),
                             style = DdType.chip,
                             color = colors.inkTertiary,
                         )
@@ -548,16 +522,7 @@ internal fun MailComposeSheet(
             ) {
                 DdIconButton(
                     icon = DdIcons.Paperclip,
-                    onClick = {
-                        runCatching { pickAttachments.launch(arrayOf("*/*")) }
-                            .onFailure {
-                                error = host.readableError(
-                                    it,
-                                    fallbackZh = "无法打开文件选择器。",
-                                    fallbackEn = "Couldn't open the file picker.",
-                                )
-                            }
-                    },
+                    onClick = { pickAttachments() },
                     contentDescription = host.t("添加附件", "Add attachment"),
                     tint = if (canEditAttachments) {
                         colors.inkSecondary
@@ -591,6 +556,14 @@ internal fun MailComposeSheet(
                 send()
             },
             onDismiss = { confirmEmptySubject = false },
+        )
+    }
+
+    viewerPath?.let { path ->
+        DdImageViewer(
+            path = path,
+            onDismiss = { viewerPath = null },
+            contentDescription = host.t("图片附件", "Image attachment"),
         )
     }
 }
