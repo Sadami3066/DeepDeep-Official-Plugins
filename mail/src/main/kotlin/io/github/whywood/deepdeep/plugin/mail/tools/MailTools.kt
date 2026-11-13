@@ -9,13 +9,17 @@ import io.github.whywood.deepdeep.plugin.api.contributions
 import io.github.whywood.deepdeep.plugin.api.localizedText
 import io.github.whywood.deepdeep.plugin.api.pluginTool
 import io.github.whywood.deepdeep.plugin.api.textResult
+import io.github.whywood.deepdeep.plugin.mail.DraftAttachment
 import io.github.whywood.deepdeep.plugin.mail.MailAccount
 import io.github.whywood.deepdeep.plugin.mail.MailDraft
 import io.github.whywood.deepdeep.plugin.mail.MailMessageDetail
 import io.github.whywood.deepdeep.plugin.mail.MailMessageSummary
 import io.github.whywood.deepdeep.plugin.mail.MailRepository
 import io.github.whywood.deepdeep.plugin.mail.mime.HtmlText
+import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeLimits
+import io.github.whywood.deepdeep.plugin.mail.ui.displayPreview
 import io.github.whywood.deepdeep.plugin.mail.ui.readableError
+import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -85,7 +89,7 @@ private fun readTool(host: PluginHost, repository: MailRepository): PluginTool =
 private fun draftTool(host: PluginHost, repository: MailRepository): PluginTool = pluginTool(
     name = "mail_draft",
     label = "起草邮件",
-    description = "生成一封待用户确认的邮件草稿。不会直接发送；草稿会以卡片形式交给用户确认。",
+    description = "生成一封待用户确认的邮件草稿。不会直接发送；草稿会以卡片形式交给用户确认。可以通过 attachments 附带本地文件。",
     parameters = parameters(
         required = listOf("to", "subject", "body"),
         "to" to stringProperty("收件人，多个用逗号分隔"),
@@ -93,6 +97,7 @@ private fun draftTool(host: PluginHost, repository: MailRepository): PluginTool 
         "subject" to stringProperty("主题"),
         "body" to stringProperty("正文纯文本"),
         "reply_to" to stringProperty("要回复的邮件 id，可留空"),
+        "attachments" to stringProperty("附件文件的本地绝对路径，多个用英文逗号分隔，可留空"),
     ),
     execute = guardedExecute(host) { call -> draft(host, repository, call) },
 )
@@ -263,24 +268,129 @@ private suspend fun draft(
         ?: return textResult("还没有连接邮箱账号，请先在「插件 → 邮箱」中添加。", isError = true)
     val to = recipients(call.args.str("to"))
     if (to.isEmpty()) return textResult("收件人不能为空。", isError = true)
+    val attachmentFiles = mutableListOf<File>()
+    attachmentInputError(host, call.args.str("attachments"), attachmentFiles)?.let { message ->
+        return textResult(message, isError = true)
+    }
     val now = System.currentTimeMillis()
+    val draftId = "draft-$now-${to.hashCode()}"
+    val imported = mutableListOf<DraftAttachment>()
+    try {
+        attachmentFiles.forEach { file ->
+            imported += repository.importDraftAttachment(
+                draftId = draftId,
+                sourcePath = file.absolutePath,
+                name = file.name,
+                mimeType = "",
+            )
+        }
+    } catch (cancelled: CancellationException) {
+        discardImportedAttachments(repository, draftId, imported)
+        throw cancelled
+    } catch (error: Throwable) {
+        discardImportedAttachments(repository, draftId, imported)
+        throw error
+    }
     val draft = MailDraft(
-        id = "draft-${now}-${to.hashCode()}",
+        id = draftId,
         accountId = account.id,
         to = to,
         cc = recipients(call.args.str("cc")),
         subject = call.args.str("subject").trim(),
         body = call.args.str("body"),
         inReplyToId = call.args.str("reply_to").ifBlank { null },
+        attachments = imported,
         createdAt = now,
         updatedAt = now,
     )
-    val saved = repository.saveDraft(draft)
+    val saved = try {
+        repository.saveDraft(draft)
+    } catch (cancelled: CancellationException) {
+        discardImportedAttachments(repository, draftId, imported)
+        throw cancelled
+    } catch (error: Throwable) {
+        discardImportedAttachments(repository, draftId, imported)
+        return textResult(
+            host.readableError(
+                error,
+                fallbackZh = "保存草稿失败，请重试。",
+                fallbackEn = "Couldn't save the draft. Try again.",
+            ),
+            isError = true,
+        )
+    }
     postDraftCard(host, call, account, saved)
+    val attachmentNote = if (saved.attachments.isEmpty()) {
+        ""
+    } else {
+        "，附件 ${saved.attachments.size} 个"
+    }
     return textResult(
-        "已生成草稿：收件人 ${saved.to.joinToString(", ")}，主题「${saved.subject.ifBlank { "（无主题）" }}」。发送前请在草稿卡片上确认。",
+        "已生成草稿：收件人 ${saved.to.joinToString(", ")}，主题「${saved.subject.ifBlank { "（无主题）" }}」$attachmentNote。发送前请在草稿卡片上确认。",
     )
 }
+
+private fun attachmentInputError(
+    host: PluginHost,
+    raw: String,
+    into: MutableList<File>,
+): String? {
+    val paths = raw.split(',', ';', '，', '；').map { it.trim() }.filter { it.isNotEmpty() }
+    var total = 0L
+    for (path in paths) {
+        val file = File(path)
+        if (!file.isAbsolute) {
+            return host.toolText(
+                "附件「%s」需要使用本地绝对路径。",
+                "Attachment “%s” needs an absolute local path.",
+                displayPreview(path, 120),
+            )
+        }
+        if (!file.isFile) {
+            return host.toolText(
+                "找不到附件文件「%s」。",
+                "Attachment file “%s” was not found.",
+                displayPreview(path, 120),
+            )
+        }
+        if (!file.canRead()) {
+            return host.toolText(
+                "无法读取附件「%s」。",
+                "Attachment “%s” can't be read.",
+                file.name,
+            )
+        }
+        if (file.length() > MailComposeLimits.MAX_ATTACHMENT_BYTES) {
+            return host.toolText(
+                "附件「%s」超过 20 MB，请换一个文件。",
+                "Attachment “%s” is larger than 20 MB. Choose another file.",
+                file.name,
+            )
+        }
+        total += file.length()
+        if (total > MailComposeLimits.MAX_TOTAL_ATTACHMENT_BYTES) {
+            return host.toolText(
+                "附件总大小不能超过 25 MB。",
+                "Attachments must total 25 MB or less.",
+            )
+        }
+        into += file
+    }
+    return null
+}
+
+private suspend fun discardImportedAttachments(
+    repository: MailRepository,
+    draftId: String,
+    attachments: List<DraftAttachment>,
+) {
+    attachments.forEach { attachment ->
+        runCatching { repository.removeDraftAttachment(draftId, attachment) }
+    }
+}
+
+private fun PluginHost.toolText(zh: String, en: String, vararg args: Any): String =
+    text(localizedText(default = zh, zh = zh, en = en), *args)
 
 private suspend fun postDraftCard(
     host: PluginHost,
@@ -295,14 +405,25 @@ private suspend fun postDraftCard(
         cc = draft.cc,
         subject = draft.subject,
         bodyPreview = HtmlText.preview(draft.body, 240),
+        attachments = draft.attachments.map { MailDraftCardAttachment(it.name, it.sizeBytes) },
     )
     val subject = displaySubject(draft.subject, host.cardText("（无主题）", "(No subject)"))
-    val text = host.cardText(
-        "已生成草稿：收件人 %s，主题「%s」。确认后再发送。",
-        "Draft ready for %s with subject “%s”. Review it before sending.",
-        draft.to.joinToString(", "),
-        subject,
-    )
+    val text = if (draft.attachments.isEmpty()) {
+        host.cardText(
+            "已生成草稿：收件人 %s，主题「%s」。确认后再发送。",
+            "Draft ready for %s with subject “%s”. Review it before sending.",
+            draft.to.joinToString(", "),
+            subject,
+        )
+    } else {
+        host.cardText(
+            "已生成草稿：收件人 %s，主题「%s」，附件 %d 个。确认后再发送。",
+            "Draft ready for %s with subject “%s” and %d attachments. Review it before sending.",
+            draft.to.joinToString(", "),
+            subject,
+            draft.attachments.size,
+        )
+    }
     postCard(host, call, MailChatCardTypes.DRAFT, payload.encodeCardPayload(), text)
 }
 

@@ -1,11 +1,14 @@
 package io.github.whywood.deepdeep.plugin.mail.store
 
+import io.github.whywood.deepdeep.plugin.mail.DraftAttachment
 import io.github.whywood.deepdeep.plugin.mail.MailAccount
 import io.github.whywood.deepdeep.plugin.mail.MailDraft
 import io.github.whywood.deepdeep.plugin.mail.MailFolderRole
 import io.github.whywood.deepdeep.plugin.mail.MailMessageSummary
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import java.util.UUID
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -35,6 +38,19 @@ internal data class MailAccountIndex(
     val messages: List<MailMessageSummary> = emptyList(),
     val updatedAt: Long = 0,
 )
+
+internal enum class DraftAttachmentFailure {
+    SOURCE_MISSING,
+    SOURCE_UNREADABLE,
+    TOO_LARGE,
+    TOTAL_TOO_LARGE,
+}
+
+internal class DraftAttachmentException(
+    val failure: DraftAttachmentFailure,
+    val attachmentName: String? = null,
+    cause: Throwable? = null,
+) : IOException(failure.name, cause)
 
 internal class MailStore(
     val root: File,
@@ -68,6 +84,118 @@ internal class MailStore(
 
     fun saveIndex(index: MailAccountIndex) {
         writeJson(indexFile(index.accountId), json.encodeToString(index))
+    }
+
+    fun importDraftAttachment(
+        draftId: String,
+        sourcePath: String,
+        name: String,
+        mimeType: String,
+        maxBytes: Long,
+        maxTotalBytes: Long,
+    ): DraftAttachment {
+        val source = File(sourcePath)
+        if (!source.isFile) throw DraftAttachmentException(DraftAttachmentFailure.SOURCE_MISSING, name)
+        val displayName = name.trim().ifBlank { source.name }.ifBlank { "attachment" }
+        val size = source.length()
+        if (size > maxBytes) throw DraftAttachmentException(DraftAttachmentFailure.TOO_LARGE, displayName)
+        if (draftAttachmentTotalBytes(draftId) + size > maxTotalBytes) {
+            throw DraftAttachmentException(DraftAttachmentFailure.TOTAL_TOO_LARGE, displayName)
+        }
+        val directory = draftAttachmentsDirectory(draftId)
+        directory.mkdirs()
+        val target = uniqueAttachmentFile(directory, displayName)
+        val temporary = File(directory, target.name + DRAFT_PART_SUFFIX)
+        temporary.delete()
+        try {
+            var copied = 0L
+            source.inputStream().use { input ->
+                FileOutputStream(temporary).use { output ->
+                    val buffer = ByteArray(COPY_BUFFER_SIZE)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        copied += read
+                        if (copied > maxBytes) throw DraftAttachmentException(DraftAttachmentFailure.TOO_LARGE, displayName)
+                        output.write(buffer, 0, read)
+                    }
+                    output.fd.sync()
+                }
+            }
+            target.delete()
+            if (!temporary.renameTo(target)) throw DraftAttachmentException(DraftAttachmentFailure.SOURCE_UNREADABLE, displayName)
+            return DraftAttachment(
+                path = target.absolutePath,
+                name = displayName,
+                mimeType = mimeType.trim().ifBlank { guessMimeType(displayName) },
+                sizeBytes = copied,
+            )
+        } catch (error: DraftAttachmentException) {
+            temporary.delete()
+            throw error
+        } catch (error: Exception) {
+            temporary.delete()
+            log("mail store: cannot import draft attachment", error)
+            throw DraftAttachmentException(DraftAttachmentFailure.SOURCE_UNREADABLE, displayName, error)
+        }
+    }
+
+    fun draftAttachmentTotalBytes(draftId: String): Long =
+        draftAttachmentsDirectory(draftId).listFiles().orEmpty().filter { it.isFile }.sumOf { it.length() }
+
+    fun removeDraftAttachmentFile(path: String) {
+        val target = File(path)
+        if (!isInsideDrafts(target)) return
+        target.delete()
+        target.parentFile?.let { parent ->
+            if (parent.isDirectory && parent.listFiles().orEmpty().isEmpty()) parent.delete()
+        }
+    }
+
+    fun pruneDraftAttachments(draftId: String, validPaths: Set<String>) {
+        val directory = draftAttachmentsDirectory(draftId)
+        val valid = validPaths.map { File(it).canonicalFile }.toSet()
+        val dirty = directory.listFiles().orEmpty().any { file ->
+            val keep = file.isFile && file.canonicalFile in valid
+            if (!keep) file.delete()
+            !keep
+        }
+        if (dirty && directory.isDirectory && directory.listFiles().orEmpty().isEmpty()) directory.delete()
+    }
+
+    fun deleteDraftData(draftId: String) {
+        draftDirectory(draftId).deleteRecursively()
+    }
+
+    fun retainDraftData(validDraftIds: Set<String>) {
+        val valid = validDraftIds.map { safeSegment(it) }.toSet()
+        val now = System.currentTimeMillis()
+        draftsDirectory().listFiles().orEmpty().forEach { directory ->
+            if (!directory.isDirectory) {
+                directory.delete()
+                return@forEach
+            }
+            if (directory.name !in valid) {
+                directory.deleteRecursively()
+                return@forEach
+            }
+            directory.walkTopDown().filter { it.isFile && it.name.endsWith(DRAFT_PART_SUFFIX) }.forEach { part ->
+                if (now - part.lastModified() > STALE_PART_MILLIS) part.delete()
+            }
+        }
+    }
+
+    fun outgoingTempFile(): File {
+        val directory = tempDirectory()
+        directory.mkdirs()
+        return File(directory, "outgoing-" + UUID.randomUUID().toString() + TEMP_SUFFIX)
+    }
+
+    fun cleanupOutgoingTemp(maxAgeMillis: Long = STALE_PART_MILLIS) {
+        val now = System.currentTimeMillis()
+        tempDirectory().listFiles().orEmpty().forEach { file ->
+            if (file.isFile && now - file.lastModified() > maxAgeMillis) file.delete()
+        }
     }
 
     fun deleteAccount(accountId: String) {
@@ -146,6 +274,36 @@ internal class MailStore(
         }
     }
 
+    private fun draftsDirectory(): File = File(root, "drafts")
+
+    private fun draftDirectory(draftId: String): File = File(draftsDirectory(), safeSegment(draftId))
+
+    private fun draftAttachmentsDirectory(draftId: String): File = File(draftDirectory(draftId), "attachments")
+
+    private fun tempDirectory(): File = File(root, "tmp")
+
+    private fun uniqueAttachmentFile(directory: File, name: String): File {
+        val base = safeFileName(name)
+        val extension = base.substringAfterLast('.', "").let { if (it.isEmpty() || it == base) "" else ".$it" }
+        val stem = if (extension.isEmpty()) base else base.dropLast(extension.length)
+        var index = 1
+        while (true) {
+            val candidate = File(directory, if (index == 1) base else "$stem-$index$extension")
+            if (!candidate.exists()) return candidate
+            index++
+        }
+    }
+
+    private fun guessMimeType(name: String): String =
+        MIME_TYPES[name.substringAfterLast('.', "").lowercase()] ?: "application/octet-stream"
+
+    private fun isInsideDrafts(file: File): Boolean = try {
+        val base = draftsDirectory().canonicalFile
+        file.canonicalFile.toPath().startsWith(base.toPath())
+    } catch (error: Exception) {
+        false
+    }
+
     private fun accountsFile(): File = File(root, "accounts.json")
 
     private fun serversFile(): File = File(root, "servers.json")
@@ -204,7 +362,33 @@ internal class MailStore(
     private companion object {
         const val BODY_SUFFIX = ".eml"
         const val PART_SUFFIX = ".eml.part"
+        const val DRAFT_PART_SUFFIX = ".part"
         const val TEMP_SUFFIX = ".tmp"
+        const val COPY_BUFFER_SIZE = 64 * 1024
         const val STALE_PART_MILLIS = 60L * 60 * 1000
+        val MIME_TYPES = mapOf(
+            "pdf" to "application/pdf",
+            "png" to "image/png",
+            "jpg" to "image/jpeg",
+            "jpeg" to "image/jpeg",
+            "gif" to "image/gif",
+            "webp" to "image/webp",
+            "txt" to "text/plain",
+            "csv" to "text/csv",
+            "json" to "application/json",
+            "xml" to "application/xml",
+            "zip" to "application/zip",
+            "gz" to "application/gzip",
+            "doc" to "application/msword",
+            "docx" to "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "xls" to "application/vnd.ms-excel",
+            "xlsx" to "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "ppt" to "application/vnd.ms-powerpoint",
+            "pptx" to "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "mp3" to "audio/mpeg",
+            "mp4" to "video/mp4",
+            "ics" to "text/calendar",
+            "vcf" to "text/vcard",
+        )
     }
 }

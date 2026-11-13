@@ -49,6 +49,13 @@ internal data class MailDraftCardPayload(
     val cc: List<String> = emptyList(),
     val subject: String = "",
     val bodyPreview: String = "",
+    val attachments: List<MailDraftCardAttachment> = emptyList(),
+)
+
+@Serializable
+internal data class MailDraftCardAttachment(
+    val name: String = "",
+    val sizeBytes: Long = 0L,
 )
 
 @Serializable

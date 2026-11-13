@@ -364,10 +364,16 @@ private fun DraftItem(
 ) {
     val colors = deepDeepColors()
     val recipients = draft.to.ifEmpty { draft.cc }
+    val attachmentLabel = when {
+        draft.attachments.isEmpty() -> null
+        draft.attachments.size == 1 -> host.t("1 个附件", "1 attachment")
+        else -> host.tf("%d 个附件", "%d attachments", draft.attachments.size)
+    }
     DdListRow(
         title = displaySubject(draft.subject, host.t("（无主题）", "(No subject)")),
         subtitle = listOfNotNull(
             recipients.takeIf { it.isNotEmpty() }?.joinToString(", "),
+            attachmentLabel,
             mailFullTime(draft.updatedAt, host.chinese),
         ).joinToString(" · "),
         leadingIcon = DdIcons.Pen,

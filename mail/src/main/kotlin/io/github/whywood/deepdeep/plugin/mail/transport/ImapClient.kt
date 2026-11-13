@@ -2,10 +2,12 @@ package io.github.whywood.deepdeep.plugin.mail.transport
 
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
+import java.io.ByteArrayInputStream
 import java.io.Closeable
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -178,9 +180,13 @@ internal class ImapClient(
     }
 
     fun append(folder: String, flags: List<String>, message: ByteArray) {
+        appendStream(folder, flags, message.size.toLong(), ByteArrayInputStream(message))
+    }
+
+    fun appendStream(folder: String, flags: List<String>, size: Long, input: InputStream) {
         val tag = nextTag()
         val flagSection = if (flags.isEmpty()) "" else " (${flags.joinToString(" ")})"
-        writeLine("$tag APPEND ${ImapCodec.quoteMailbox(folder)}$flagSection {${message.size}}")
+        writeLine("$tag APPEND ${ImapCodec.quoteMailbox(folder)}$flagSection {$size}")
         while (true) {
             when (val response = readResponse()) {
                 is ImapResponse.Continuation -> break
@@ -192,7 +198,14 @@ internal class ImapClient(
             }
         }
         val stream = outputStream()
-        stream.write(message)
+        val buffer = ByteArray(APPEND_BUFFER_SIZE)
+        var remaining = size
+        while (remaining > 0) {
+            val read = input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+            if (read < 0) throw MailStorageException("cannot read outgoing message")
+            stream.write(buffer, 0, read)
+            remaining -= read
+        }
         stream.write(CRLF)
         stream.flush()
         requireOk(readUntilTagged(tag), "APPEND")
@@ -426,6 +439,7 @@ internal class ImapClient(
         const val DEFAULT_TIMEOUT_MS = 30_000
         const val FETCH_PAGE_SIZE = 50
         const val BODY_WRITE_BUFFER_SIZE = 64 * 1024
+        const val APPEND_BUFFER_SIZE = 64 * 1024
         const val PART_SUFFIX = ".part"
         const val DEFAULT_BODY_LIMIT_BYTES = 64L * 1024 * 1024
         val CRLF = byteArrayOf('\r'.code.toByte(), '\n'.code.toByte())

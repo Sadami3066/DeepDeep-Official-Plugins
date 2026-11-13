@@ -35,6 +35,10 @@ interface MailRepository {
 
     suspend fun deleteForever(accountId: String, messageId: String)
 
+    suspend fun importDraftAttachment(draftId: String, sourcePath: String, name: String, mimeType: String): DraftAttachment
+
+    suspend fun removeDraftAttachment(draftId: String, attachment: DraftAttachment)
+
     suspend fun saveDraft(draft: MailDraft): MailDraft
 
     suspend fun deleteDraft(draftId: String)

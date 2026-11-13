@@ -17,7 +17,7 @@ DeepDeep 是一个运行在 Android 上的个人智能体（[应用仓库](https
 | `sysu` | 中山大学 CLI | 2.0.0 | 在 Linux 环境运行 Node.js 版 `sysu` CLI：课表、成绩、作业、课件、场馆预约、网费与统一认证换票 | 中山大学在校师生 |
 | `wechat` | 微信导出 | 0.3.0 | 同步并解密微信本地数据库，按日期范围导出完整聊天记录，交给 Agent 总结 | 需要完整导出微信记录的用户 |
 | `micloud` | 小米云服务 | 2.0.0 | 登录小米账号后读取笔记、待办、短信、联系人、相册与录音 | 使用小米云服务的用户 |
-| `mail` | 邮箱 | 1.0.0 | 用授权码接入 IMAP/SMTP 邮箱，收件箱、会话、写信与账户管理，并让 Agent 搜信、读信、归档与起草回复 | 使用 QQ、163、Gmail、iCloud 等标准 IMAP/SMTP 邮箱的用户 |
+| `mail` | 邮箱 | 1.1.0 | 用授权码接入 IMAP/SMTP 邮箱：收件箱、会话、写信（含附件）、账户管理，聊天内邮件卡片，并让 Agent 搜信、读信、归档与起草回复 | 使用 QQ、163、Gmail、iCloud 等标准 IMAP/SMTP 邮箱的用户 |
 
 版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。六个插件的清单均为 `apiLevel` 6，构建时使用当时的 `plugin-api` 最新版本；邮箱要求 DeepDeep 1.0.5+，其余五个要求 1.0.4+。运行时依赖：飞书使用 `lark-cli` 1.0.98，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.4.2；微信导出插件自带 `wechat` CLI，需要 Root 和微信本地数据；小米云服务没有 CLI，通过插件页内 WebView 登录；邮箱插件不依赖 CLI，用 JVM 网络栈直连 IMAP/SMTP（QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义服务器）。
 

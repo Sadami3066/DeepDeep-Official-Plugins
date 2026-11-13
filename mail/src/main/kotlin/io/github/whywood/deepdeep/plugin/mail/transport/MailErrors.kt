@@ -140,6 +140,26 @@ internal class MailTexts(
         "This draft no longer exists. It may have been sent or deleted.",
     )
 
+    fun draftAttachmentInvalid(): String = text(
+        "无法读取所选文件，请重新选择。",
+        "That file could not be read. Choose it again.",
+    )
+
+    fun draftAttachmentTooLarge(): String = text(
+        "单个附件不能超过 20 MB。",
+        "Each attachment must be 20 MB or smaller.",
+    )
+
+    fun draftAttachmentsTooLarge(): String = text(
+        "附件总大小不能超过 25 MB。",
+        "Attachments must total 25 MB or less.",
+    )
+
+    fun draftAttachmentMissing(name: String): String = text(
+        "附件「$name」已丢失，请重新添加后再发送。",
+        "The attachment \"$name\" is missing. Add it again before sending.",
+    )
+
     fun attachmentUnavailable(): String = text(
         "无法打开这个附件，请稍后重试。",
         "This attachment could not be opened. Try again later.",

@@ -1,13 +1,18 @@
 package io.github.whywood.deepdeep.plugin.mail
 
 import io.github.whywood.deepdeep.plugin.mail.mime.HtmlText
+import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeException
+import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeFailure
+import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeLimits
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposer
 import io.github.whywood.deepdeep.plugin.mail.mime.MailLimits
 import io.github.whywood.deepdeep.plugin.mail.mime.MailMimeParser
+import io.github.whywood.deepdeep.plugin.mail.mime.OutgoingAttachment
 import io.github.whywood.deepdeep.plugin.mail.mime.OutgoingMail
 import io.github.whywood.deepdeep.plugin.mail.mime.Rfc2047
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.RandomAccessFile
 import java.nio.charset.Charset
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -265,6 +270,153 @@ class MimeTest {
         val cappedFile = File(temporaryFolder.newFolder("capped"), "first.pdf")
         assertNull(MailMimeParser.extractAttachmentTo(file, "att-0", cappedFile, 2))
         assertFalse(cappedFile.exists())
+    }
+
+    @Test
+    fun composesMultipartMessageWithAttachments() {
+        val directory = temporaryFolder.newFolder("compose")
+        val textFile = File(directory, "notes.txt").apply { writeText("hello attachment") }
+        val chineseFile = File(directory, "source.pdf").apply { writeText("PDFDATA") }
+        val message = MailComposer.compose(
+            OutgoingMail(
+                fromAddress = "me@example.com",
+                fromName = "Me",
+                to = listOf("you@example.com"),
+                cc = emptyList(),
+                subject = "带附件",
+                body = "第一行\n第二行",
+                attachments = listOf(
+                    OutgoingAttachment(textFile.absolutePath, "notes.txt", "text/plain"),
+                    OutgoingAttachment(chineseFile.absolutePath, "中文报告.pdf", "application/pdf"),
+                ),
+            ),
+        )
+        val raw = message.toString(Charsets.UTF_8)
+        assertTrue(raw.contains("multipart/mixed"))
+        assertTrue(raw.contains("multipart/alternative"))
+        assertTrue(raw.contains("filename*=UTF-8''"))
+        val parsed = MailMimeParser.parse(message, retainAttachments = true)
+        assertEquals("第一行\n第二行", parsed.textBody)
+        assertNotNull(parsed.htmlBody)
+        assertTrue(parsed.htmlBody!!.contains("第一行"))
+        assertEquals(2, parsed.attachments.size)
+        assertEquals("notes.txt", parsed.attachments[0].name)
+        assertEquals("text/plain", parsed.attachments[0].mimeType)
+        assertEquals("hello attachment", parsed.attachments[0].data?.toString(Charsets.UTF_8))
+        assertEquals("中文报告.pdf", parsed.attachments[1].name)
+        assertEquals("application/pdf", parsed.attachments[1].mimeType)
+        assertEquals("PDFDATA", parsed.attachments[1].data?.toString(Charsets.UTF_8))
+    }
+
+    @Test
+    fun composesAttachmentNameWithQuotesAsParameter() {
+        val directory = temporaryFolder.newFolder("quoted")
+        val file = File(directory, "source.bin").apply { writeBytes(ByteArray(8) { it.toByte() }) }
+        val message = MailComposer.compose(
+            OutgoingMail(
+                fromAddress = "me@example.com",
+                fromName = "Me",
+                to = listOf("you@example.com"),
+                cc = emptyList(),
+                subject = "quoted",
+                body = "body",
+                attachments = listOf(OutgoingAttachment(file.absolutePath, "report \"final\".bin", "application/octet-stream")),
+            ),
+        )
+        val parsed = MailMimeParser.parse(message)
+        assertEquals("report \"final\".bin", parsed.attachments.single().name)
+    }
+
+    @Test
+    fun rejectsOversizedSingleAttachment() {
+        val file = temporaryFolder.newFile("big.bin")
+        RandomAccessFile(file, "rw").use { it.setLength(MailComposeLimits.MAX_ATTACHMENT_BYTES + 1) }
+        val error = runCatching {
+            MailComposer.compose(
+                OutgoingMail(
+                    fromAddress = "me@example.com",
+                    fromName = "Me",
+                    to = listOf("you@example.com"),
+                    cc = emptyList(),
+                    subject = "big",
+                    body = "body",
+                    attachments = listOf(OutgoingAttachment(file.absolutePath, "big.bin", "application/octet-stream")),
+                ),
+            )
+        }.exceptionOrNull()
+        assertTrue(error is MailComposeException)
+        assertEquals(MailComposeFailure.ATTACHMENT_TOO_LARGE, (error as MailComposeException).failure)
+    }
+
+    @Test
+    fun rejectsTotalOversizedAttachments() {
+        val first = temporaryFolder.newFile("first.bin")
+        val second = temporaryFolder.newFile("second.bin")
+        val each = MailComposeLimits.MAX_TOTAL_ATTACHMENT_BYTES / 2 + 1
+        RandomAccessFile(first, "rw").use { it.setLength(each) }
+        RandomAccessFile(second, "rw").use { it.setLength(each) }
+        val error = runCatching {
+            MailComposer.compose(
+                OutgoingMail(
+                    fromAddress = "me@example.com",
+                    fromName = "Me",
+                    to = listOf("you@example.com"),
+                    cc = emptyList(),
+                    subject = "big",
+                    body = "body",
+                    attachments = listOf(
+                        OutgoingAttachment(first.absolutePath, "first.bin", "application/octet-stream"),
+                        OutgoingAttachment(second.absolutePath, "second.bin", "application/octet-stream"),
+                    ),
+                ),
+            )
+        }.exceptionOrNull()
+        assertTrue(error is MailComposeException)
+        assertEquals(MailComposeFailure.TOTAL_TOO_LARGE, (error as MailComposeException).failure)
+    }
+
+    @Test
+    fun rejectsMissingAttachmentFile() {
+        val error = runCatching {
+            MailComposer.compose(
+                OutgoingMail(
+                    fromAddress = "me@example.com",
+                    fromName = "Me",
+                    to = listOf("you@example.com"),
+                    cc = emptyList(),
+                    subject = "missing",
+                    body = "body",
+                    attachments = listOf(OutgoingAttachment("/definitely/missing/file.bin", "file.bin", "application/octet-stream")),
+                ),
+            )
+        }.exceptionOrNull()
+        assertTrue(error is MailComposeException)
+        assertEquals(MailComposeFailure.ATTACHMENT_MISSING, (error as MailComposeException).failure)
+    }
+
+    @Test
+    fun composeToFileWritesParseableMessage() {
+        val directory = temporaryFolder.newFolder("compose-file")
+        val attachment = File(directory, "data.txt").apply { writeText("payload") }
+        val target = File(directory, "outgoing.eml")
+        val written = MailComposer.composeToFile(
+            OutgoingMail(
+                fromAddress = "me@example.com",
+                fromName = "Me",
+                to = listOf("you@example.com"),
+                cc = emptyList(),
+                subject = "file",
+                body = "body content",
+                attachments = listOf(OutgoingAttachment(attachment.absolutePath, "data.txt", "text/plain")),
+            ),
+            target,
+        )
+        assertTrue(target.isFile)
+        assertEquals(target.length(), written)
+        assertFalse(File(directory, "outgoing.eml.part").exists())
+        val parsed = MailMimeParser.parse(target, retainAttachments = true)
+        assertEquals("body content", parsed.textBody)
+        assertEquals("payload", parsed.attachments.single().data?.toString(Charsets.UTF_8))
     }
 
     @Test

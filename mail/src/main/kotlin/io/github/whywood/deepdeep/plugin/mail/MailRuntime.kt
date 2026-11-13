@@ -3,9 +3,15 @@ package io.github.whywood.deepdeep.plugin.mail
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.localizedText
 import io.github.whywood.deepdeep.plugin.api.pluginNotification
+import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeException
+import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeFailure
+import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeLimits
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposer
 import io.github.whywood.deepdeep.plugin.mail.mime.MailMimeParser
+import io.github.whywood.deepdeep.plugin.mail.mime.OutgoingAttachment
 import io.github.whywood.deepdeep.plugin.mail.mime.OutgoingMail
+import io.github.whywood.deepdeep.plugin.mail.store.DraftAttachmentException
+import io.github.whywood.deepdeep.plugin.mail.store.DraftAttachmentFailure
 import io.github.whywood.deepdeep.plugin.mail.store.MailAccountIndex
 import io.github.whywood.deepdeep.plugin.mail.store.MailFolderIndex
 import io.github.whywood.deepdeep.plugin.mail.store.MailServerSettings
@@ -160,6 +166,23 @@ internal class MailRuntime(
         deleteForeverInternal(accountId, messageId)
     }
 
+    override suspend fun importDraftAttachment(
+        draftId: String,
+        sourcePath: String,
+        name: String,
+        mimeType: String,
+    ): DraftAttachment = boundary(
+        fallback = { error -> throw localizedFailure(error) },
+    ) {
+        importDraftAttachmentInternal(draftId, sourcePath, name, mimeType)
+    }
+
+    override suspend fun removeDraftAttachment(draftId: String, attachment: DraftAttachment): Unit = boundary(
+        fallback = { },
+    ) {
+        removeDraftAttachmentInternal(draftId, attachment)
+    }
+
     override suspend fun saveDraft(draft: MailDraft): MailDraft = boundary(
         fallback = { error -> throw localizedFailure(error) },
     ) {
@@ -192,11 +215,14 @@ internal class MailRuntime(
         if (stateMutex.withLock { started }) return
         val loaded = withContext(Dispatchers.IO) {
             val loadedAccounts = store.accounts()
+            val loadedDrafts = store.drafts()
+            store.retainDraftData(loadedDrafts.map { it.id }.toSet())
+            store.cleanupOutgoingTemp()
             LoadedState(
                 accounts = loadedAccounts,
                 servers = store.servers().associateBy { it.accountId },
                 indexes = loadedAccounts.associate { it.id to store.index(it.id) },
-                drafts = store.drafts(),
+                drafts = loadedDrafts,
             )
         }
         stateMutex.withLock {
@@ -313,10 +339,12 @@ internal class MailRuntime(
 
     private suspend fun removeAccountInternal(accountId: String) {
         stateMutex.withLock {
+            val removedDrafts = drafts.filter { it.accountId == accountId }.map { it.id }
             accounts = accounts.filterNot { it.id == accountId }
             servers = servers - accountId
             indexes.remove(accountId)
             drafts = drafts.filterNot { it.accountId == accountId }
+            removedDrafts.forEach { draftId -> store.deleteDraftData(draftId) }
             accountErrors = accountErrors - accountId
             lastSyncByAccount = lastSyncByAccount - accountId
             notifiedAt.remove(accountId)
@@ -458,6 +486,7 @@ internal class MailRuntime(
         stateMutex.withLock {
             drafts = drafts.filterNot { it.id == saved.id } + saved
             persistDrafts()
+            store.pruneDraftAttachments(saved.id, saved.attachments.map { it.path }.toSet())
             publishLocked()
         }
         return saved
@@ -467,6 +496,52 @@ internal class MailRuntime(
         stateMutex.withLock {
             drafts = drafts.filterNot { it.id == draftId }
             persistDrafts()
+            store.deleteDraftData(draftId)
+            publishLocked()
+        }
+    }
+
+    private suspend fun importDraftAttachmentInternal(
+        draftId: String,
+        sourcePath: String,
+        name: String,
+        mimeType: String,
+    ): DraftAttachment {
+        if (draftId.isBlank()) throw MailLocalizedException(texts.missingDraft())
+        return withContext(Dispatchers.IO) {
+            try {
+                store.importDraftAttachment(
+                    draftId = draftId,
+                    sourcePath = sourcePath,
+                    name = name,
+                    mimeType = mimeType,
+                    maxBytes = MailComposeLimits.MAX_ATTACHMENT_BYTES,
+                    maxTotalBytes = MailComposeLimits.MAX_TOTAL_ATTACHMENT_BYTES,
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: DraftAttachmentException) {
+                throw MailLocalizedException(draftAttachmentError(failure), failure)
+            } catch (error: Exception) {
+                report(error)
+                throw MailLocalizedException(texts.draftAttachmentInvalid(), error)
+            }
+        }
+    }
+
+    private suspend fun removeDraftAttachmentInternal(draftId: String, attachment: DraftAttachment) {
+        withContext(Dispatchers.IO) { store.removeDraftAttachmentFile(attachment.path) }
+        stateMutex.withLock {
+            val existing = drafts.firstOrNull { it.id == draftId } ?: return
+            drafts = drafts.map { draft ->
+                if (draft.id == draftId) {
+                    draft.copy(attachments = draft.attachments.filterNot { it.path == attachment.path })
+                } else {
+                    draft
+                }
+            }
+            persistDrafts()
+            store.pruneDraftAttachments(existing.id, drafts.first { it.id == draftId }.attachments.map { it.path }.toSet())
             publishLocked()
         }
     }
@@ -481,19 +556,36 @@ internal class MailRuntime(
             ?: return MailSendResult(ok = false, error = texts.missingServers())
         val password = host.secrets().get(secretKey(account.id))
             ?: return MailSendResult(ok = false, error = texts.missingSecret())
+        val missing = draft.attachments.firstOrNull { attachment -> !File(attachment.path).isFile }
+        if (missing != null) return MailSendResult(ok = false, error = texts.draftAttachmentMissing(missing.name))
         val reply = replyContext(account, draft)
-        val message = MailComposer.compose(
-            OutgoingMail(
-                fromAddress = account.email,
-                fromName = account.displayName,
-                to = draft.to,
-                cc = draft.cc,
-                subject = draft.subject,
-                body = draft.body,
-                inReplyTo = reply.first,
-                references = reply.second,
-            ),
+        val outgoing = OutgoingMail(
+            fromAddress = account.email,
+            fromName = account.displayName,
+            to = draft.to,
+            cc = draft.cc,
+            subject = draft.subject,
+            body = draft.body,
+            inReplyTo = reply.first,
+            references = reply.second,
+            attachments = draft.attachments.map { attachment ->
+                OutgoingAttachment(path = attachment.path, name = attachment.name, mimeType = attachment.mimeType)
+            },
         )
+        val temporary = store.outgoingTempFile()
+        val messageSize = try {
+            withContext(Dispatchers.IO) { MailComposer.composeToFile(outgoing, temporary) }
+        } catch (cancelled: CancellationException) {
+            temporary.delete()
+            throw cancelled
+        } catch (compose: MailComposeException) {
+            temporary.delete()
+            return MailSendResult(ok = false, error = composeErrorMessage(compose))
+        } catch (error: Exception) {
+            temporary.delete()
+            report(error)
+            return MailSendResult(ok = false, error = texts.storageFailed())
+        }
         val recipients = draft.to + draft.cc
         val error = withContext(Dispatchers.IO) {
             val client = transport.smtp(
@@ -504,7 +596,7 @@ internal class MailRuntime(
             try {
                 client.connect()
                 client.login()
-                client.send(account.email, recipients, message)
+                client.sendFile(account.email, recipients, temporary)
                 client.quit()
                 null
             } catch (cancelled: CancellationException) {
@@ -515,22 +607,45 @@ internal class MailRuntime(
                 client.close()
             }
         }
-        if (error != null) return MailSendResult(ok = false, error = error)
-        val sentFolder = folderOf(account.id, MailFolderRole.SENT)
-        if (sentFolder != null) {
-            try {
-                withImap(account) { client ->
-                    client.select(sentFolder, readOnly = false)
-                    client.append(sentFolder, listOf("\\Seen"), message)
-                }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Throwable) {
-                report(failure)
-            }
+        if (error != null) {
+            temporary.delete()
+            return MailSendResult(ok = false, error = error)
         }
-        deleteDraftInternal(draft.id)
+        try {
+            val sentFolder = folderOf(account.id, MailFolderRole.SENT)
+            if (sentFolder != null) {
+                try {
+                    withImap(account) { client ->
+                        client.select(sentFolder, readOnly = false)
+                        temporary.inputStream().use { input ->
+                            client.appendStream(sentFolder, listOf("\\Seen"), messageSize, input)
+                        }
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Throwable) {
+                    report(failure)
+                }
+            }
+            deleteDraftInternal(draft.id)
+        } finally {
+            temporary.delete()
+        }
         return MailSendResult(ok = true)
+    }
+
+    private fun draftAttachmentError(error: DraftAttachmentException): String = when (error.failure) {
+        DraftAttachmentFailure.SOURCE_MISSING -> texts.draftAttachmentInvalid()
+        DraftAttachmentFailure.SOURCE_UNREADABLE -> texts.draftAttachmentInvalid()
+        DraftAttachmentFailure.TOO_LARGE -> texts.draftAttachmentTooLarge()
+        DraftAttachmentFailure.TOTAL_TOO_LARGE -> texts.draftAttachmentsTooLarge()
+    }
+
+    private fun composeErrorMessage(error: MailComposeException): String = when (error.failure) {
+        MailComposeFailure.ATTACHMENT_MISSING -> texts.draftAttachmentMissing(error.attachmentName.orEmpty())
+        MailComposeFailure.ATTACHMENT_UNREADABLE -> texts.draftAttachmentInvalid()
+        MailComposeFailure.ATTACHMENT_TOO_LARGE -> texts.draftAttachmentTooLarge()
+        MailComposeFailure.TOTAL_TOO_LARGE -> texts.draftAttachmentsTooLarge()
     }
 
     private suspend fun searchInternal(query: String, accountId: String?): List<MailMessageSummary> {

@@ -80,6 +80,14 @@ data class MailMessageDetail(
 )
 
 @Serializable
+data class DraftAttachment(
+    val path: String,
+    val name: String,
+    val mimeType: String,
+    val sizeBytes: Long,
+)
+
+@Serializable
 data class MailDraft(
     val id: String,
     val accountId: String,
@@ -88,6 +96,7 @@ data class MailDraft(
     val subject: String,
     val body: String,
     val inReplyToId: String? = null,
+    val attachments: List<DraftAttachment> = emptyList(),
     val createdAt: Long,
     val updatedAt: Long,
 )

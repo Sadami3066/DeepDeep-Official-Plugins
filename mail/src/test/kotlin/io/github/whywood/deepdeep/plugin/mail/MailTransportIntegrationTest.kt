@@ -372,6 +372,55 @@ class MailTransportIntegrationTest {
     }
 
     @Test
+    fun smtpSendFileStreamsAndDotStuffs() {
+        val server = FakeSmtpServer()
+        try {
+            val client = SmtpClient(
+                SmtpEndpoint("127.0.0.1", server.port, SmtpSecurity.PLAIN),
+                SmtpCredentials("user@example.com", "secret"),
+            )
+            try {
+                client.connect()
+                client.login()
+                val content = "Subject: dots\r\n\r\nline1\r\n.\r\n..line2\r\n"
+                val file = File(temporaryFolder.newFolder("outgoing"), "message.eml")
+                file.writeBytes(content.toByteArray(Charsets.ISO_8859_1))
+                client.sendFile("user@example.com", listOf("a@example.com"), file)
+                client.quit()
+                assertEquals(content, server.messages.single().toString(Charsets.ISO_8859_1))
+            } finally {
+                client.close()
+            }
+            assertTrue(server.commands.any { it.contains("DATA") })
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun imapAppendStreamsLargeLiteral() {
+        val sent = FakeFolder("Sent", flags = setOf("\\Sent"))
+        val server = FakeImapServer(mutableListOf(FakeFolder("INBOX"), sent))
+        val raw = ByteArray(300_000) { index -> ((index * 7 + 3) % 251).toByte() }
+        try {
+            val client = ImapClient(
+                ImapEndpoint("127.0.0.1", server.port, tls = false),
+                ImapCredentials("user@example.com", "secret"),
+            )
+            try {
+                client.connect()
+                client.login()
+                client.appendStream("Sent", listOf("\\Seen"), raw.size.toLong(), raw.inputStream())
+            } finally {
+                client.close()
+            }
+            assertTrue(sent.messages.single().raw.contentEquals(raw))
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
     fun smtpUsesLoginMechanismWhenPlainIsNotAdvertised() {
         val server = FakeSmtpServer(advertisedMechanisms = "AUTH LOGIN")
         try {

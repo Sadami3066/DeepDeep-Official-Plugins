@@ -4,7 +4,9 @@ import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.ByteArrayOutputStream
 import java.io.Closeable
+import java.io.File
 import java.io.IOException
+import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
@@ -91,7 +93,27 @@ internal class SmtpClient(
         }
     }
 
-    fun send(from: String, recipients: List<String>, message: ByteArray): String {
+    fun send(from: String, recipients: List<String>, message: ByteArray): String =
+        sendData(from, recipients) { output -> output.write(message) }
+
+    fun sendFile(from: String, recipients: List<String>, file: File): String =
+        sendData(from, recipients) { output ->
+            try {
+                file.inputStream().use { input ->
+                    val buffer = ByteArray(COPY_BUFFER_SIZE)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                    }
+                }
+            } catch (error: IOException) {
+                if (error is java.net.SocketException) throw error
+                throw MailStorageException("cannot read outgoing message", error)
+            }
+        }
+
+    private fun sendData(from: String, recipients: List<String>, produce: (OutputStream) -> Unit): String {
         expect(command("MAIL FROM:<$from>"), 250)
         for (recipient in recipients) {
             val response = command("RCPT TO:<$recipient>")
@@ -100,7 +122,14 @@ internal class SmtpClient(
             }
         }
         expect(command("DATA"), 354)
-        writeData(message)
+        val stream = outputStream()
+        val stuffing = DotStuffingOutputStream(stream)
+        try {
+            produce(stuffing)
+            stuffing.finish()
+        } catch (error: java.net.SocketException) {
+            throw MailConnectionLostException(error)
+        }
         val response = readResponse()
         expect(response, 250)
         return response.text
@@ -231,20 +260,55 @@ internal class SmtpClient(
         }
     }
 
-    private fun writeData(message: ByteArray) {
-        val text = message.toString(Charsets.ISO_8859_1)
-            .replace("\r\n", "\n")
-            .replace('\r', '\n')
-            .trimEnd('\n')
-        val builder = StringBuilder(text.length + 64)
-        for (line in text.split('\n')) {
-            if (line.startsWith(".")) builder.append('.')
-            builder.append(line).append("\r\n")
+    private class DotStuffingOutputStream(private val sink: BufferedOutputStream) : OutputStream() {
+        private var lineStart = true
+        private var lastByte = -1
+
+        override fun write(byte: Int) {
+            val value = byte and 0xff
+            if (lineStart && value == DOT) sink.write(DOT)
+            sink.write(value)
+            lineStart = value == LF
+            lastByte = value
         }
-        builder.append(".\r\n")
-        val stream = outputStream()
-        stream.write(builder.toString().toByteArray(Charsets.ISO_8859_1))
-        stream.flush()
+
+        override fun write(bytes: ByteArray, offset: Int, length: Int) {
+            var index = offset
+            val end = offset + length
+            while (index < end) {
+                if (lineStart) {
+                    if ((bytes[index].toInt() and 0xff) == DOT) sink.write(DOT)
+                    lineStart = false
+                }
+                var newline = -1
+                var cursor = index
+                while (cursor < end) {
+                    if ((bytes[cursor].toInt() and 0xff) == LF) {
+                        newline = cursor
+                        break
+                    }
+                    cursor += 1
+                }
+                if (newline < 0) {
+                    sink.write(bytes, index, end - index)
+                    lastByte = bytes[end - 1].toInt() and 0xff
+                    index = end
+                } else {
+                    sink.write(bytes, index, newline - index + 1)
+                    lastByte = LF
+                    lineStart = true
+                    index = newline + 1
+                }
+            }
+        }
+
+        fun finish() {
+            if (lastByte != LF) sink.write(CR)
+            sink.write(DOT)
+            sink.write(CR)
+            sink.write(LF)
+            sink.flush()
+        }
     }
 
     private fun secure(plain: Socket): Socket {
@@ -277,6 +341,10 @@ internal class SmtpClient(
     private companion object {
         const val DEFAULT_TIMEOUT_MS = 30_000
         const val MAX_LINE_BYTES = 64 * 1024
+        const val COPY_BUFFER_SIZE = 64 * 1024
+        const val CR = '\r'.code
+        const val LF = '\n'.code
+        const val DOT = '.'.code
         val CRLF = byteArrayOf('\r'.code.toByte(), '\n'.code.toByte())
     }
 }

@@ -15,6 +15,7 @@ import io.github.whywood.deepdeep.plugin.mail.transport.SmtpCredentials
 import io.github.whywood.deepdeep.plugin.mail.transport.SmtpEndpoint
 import io.github.whywood.deepdeep.plugin.mail.transport.SmtpSecurity
 import java.io.File
+import java.io.RandomAccessFile
 import java.net.ServerSocket
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -191,6 +192,147 @@ class MailRuntimeIntegrationTest {
             assertTrue(rig.runtime.state.value.drafts.isEmpty())
         } finally {
             closeRig(rig)
+        }
+    }
+
+    @Test
+    fun sendDraftWithAttachmentSendsStoresAndCleansUp() = runBlocking {
+        val inbox = FakeFolder("INBOX", messages = mutableListOf(fixtureMessage(1, "first", "one")))
+        val sent = FakeFolder("已发送", flags = setOf("\\Sent"))
+        val rig = createRig(listOf(inbox, sent))
+        try {
+            val accountId = rig.connectAccount(expectedMessages = 1)
+            val source = File(temporaryFolder.newFolder("attach-source"), "report.txt")
+            source.writeText("attachment payload")
+            val attachment = rig.runtime.importDraftAttachment("draft-att-1", source.absolutePath, "报告.txt", "text/plain")
+            assertEquals("报告.txt", attachment.name)
+            assertTrue(File(attachment.path).isFile)
+            val draft = rig.runtime.saveDraft(
+                MailDraft(
+                    id = "draft-att-1",
+                    accountId = accountId,
+                    to = listOf("friend@example.com"),
+                    subject = "附件测试",
+                    body = "正文内容",
+                    attachments = listOf(attachment),
+                    createdAt = 0,
+                    updatedAt = 0,
+                ),
+            )
+            val result = rig.runtime.sendDraft(draft.id)
+            assertTrue(result.error, result.ok)
+            assertEquals(1, rig.smtp.messages.size)
+            val parsed = MailMimeParser.parse(rig.smtp.messages.single(), retainAttachments = true)
+            assertEquals("附件测试", parsed.headers.subject)
+            assertEquals("正文内容", parsed.textBody)
+            assertEquals("报告.txt", parsed.attachments.single().name)
+            assertEquals("attachment payload", parsed.attachments.single().data?.toString(Charsets.UTF_8))
+            assertEquals(1, sent.messages.size)
+            assertTrue(sent.messages.single().raw.contentEquals(rig.smtp.messages.single()))
+            assertTrue(rig.runtime.state.value.drafts.isEmpty())
+            assertFalse(File(attachment.path).exists())
+            assertTrue(File(rig.mailDir, "drafts").listFiles().orEmpty().isEmpty())
+            assertTrue(File(rig.mailDir, "tmp").listFiles().orEmpty().isEmpty())
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    @Test
+    fun sendDraftMissingAttachmentKeepsDraftWithReadableError() = runBlocking {
+        val inbox = FakeFolder("INBOX", messages = mutableListOf(fixtureMessage(1, "first", "one")))
+        val rig = createRig(listOf(inbox))
+        try {
+            val accountId = rig.connectAccount(expectedMessages = 1)
+            val source = File(temporaryFolder.newFolder("missing-source"), "report.txt")
+            source.writeText("payload")
+            val attachment = rig.runtime.importDraftAttachment("draft-missing-1", source.absolutePath, "report.txt", "text/plain")
+            val draft = rig.runtime.saveDraft(
+                MailDraft(
+                    id = "draft-missing-1",
+                    accountId = accountId,
+                    to = listOf("friend@example.com"),
+                    subject = "missing attachment",
+                    body = "body",
+                    attachments = listOf(attachment),
+                    createdAt = 0,
+                    updatedAt = 0,
+                ),
+            )
+            File(attachment.path).delete()
+            val result = rig.runtime.sendDraft(draft.id)
+            assertFalse(result.ok)
+            assertTrue(result.error.orEmpty().contains("附件"))
+            assertFalse(result.error.orEmpty().contains("Exception"))
+            assertTrue(rig.smtp.messages.isEmpty())
+            assertEquals(1, rig.runtime.state.value.drafts.size)
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    @Test
+    fun importDraftAttachmentRejectsOversizedFileWithReadableError() = runBlocking {
+        val host = FakePluginHost(temporaryFolder.newFolder("import-limit"))
+        val runtime = MailRuntime(host, PlainTextMailTransport)
+        try {
+            val source = File(temporaryFolder.newFolder("big-source"), "big.bin")
+            RandomAccessFile(source, "rw").use { it.setLength(20L * 1024 * 1024 + 1) }
+            val error = runCatching {
+                runtime.importDraftAttachment("draft-big", source.absolutePath, "big.bin", "application/octet-stream")
+            }.exceptionOrNull()
+            assertTrue(error is MailLocalizedException)
+            assertTrue(error?.message.orEmpty().contains("20 MB"))
+            assertFalse(error?.message.orEmpty().contains("Exception"))
+        } finally {
+            runBlocking { runtime.stop() }
+            host.close()
+        }
+    }
+
+    @Test
+    fun importDraftAttachmentMissingSourceIsReadable() = runBlocking {
+        val host = FakePluginHost(temporaryFolder.newFolder("import-missing"))
+        val runtime = MailRuntime(host, PlainTextMailTransport)
+        try {
+            val error = runCatching {
+                runtime.importDraftAttachment("draft-1", "/definitely/missing.bin", "x.bin", "application/octet-stream")
+            }.exceptionOrNull()
+            assertTrue(error is MailLocalizedException)
+            assertTrue(error?.message.orEmpty().contains("无法读取"))
+        } finally {
+            runBlocking { runtime.stop() }
+            host.close()
+        }
+    }
+
+    @Test
+    fun removeDraftAttachmentDeletesCopyAndUpdatesDraft() = runBlocking {
+        val host = FakePluginHost(temporaryFolder.newFolder("remove-attachment"))
+        val runtime = MailRuntime(host, PlainTextMailTransport)
+        try {
+            val source = File(temporaryFolder.newFolder("remove-source"), "file.txt")
+            source.writeText("payload")
+            val attachment = runtime.importDraftAttachment("draft-2", source.absolutePath, "file.txt", "text/plain")
+            runtime.saveDraft(
+                MailDraft(
+                    id = "draft-2",
+                    accountId = "acc",
+                    to = listOf("friend@example.com"),
+                    subject = "remove",
+                    body = "body",
+                    attachments = listOf(attachment),
+                    createdAt = 0,
+                    updatedAt = 0,
+                ),
+            )
+            assertEquals(1, runtime.state.value.drafts.single().attachments.size)
+            runtime.removeDraftAttachment("draft-2", attachment)
+            assertFalse(File(attachment.path).exists())
+            assertTrue(runtime.state.value.drafts.single().attachments.isEmpty())
+        } finally {
+            runBlocking { runtime.stop() }
+            host.close()
         }
     }
 

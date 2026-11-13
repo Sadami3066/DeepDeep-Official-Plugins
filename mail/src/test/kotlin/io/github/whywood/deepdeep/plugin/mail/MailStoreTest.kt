@@ -1,10 +1,13 @@
 package io.github.whywood.deepdeep.plugin.mail
 
+import io.github.whywood.deepdeep.plugin.mail.store.DraftAttachmentException
+import io.github.whywood.deepdeep.plugin.mail.store.DraftAttachmentFailure
 import io.github.whywood.deepdeep.plugin.mail.store.MailAccountIndex
 import io.github.whywood.deepdeep.plugin.mail.store.MailFolderIndex
 import io.github.whywood.deepdeep.plugin.mail.store.MailServerSettings
 import io.github.whywood.deepdeep.plugin.mail.store.MailStore
 import java.io.File
+import java.io.RandomAccessFile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -88,6 +91,98 @@ class MailStoreTest {
         )
         store.saveDrafts(listOf(draft))
         assertEquals(listOf(draft), store.drafts())
+    }
+
+    @Test
+    fun legacyDraftsWithoutAttachmentsStillDecode() {
+        val root = File(temporaryFolder.root, "mail")
+        root.mkdirs()
+        File(root, "drafts.json").writeText(
+            """[{"id":"draft-1","accountId":"abc","to":["a@example.com"],"cc":[],"subject":"s","body":"b","createdAt":1,"updatedAt":2}]""",
+        )
+        val store = MailStore(root)
+        val draft = store.drafts().single()
+        assertEquals("draft-1", draft.id)
+        assertEquals(emptyList<DraftAttachment>(), draft.attachments)
+        val withAttachment = draft.copy(
+            attachments = listOf(DraftAttachment("/tmp/file.txt", "file.txt", "text/plain", 4)),
+        )
+        store.saveDrafts(listOf(withAttachment))
+        assertEquals(withAttachment, store.drafts().single())
+    }
+
+    @Test
+    fun importsDraftAttachmentCopyAndCleansUp() {
+        val store = store()
+        val source = File(temporaryFolder.newFolder("source"), "notes.txt").apply { writeText("hello") }
+        val attachment = store.importDraftAttachment(
+            draftId = "draft-1",
+            sourcePath = source.absolutePath,
+            name = "",
+            mimeType = "",
+            maxBytes = 1024,
+            maxTotalBytes = 4096,
+        )
+        assertEquals("notes.txt", attachment.name)
+        assertEquals("text/plain", attachment.mimeType)
+        assertEquals(5L, attachment.sizeBytes)
+        assertTrue(attachment.path.contains("drafts"))
+        assertEquals("hello", File(attachment.path).readText())
+        assertTrue(store.draftAttachmentTotalBytes("draft-1") > 0)
+        store.deleteDraftData("draft-1")
+        assertFalse(File(attachment.path).exists())
+    }
+
+    @Test
+    fun rejectsImportedAttachmentAboveLimits() {
+        val store = store()
+        val source = File(temporaryFolder.newFolder("limits"), "big.bin").apply { writeBytes(ByteArray(64)) }
+        val single = runCatching {
+            store.importDraftAttachment("draft-1", source.absolutePath, "big.bin", "", maxBytes = 32, maxTotalBytes = 1024)
+        }.exceptionOrNull()
+        assertTrue(single is DraftAttachmentException)
+        assertEquals(DraftAttachmentFailure.TOO_LARGE, (single as DraftAttachmentException).failure)
+
+        val first = store.importDraftAttachment("draft-1", source.absolutePath, "a.bin", "", maxBytes = 1024, maxTotalBytes = 100)
+        assertEquals(64L, first.sizeBytes)
+        val total = runCatching {
+            store.importDraftAttachment("draft-1", source.absolutePath, "b.bin", "", maxBytes = 1024, maxTotalBytes = 100)
+        }.exceptionOrNull()
+        assertTrue(total is DraftAttachmentException)
+        assertEquals(DraftAttachmentFailure.TOTAL_TOO_LARGE, (total as DraftAttachmentException).failure)
+        assertEquals(1, File(first.path).parentFile?.listFiles().orEmpty().size)
+    }
+
+    @Test
+    fun rejectsMissingAttachmentSource() {
+        val store = store()
+        val error = runCatching {
+            store.importDraftAttachment("draft-1", "/definitely/missing.bin", "x.bin", "", maxBytes = 10, maxTotalBytes = 10)
+        }.exceptionOrNull()
+        assertTrue(error is DraftAttachmentException)
+        assertEquals(DraftAttachmentFailure.SOURCE_MISSING, (error as DraftAttachmentException).failure)
+    }
+
+    @Test
+    fun prunesUnreferencedDraftAttachments() {
+        val store = store()
+        val source = File(temporaryFolder.newFolder("prune-source"), "keep.txt").apply { writeText("keep") }
+        val kept = store.importDraftAttachment("draft-1", source.absolutePath, "keep.txt", "", 1024, 4096)
+        val dropped = store.importDraftAttachment("draft-1", source.absolutePath, "drop.txt", "", 1024, 4096)
+        store.pruneDraftAttachments("draft-1", setOf(kept.path))
+        assertTrue(File(kept.path).isFile)
+        assertFalse(File(dropped.path).exists())
+    }
+
+    @Test
+    fun outgoingTempFilesAreCleaned() {
+        val store = store()
+        val temp = store.outgoingTempFile()
+        temp.parentFile?.mkdirs()
+        temp.writeText("partial")
+        assertTrue(temp.isFile)
+        store.cleanupOutgoingTemp(maxAgeMillis = -1)
+        assertFalse(temp.exists())
     }
 
     @Test

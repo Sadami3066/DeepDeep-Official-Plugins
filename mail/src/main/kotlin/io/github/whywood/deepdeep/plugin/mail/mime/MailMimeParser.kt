@@ -224,10 +224,11 @@ internal object MailMimeParser {
             val disposition = disposition(headers.firstValue("content-disposition"))
             val contentTypeName = parameter(headers.firstValue("content-type").orEmpty(), "name")
             val fileName = disposition.filename ?: contentTypeName?.let { Rfc2047.decode(it) }
-            if (mimeType == "text/plain" || mimeType == "text/html") {
-                collectText(mimeType, descriptor.charset, stream)
-            } else {
-                collectAttachment(mimeType, fileName, stream)
+            val attachmentPart = disposition.type.equals("attachment", ignoreCase = true) || fileName != null
+            when {
+                attachmentPart -> collectAttachment(mimeType, fileName, stream)
+                mimeType == "text/plain" || mimeType == "text/html" -> collectText(mimeType, descriptor.charset, stream)
+                else -> collectAttachment(mimeType, fileName, stream)
             }
         }
 
@@ -335,29 +336,31 @@ internal object MailMimeParser {
             if (value.isNullOrBlank()) return Disposition("", null)
             val parts = splitParameters(value)
             val type = parts.firstOrNull().orEmpty().trim().lowercase()
-            var filename: String? = null
-            for (part in parts.drop(1)) {
-                val index = part.indexOf('=')
-                if (index <= 0) continue
-                val name = part.substring(0, index).trim().lowercase()
-                if (name == "filename" || name == "filename*") {
-                    filename = decodeParameter(part.substring(index + 1).trim())
-                    break
-                }
+            val extended = parts.drop(1).firstOrNull { part ->
+                part.substringBefore('=').trim().equals("filename*", ignoreCase = true)
             }
-            return Disposition(type, filename)
+            val plain = parts.drop(1).firstOrNull { part ->
+                part.substringBefore('=').trim().equals("filename", ignoreCase = true)
+            }
+            val selected = extended ?: plain ?: return Disposition(type, null)
+            val index = selected.indexOf('=')
+            if (index <= 0) return Disposition(type, null)
+            return Disposition(type, decodeParameter(selected.substring(index + 1).trim()))
         }
 
         private fun parameter(value: String, name: String): String? {
             if (value.isBlank()) return null
             val parts = splitParameters(value)
-            for (part in parts.drop(1)) {
-                val index = part.indexOf('=')
-                if (index <= 0) continue
-                if (!part.substring(0, index).trim().equals(name, ignoreCase = true)) continue
-                return decodeParameter(part.substring(index + 1).trim())
+            val extended = parts.drop(1).firstOrNull { part ->
+                part.substringBefore('=').trim().equals("$name*", ignoreCase = true)
             }
-            return null
+            val plain = parts.drop(1).firstOrNull { part ->
+                part.substringBefore('=').trim().equals(name, ignoreCase = true)
+            }
+            val selected = extended ?: plain ?: return null
+            val index = selected.indexOf('=')
+            if (index <= 0) return null
+            return decodeParameter(selected.substring(index + 1).trim())
         }
 
         private fun decodeParameter(value: String): String {

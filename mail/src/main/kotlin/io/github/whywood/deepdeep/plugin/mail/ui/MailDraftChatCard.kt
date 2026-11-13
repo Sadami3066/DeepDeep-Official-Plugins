@@ -32,6 +32,7 @@ import io.github.whywood.deepdeep.plugin.api.CustomMessageSlotState
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.mail.MailRepository
 import io.github.whywood.deepdeep.plugin.mail.MailSendResult
+import io.github.whywood.deepdeep.plugin.mail.tools.MailDraftCardAttachment
 import io.github.whywood.deepdeep.plugin.mail.tools.MailDraftCardPayload
 import kotlinx.coroutines.launch
 
@@ -74,6 +75,11 @@ internal fun MailDraftChatCard(
     val recipients = liveDraft?.to ?: payload.to
     val ccRecipients = liveDraft?.cc ?: payload.cc
     val bodyPreview = liveDraft?.body?.let { displayPreview(it, 240) } ?: payload.bodyPreview
+    val draftAttachments = if (liveDraft != null) {
+        liveDraft.attachments.map { MailDraftCardAttachment(name = it.name, sizeBytes = it.sizeBytes) }
+    } else {
+        payload.attachments
+    }
 
     fun editDraft() {
         MailCardNavigation.editDraft(payload.draftId)
@@ -142,6 +148,44 @@ internal fun MailDraftChatCard(
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+            if (draftAttachments.isNotEmpty()) {
+                Spacer(Modifier.height(DdSpacing.Sm))
+                draftAttachments.take(3).forEach { attachment ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        DdIcon(icon = DdIcons.Paperclip, tint = colors.inkTertiary, size = 12.dp)
+                        Spacer(Modifier.width(DdSpacing.Xs))
+                        Text(
+                            text = attachment.name.ifBlank { host.t("附件", "Attachment") },
+                            modifier = Modifier.weight(1f),
+                            style = DdType.chip,
+                            color = colors.inkSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (attachment.sizeBytes > 0L) {
+                            Spacer(Modifier.width(DdSpacing.Sm))
+                            Text(
+                                text = formatFileSize(attachment.sizeBytes),
+                                style = DdType.chip,
+                                color = colors.inkTertiary,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+                if (draftAttachments.size > 3) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = host.tf("另有 %d 个附件", "%d more attachments", draftAttachments.size - 3),
+                        style = DdType.chip,
+                        color = colors.inkTertiary,
+                        maxLines = 1,
+                    )
+                }
             }
             if (current is MailCardSendState.Failed) {
                 Spacer(Modifier.height(DdSpacing.Sm))
