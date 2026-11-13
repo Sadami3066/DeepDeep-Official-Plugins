@@ -12,14 +12,14 @@ This repository contains six official plugins, published by `milous`:
 
 | Module | Plugin | Version | What it does | For |
 |---|---|---|---|---|
-| `feishu` | Feishu | 2.0.0 | Read and write messages, calendar, docs, drive, mail and tasks through the official `lark-cli` | Office users who work in Feishu every day |
-| `wecom` | WeCom | 2.0.0 | Operate messages, mail, docs, schedules and to-dos through the official `wecom-cli` | Teams that use WeCom |
-| `sysu` | SYSU CLI | 2.0.0 | Run the Node.js `sysu` CLI inside the Linux environment: timetable, grades, assignments, course files, venue booking, campus network fees and SSO tickets | Students and staff at Sun Yat-sen University |
-| `wechat` | WeChat Export | 0.3.0 | Sync and decrypt the local WeChat database, export complete chat records for a date range and let the agent summarize | Users who need a complete WeChat export |
-| `micloud` | Xiaomi Cloud | 2.0.0 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
-| `mail` | Mail | 1.1.0 | Connect an IMAP/SMTP mailbox with an authorization code: inbox, conversations, composing with attachments, account management and in-chat mail cards, with agent search, reading, archiving and draft replies | Users of standard IMAP/SMTP mailboxes such as QQ, 163, Gmail or iCloud |
+| `feishu` | Feishu | 2.1.0 | Read and write messages, calendar, docs, drive, mail and tasks through the official `lark-cli` | Office users who work in Feishu every day |
+| `wecom` | WeCom | 2.1.0 | Operate messages, mail, docs, schedules and to-dos through the official `wecom-cli` | Teams that use WeCom |
+| `sysu` | SYSU CLI | 2.1.0 | Run the Node.js `sysu` CLI inside the Linux environment: timetable, grades, assignments, course files, venue booking, campus network fees and SSO tickets | Students and staff at Sun Yat-sen University |
+| `wechat` | WeChat Export | 0.4.0 | Sync and decrypt the local WeChat database, export complete chat records for a date range and let the agent summarize | Users who need a complete WeChat export |
+| `micloud` | Xiaomi Cloud | 2.1.0 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
+| `mail` | Mail | 1.2.0 | Connect an IMAP/SMTP mailbox with an authorization code: inbox, conversations, composing with attachments, account management and in-chat mail cards, with agent search, reading, archiving and draft replies | Users of standard IMAP/SMTP mailboxes such as QQ, 163, Gmail or iCloud |
 
-Versions follow `version` in each module's `src/main/assets/plugin.json`. All six manifests declare `apiLevel` 6 and are built against the current `plugin-api` release; Mail requires DeepDeep 1.0.5+ and the other five require 1.0.4+. Runtime dependencies: Feishu uses `lark-cli` 1.0.98, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.4.2; WeChat Export bundles its own `wechat` CLI and needs Root plus local WeChat data; Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page; the Mail plugin needs no CLI and connects to IMAP/SMTP directly over the JVM network stack (QQ, 163, 126, Tencent Exmail, Alibaba Mail, Gmail, iCloud, Fastmail, Yahoo, Zoho and custom servers).
+Versions follow `version` in each module's `src/main/assets/plugin.json`. All six manifests declare `apiLevel` 6 and are built against `plugin-api` 1.1.0; all six require DeepDeep 1.0.6+. Runtime dependencies: Feishu uses `lark-cli` 1.0.98, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.4.2; WeChat Export bundles its own `wechat` CLI and needs Root plus local WeChat data; Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page; the Mail plugin needs no CLI and connects to IMAP/SMTP directly over the JVM network stack (QQ, 163, 126, Tencent Exmail, Alibaba Mail, Gmail, iCloud, Fastmail, Yahoo, Zoho and custom servers).
 
 ## What's in the repository
 
@@ -99,7 +99,7 @@ The task chain is `assemblePlugin → signPlugin → verifyPlugin`:
 
 ### Install from the plugin market
 
-Search and install from DeepDeep's "Plugins → Market". Market entry versions match this repository, and artifacts are published in the GitHub Releases of [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) (releases are named `plugins-YYYYMMDD`, assets look like `feishu-2.0.0.ddp`). Each entry records the official `keyId` as `publisherKeyId`.
+Search and install from DeepDeep's "Plugins → Market". Market entry versions match this repository, and artifacts are published in the GitHub Releases of [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) (releases are named `plugins-YYYYMMDD`, assets look like `feishu-2.1.0.ddp`). Each entry records the official `keyId` as `publisherKeyId`.
 
 ### Import a .ddp manually
 
