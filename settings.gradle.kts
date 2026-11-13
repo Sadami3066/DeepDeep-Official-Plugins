@@ -9,6 +9,11 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        mavenLocal {
+            content {
+                includeGroup("io.github.sadami3066.deepdeep")
+            }
+        }
         maven {
             url = uri("https://sadami3066.github.io/deepdeep-maven")
             content {
