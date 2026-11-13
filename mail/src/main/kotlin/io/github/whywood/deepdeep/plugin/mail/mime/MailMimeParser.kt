@@ -23,6 +23,8 @@ internal data class MimeAttachment(
     val mimeType: String,
     val sizeBytes: Long,
     val data: ByteArray?,
+    val inline: Boolean = false,
+    val contentId: String? = null,
 )
 
 internal data class ParsedMail(
@@ -46,6 +48,7 @@ internal object MailLimits {
     const val MAX_TOTAL_HEADER_COUNT = 5_000
     const val MAX_TOTAL_HEADER_LENGTH = 2L * 1024 * 1024
     const val MAX_CONTENT_BYTES = 64L * 1024 * 1024
+    const val MAX_INLINE_IMAGE_BYTES = 5L * 1024 * 1024
     const val MAX_PART_COUNT = 500
     const val MAX_NESTING_DEPTH = 16
 }
@@ -56,6 +59,13 @@ internal object MailMimeParser {
 
     fun parse(file: File, retainAttachments: Boolean = false): ParsedMail =
         parseSource({ BufferedInputStream(file.inputStream()) }, retainAttachments)
+
+    fun normalizeContentId(value: String?): String? {
+        if (value.isNullOrBlank()) return null
+        val decoded = Rfc2047.decode(value).trim()
+        val normalized = decoded.trim('<', '>').trim()
+        return normalized.takeIf { it.isNotEmpty() && !it.contains('<') && !it.contains('>') }
+    }
 
     fun extractAttachmentTo(file: File, attachmentId: String, destination: File, maxBytes: Long): Long? {
         val index = attachmentId.removePrefix(ATTACHMENT_ID_PREFIX).toIntOrNull() ?: return null
@@ -222,13 +232,24 @@ internal object MailMimeParser {
             val mimeType = descriptor.mimeType.lowercase().ifBlank { "application/octet-stream" }
             val headers = headerStack.lastOrNull() ?: messageHeaders
             val disposition = disposition(headers.firstValue("content-disposition"))
+            val dispositionType = disposition.type.lowercase()
             val contentTypeName = parameter(headers.firstValue("content-type").orEmpty(), "name")
             val fileName = disposition.filename ?: contentTypeName?.let { Rfc2047.decode(it) }
-            val attachmentPart = disposition.type.equals("attachment", ignoreCase = true) || fileName != null
+            val contentId = normalizeContentId(headers.firstValue("content-id"))
+            val imagePart = mimeType.startsWith("image/") && contentId != null
+            val inline = when {
+                dispositionType == "inline" -> true
+                dispositionType == "attachment" -> false
+                else -> imagePart
+            }
+            val attachmentPart = dispositionType == "attachment" ||
+                fileName != null ||
+                (dispositionType == "inline" && contentId != null) ||
+                imagePart
             when {
-                attachmentPart -> collectAttachment(mimeType, fileName, stream)
+                attachmentPart -> collectAttachment(mimeType, fileName, inline, contentId, stream)
                 mimeType == "text/plain" || mimeType == "text/html" -> collectText(mimeType, descriptor.charset, stream)
-                else -> collectAttachment(mimeType, fileName, stream)
+                else -> collectAttachment(mimeType, fileName, inline, contentId, stream)
             }
         }
 
@@ -247,16 +268,25 @@ internal object MailMimeParser {
             if (!isPlain && htmlText == null) htmlText = text
         }
 
-        private fun collectAttachment(mimeType: String, fileName: String?, stream: InputStream) {
+        private fun collectAttachment(
+            mimeType: String,
+            fileName: String?,
+            inline: Boolean,
+            contentId: String?,
+            stream: InputStream,
+        ) {
             val index = attachmentIndex++
+            val displayName = if (!fileName.isNullOrBlank()) fileName else defaultName(mimeType, index)
             if (streamTarget == index && targetFile != null) {
                 streamedTargetBytes = streamAttachment(stream, targetFile, targetMaxBytes)
                 attachments += MimeAttachment(
                     id = "$ATTACHMENT_ID_PREFIX$index",
-                    name = if (!fileName.isNullOrBlank()) fileName else defaultName(mimeType, index),
+                    name = displayName,
                     mimeType = mimeType,
                     sizeBytes = streamedTargetBytes ?: 0L,
                     data = null,
+                    inline = inline,
+                    contentId = contentId,
                 )
                 return
             }
@@ -268,10 +298,12 @@ internal object MailMimeParser {
             if (data != null) retainedAttachmentBytes += data.size
             attachments += MimeAttachment(
                 id = "$ATTACHMENT_ID_PREFIX$index",
-                name = if (!fileName.isNullOrBlank()) fileName else defaultName(mimeType, index),
+                name = displayName,
                 mimeType = mimeType,
                 sizeBytes = body.size,
                 data = data,
+                inline = inline,
+                contentId = contentId,
             )
         }
 

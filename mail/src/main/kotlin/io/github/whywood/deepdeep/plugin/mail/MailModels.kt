@@ -68,6 +68,8 @@ data class MailAttachment(
     val name: String,
     val mimeType: String,
     val sizeBytes: Long,
+    val inline: Boolean = false,
+    val contentId: String? = null,
 )
 
 @Serializable

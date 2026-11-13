@@ -336,7 +336,7 @@ internal fun MailComposeSheet(
     }
 
     DdSheet(onDismiss = { requestClose() }) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(0.94f)) {
+        Column(Modifier.fillMaxWidth().fillMaxHeight()) {
             MailSheetHeader(
                 host = host,
                 title = if (request.draft != null) {

@@ -14,6 +14,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.charset.Charset
+import java.util.Base64
 import java.text.SimpleDateFormat
 import java.util.Locale
 import org.junit.Assert.assertEquals
@@ -417,6 +418,117 @@ class MimeTest {
         val parsed = MailMimeParser.parse(target, retainAttachments = true)
         assertEquals("body content", parsed.textBody)
         assertEquals("payload", parsed.attachments.single().data?.toString(Charsets.UTF_8))
+    }
+
+    @Test
+    fun parsesInlineImageWithContentIdAndFilename() {
+        val raw = """
+            Subject: inline
+            MIME-Version: 1.0
+            Content-Type: multipart/related; boundary="REL"
+
+            --REL
+            Content-Type: text/html; charset=UTF-8
+
+            <p>hello <img src="cid:image001@example.com"></p>
+            --REL
+            Content-Type: image/png; name="logo.png"
+            Content-ID: <image001@example.com>
+            Content-Disposition: inline; filename="logo.png"
+            Content-Transfer-Encoding: base64
+
+            iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==
+            --REL--
+        """.trimIndent().replace("\n", "\r\n")
+        val directory = temporaryFolder.newFolder("inline")
+        val file = File(directory, "message.eml").apply { writeBytes(raw.toByteArray(Charsets.UTF_8)) }
+        val parsed = MailMimeParser.parse(file)
+        assertTrue(parsed.htmlBody!!.contains("cid:image001@example.com"))
+        assertEquals(1, parsed.attachments.size)
+        val image = parsed.attachments.single()
+        assertEquals("att-0", image.id)
+        assertTrue(image.inline)
+        assertEquals("image001@example.com", image.contentId)
+        assertEquals("logo.png", image.name)
+        assertEquals("image/png", image.mimeType)
+        val extracted = File(directory, "extracted.png")
+        assertNotNull(MailMimeParser.extractAttachmentTo(file, image.id, extracted, 1024 * 1024))
+        assertEquals(
+            Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+            ).toList(),
+            extracted.readBytes().toList(),
+        )
+    }
+
+    @Test
+    fun parsesInlineImageWithoutFilenameWithStableId() {
+        val raw = """
+            Subject: inline no name
+            MIME-Version: 1.0
+            Content-Type: multipart/related; boundary="NO-NAME"
+
+            --NO-NAME
+            Content-Type: text/html; charset=UTF-8
+
+            <p><img src="cid:no-name@local"></p>
+            --NO-NAME
+            Content-Type: image/gif
+            Content-ID: <no-name@local>
+            Content-Transfer-Encoding: base64
+
+            R0lGODlhAQABAAAAACw=
+            --NO-NAME--
+        """.trimIndent().replace("\n", "\r\n")
+        val directory = temporaryFolder.newFolder("inline-no-name")
+        val file = File(directory, "message.eml").apply { writeBytes(raw.toByteArray(Charsets.UTF_8)) }
+        val parsed = MailMimeParser.parse(file)
+        val image = parsed.attachments.single()
+        assertEquals("att-0", image.id)
+        assertTrue(image.inline)
+        assertEquals("no-name@local", image.contentId)
+        assertTrue(image.name.startsWith("attachment-"))
+        assertTrue(image.name.endsWith(".gif"))
+        assertTrue(image.sizeBytes > 0)
+        val extracted = File(directory, "extracted.gif")
+        assertEquals(image.sizeBytes, MailMimeParser.extractAttachmentTo(file, image.id, extracted, 1024 * 1024))
+    }
+
+    @Test
+    fun attachmentDispositionWithContentIdIsNotInline() {
+        val raw = """
+            Subject: attached image
+            MIME-Version: 1.0
+            Content-Type: multipart/mixed; boundary="MIX"
+
+            --MIX
+            Content-Type: text/plain; charset=UTF-8
+
+            body
+            --MIX
+            Content-Type: image/png
+            Content-ID: <attached@example.com>
+            Content-Disposition: attachment; filename="photo.png"
+            Content-Transfer-Encoding: base64
+
+            iVBORw0KGgo=
+            --MIX--
+        """.trimIndent().replace("\n", "\r\n")
+        val parsed = MailMimeParser.parse(raw.toByteArray(Charsets.UTF_8))
+        val image = parsed.attachments.single()
+        assertFalse(image.inline)
+        assertEquals("attached@example.com", image.contentId)
+        assertEquals("photo.png", image.name)
+    }
+
+    @Test
+    fun normalizesContentIdsForLookup() {
+        assertEquals("abc@example.com", MailMimeParser.normalizeContentId("<abc@example.com>"))
+        assertEquals("abc@example.com", MailMimeParser.normalizeContentId("  <abc@example.com>  "))
+        assertEquals("abc@example.com", MailMimeParser.normalizeContentId("abc@example.com"))
+        assertNull(MailMimeParser.normalizeContentId("<>"))
+        assertNull(MailMimeParser.normalizeContentId("   "))
+        assertNull(MailMimeParser.normalizeContentId(null))
     }
 
     @Test

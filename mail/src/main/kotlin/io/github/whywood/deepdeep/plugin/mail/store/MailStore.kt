@@ -8,6 +8,7 @@ import io.github.whywood.deepdeep.plugin.mail.MailMessageSummary
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -267,11 +268,74 @@ internal class MailStore(
         attachmentDirectory(accountId, messageKey).deleteRecursively()
     }
 
+    fun inlineImageTempFile(): File {
+        val directory = inlineImageDirectory()
+        directory.mkdirs()
+        return File(directory, "tmp-" + UUID.randomUUID().toString() + ".part")
+    }
+
+    fun inlineImageFile(messageKey: String, contentId: String, name: String): File =
+        File(inlineImageDirectory(), inlineImageKey(messageKey, contentId) + inlineImageExtension(name))
+
+    fun touchInlineImage(file: File) {
+        runCatching { file.setLastModified(System.currentTimeMillis()) }
+    }
+
+    fun commitInlineImage(source: File, target: File, maxTotalBytes: Long = INLINE_CACHE_MAX_BYTES): File? {
+        target.parentFile?.mkdirs()
+        target.delete()
+        val moved = runCatching {
+            if (source.renameTo(target)) {
+                true
+            } else {
+                source.copyTo(target, overwrite = true)
+                source.delete()
+                true
+            }
+        }.getOrDefault(false)
+        if (!moved || !target.isFile) {
+            source.delete()
+            return null
+        }
+        touchInlineImage(target)
+        evictInlineImages(maxTotalBytes)
+        return target
+    }
+
+    fun evictInlineImages(maxTotalBytes: Long = INLINE_CACHE_MAX_BYTES) {
+        val files = inlineImageDirectory().listFiles().orEmpty()
+            .filter { it.isFile && !it.name.endsWith(".part") }
+        var total = files.sumOf { it.length() }
+        if (total <= maxTotalBytes) return
+        files.sortedBy { it.lastModified() }.forEach { file ->
+            if (total <= maxTotalBytes) return@forEach
+            total -= file.length()
+            file.delete()
+        }
+    }
+
+    fun clearInlineImages() {
+        inlineImageDirectory().deleteRecursively()
+    }
+
     fun retainAttachmentDirectories(accountId: String, validKeys: Set<String>) {
         val directories = attachmentsDirectory(accountId).listFiles() ?: return
         for (directory in directories) {
             if (directory.isDirectory && directory.name !in validKeys) directory.deleteRecursively()
         }
+    }
+
+    private fun inlineImageDirectory(): File = File(File(root, "cache"), "inline")
+
+    private fun inlineImageKey(messageKey: String, contentId: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest("$messageKey|${contentId.lowercase()}".toByteArray(Charsets.UTF_8))
+        return digest.take(16).joinToString("") { byte -> (byte.toInt() and 0xff).toString(16).padStart(2, '0') }
+    }
+
+    private fun inlineImageExtension(name: String): String {
+        val extension = name.substringAfterLast('.', "").lowercase().filter { it.isLetterOrDigit() }.take(8)
+        return if (extension.isEmpty()) ".img" else ".$extension"
     }
 
     private fun draftsDirectory(): File = File(root, "drafts")
@@ -366,6 +430,7 @@ internal class MailStore(
         const val TEMP_SUFFIX = ".tmp"
         const val COPY_BUFFER_SIZE = 64 * 1024
         const val STALE_PART_MILLIS = 60L * 60 * 1000
+        const val INLINE_CACHE_MAX_BYTES = 64L * 1024 * 1024
         val MIME_TYPES = mapOf(
             "pdf" to "application/pdf",
             "png" to "image/png",

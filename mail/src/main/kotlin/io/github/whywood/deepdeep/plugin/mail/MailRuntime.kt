@@ -9,6 +9,7 @@ import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeException
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeFailure
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeLimits
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposer
+import io.github.whywood.deepdeep.plugin.mail.mime.MailLimits
 import io.github.whywood.deepdeep.plugin.mail.mime.MailMimeParser
 import io.github.whywood.deepdeep.plugin.mail.mime.OutgoingAttachment
 import io.github.whywood.deepdeep.plugin.mail.mime.OutgoingMail
@@ -212,6 +213,12 @@ internal class MailRuntime(
         fallback = { error -> throw localizedFailure(error) },
     ) {
         loadAttachmentInternal(accountId, messageId, attachmentId)
+    }
+
+    override suspend fun loadInlineImage(accountId: String, messageId: String, contentId: String): String? = boundary(
+        fallback = { null },
+    ) {
+        loadInlineImageInternal(accountId, messageId, contentId)
     }
 
     private suspend fun startInternal() {
@@ -442,6 +449,8 @@ internal class MailRuntime(
                     name = attachment.name,
                     mimeType = attachment.mimeType,
                     sizeBytes = attachment.sizeBytes,
+                    inline = attachment.inline,
+                    contentId = attachment.contentId,
                 )
             },
         )
@@ -739,6 +748,78 @@ internal class MailRuntime(
             throw MailLocalizedException(texts.storageFailed())
         }
         return file.absolutePath
+    }
+
+    private suspend fun loadInlineImageInternal(accountId: String, messageId: String, contentId: String): String? {
+        val normalized = MailMimeParser.normalizeContentId(contentId) ?: return null
+        val summary = findMessage(accountId, messageId) ?: return null
+        val account = stateMutex.withLock { accounts.firstOrNull { it.id == accountId } } ?: return null
+        return try {
+            val detailAttachment = messageInternal(accountId, messageId)
+                ?.attachments
+                ?.firstOrNull { it.inline && it.contentId.equals(normalized, ignoreCase = true) }
+            val attachment = detailAttachment ?: findInlineAttachment(account, summary, normalized) ?: return null
+            if (attachment.sizeBytes > MailLimits.MAX_INLINE_IMAGE_BYTES) return null
+            val key = MessageKeys.key(summary.folderRole, summary.uid)
+            val cached = store.inlineImageFile(key, normalized, attachment.name)
+            if (cached.isFile && cached.length() > 0) {
+                store.touchInlineImage(cached)
+                return cached.absolutePath
+            }
+            val bodyFile = ensureBodyFile(account, summary) ?: return null
+            val temporary = store.inlineImageTempFile()
+            val written = try {
+                MailMimeParser.extractAttachmentTo(
+                    file = bodyFile,
+                    attachmentId = attachment.id,
+                    destination = temporary,
+                    maxBytes = MailLimits.MAX_INLINE_IMAGE_BYTES,
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                report(error)
+                null
+            }
+            if (written == null) {
+                temporary.delete()
+                return null
+            }
+            store.commitInlineImage(temporary, cached)?.absolutePath
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (localized: MailLocalizedException) {
+            null
+        } catch (error: Throwable) {
+            report(error)
+            null
+        }
+    }
+
+    private suspend fun findInlineAttachment(
+        account: MailAccount,
+        summary: MailMessageSummary,
+        contentId: String,
+    ): MailAttachment? {
+        val bodyFile = ensureBodyFile(account, summary) ?: return null
+        val parsed = try {
+            MailMimeParser.parse(bodyFile)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            report(error)
+            return null
+        }
+        val match = parsed.attachments.firstOrNull { it.inline && it.contentId.equals(contentId, ignoreCase = true) }
+            ?: return null
+        return MailAttachment(
+            id = match.id,
+            name = match.name,
+            mimeType = match.mimeType,
+            sizeBytes = match.sizeBytes,
+            inline = match.inline,
+            contentId = match.contentId,
+        )
     }
 
     private suspend fun refreshInternal(force: Boolean) {

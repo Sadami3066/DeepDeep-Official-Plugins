@@ -104,7 +104,7 @@ internal fun MailAccountsSheet(
 
     DdSheet(onDismiss = onDismiss) {
         if (adding) {
-            Box(Modifier.fillMaxWidth().fillMaxHeight(0.94f)) {
+            Box(Modifier.fillMaxWidth().fillMaxHeight()) {
                 MailAddAccountFlow(
                     host = host,
                     repository = repository,
@@ -117,7 +117,7 @@ internal fun MailAccountsSheet(
                 )
             }
         } else {
-            Column(Modifier.fillMaxWidth().fillMaxHeight(0.94f)) {
+            Column(Modifier.fillMaxWidth().fillMaxHeight()) {
                 MailSheetHeader(
                     host = host,
                     title = host.t("账户", "Accounts"),

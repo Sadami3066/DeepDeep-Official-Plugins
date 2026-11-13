@@ -175,6 +175,33 @@ class MailStoreTest {
     }
 
     @Test
+    fun inlineImageCacheUsesHashedNameAndEvictsOldest() {
+        val store = store()
+        fun write(name: String, contentId: String, messageKey: String, ageMillis: Long): File {
+            val target = store.inlineImageFile(messageKey, contentId, name)
+            assertFalse(target.name.contains("cid", ignoreCase = true))
+            val source = store.inlineImageTempFile()
+            source.writeBytes(ByteArray(1000) { 7 })
+            val saved = store.commitInlineImage(source, target, maxTotalBytes = Long.MAX_VALUE)!!
+            saved.setLastModified(System.currentTimeMillis() - ageMillis)
+            return saved
+        }
+        val oldest = write("a.png", "cid-a@example.com", "inbox-1", 3_000)
+        val middle = write("b.png", "cid-b@example.com", "inbox-1", 2_000)
+        val newest = write("c.png", "cid-c@example.com", "inbox-1", 1_000)
+        assertEquals(
+            store.inlineImageFile("inbox-1", "CID-A@EXAMPLE.COM", "a.png").name,
+            store.inlineImageFile("inbox-1", "cid-a@example.com", "a.png").name,
+        )
+        store.evictInlineImages(maxTotalBytes = 2_000)
+        assertFalse(oldest.exists())
+        assertTrue(middle.exists())
+        assertTrue(newest.exists())
+        store.clearInlineImages()
+        assertFalse(File(File(temporaryFolder.root, "mail"), "cache/inline").exists())
+    }
+
+    @Test
     fun outgoingTempFilesAreCleaned() {
         val store = store()
         val temp = store.outgoingTempFile()

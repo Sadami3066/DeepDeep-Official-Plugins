@@ -28,6 +28,7 @@ import io.github.whywood.deepdeep.plugin.mail.transport.SmtpSecurity
 import java.io.File
 import java.io.RandomAccessFile
 import java.net.ServerSocket
+import java.util.Base64
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -839,6 +840,57 @@ class MailRuntimeIntegrationTest {
         }
     }
 
+    @Test
+    fun loadInlineImageResolvesContentIdCaseInsensitively() = runBlocking {
+        val image = byteArrayOf(1, 2, 3, 4, 5, 6, 7)
+        val inbox = FakeFolder("INBOX", messages = mutableListOf(inlineFixture(1, "Image001@Example.COM", image)))
+        val rig = createRig(listOf(inbox))
+        try {
+            val accountId = rig.connectAccount(expectedMessages = 1)
+            val summary = rig.runtime.state.value.messages.single()
+            val detail = rig.runtime.message(accountId, summary.id)
+            assertNotNull(detail)
+            val inline = detail!!.attachments.single()
+            assertTrue(inline.inline)
+            assertEquals("Image001@Example.COM", inline.contentId)
+            assertTrue(detail.htmlBody.orEmpty().contains("cid:"))
+            assertTrue(detail.textBody.contains("hello"))
+
+            val path = rig.runtime.loadInlineImage(accountId, summary.id, "image001@example.com")
+            assertNotNull(path)
+            assertTrue(path!!.contains("cache/inline"))
+            assertTrue(File(path).isFile)
+            assertTrue(File(path).readBytes().contentEquals(image))
+
+            assertEquals(path, rig.runtime.loadInlineImage(accountId, summary.id, "<IMAGE001@example.com>"))
+            assertNull(rig.runtime.loadInlineImage(accountId, summary.id, "missing@example.com"))
+            assertNull(rig.runtime.loadInlineImage("unknown-account", summary.id, "Image001@Example.COM"))
+            assertNull(rig.runtime.loadInlineImage(accountId, "inbox:missing", "Image001@Example.COM"))
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    @Test
+    fun inlineImageAboveSizeLimitReturnsNull() = runBlocking {
+        val image = ByteArray(5 * 1024 * 1024 + 1) { index -> (index % 251).toByte() }
+        val inbox = FakeFolder("INBOX", messages = mutableListOf(inlineFixture(1, "big@example.com", image)))
+        val rig = createRig(listOf(inbox))
+        try {
+            val accountId = rig.connectAccount(expectedMessages = 1)
+            val summary = rig.runtime.state.value.messages.single()
+            val detail = rig.runtime.message(accountId, summary.id)
+            assertNotNull(detail)
+            val inline = detail!!.attachments.single()
+            assertTrue(inline.sizeBytes > 5L * 1024 * 1024)
+            assertNull(rig.runtime.loadInlineImage(accountId, summary.id, "big@example.com"))
+            val cache = File(File(rig.mailDir, "cache"), "inline")
+            assertTrue(cache.listFiles().orEmpty().none { it.isFile && !it.name.endsWith(".part") })
+        } finally {
+            closeRig(rig)
+        }
+    }
+
     private class FakeBackgroundTaskEvent(
         override val taskId: String,
         override val kind: PluginBackgroundKind,
@@ -894,6 +946,41 @@ class MailRuntimeIntegrationTest {
         }
         fail("condition was not met within ${timeoutMs}ms")
     }
+
+    private fun inlineFixture(uid: Long, contentId: String, image: ByteArray): FakeMessage = FakeMessage(
+        uid = uid,
+        flags = mutableSetOf(),
+        subject = "inline image",
+        fromName = "Sender",
+        fromAddress = "sender$uid@example.com",
+        toName = "User",
+        toAddress = "user@example.com",
+        messageId = "<$uid@example.com>",
+        raw = relatedRaw(uid, contentId, image),
+    )
+
+    private fun relatedRaw(uid: Long, contentId: String, image: ByteArray): ByteArray = (
+        "From: Sender <sender$uid@example.com>\r\n" +
+            "To: User <user@example.com>\r\n" +
+            "Subject: inline image\r\n" +
+            "Date: Tue, 12 Nov 2026 10:00:00 +0800\r\n" +
+            "Message-ID: <$uid@example.com>\r\n" +
+            "MIME-Version: 1.0\r\n" +
+            "Content-Type: multipart/related; boundary=\"REL\"\r\n" +
+            "\r\n" +
+            "--REL\r\n" +
+            "Content-Type: text/html; charset=UTF-8\r\n" +
+            "\r\n" +
+            "<p>hello <img src=\"cid:$contentId\"></p>\r\n" +
+            "--REL\r\n" +
+            "Content-Type: image/png\r\n" +
+            "Content-ID: <$contentId>\r\n" +
+            "Content-Disposition: inline; filename=\"logo.png\"\r\n" +
+            "Content-Transfer-Encoding: base64\r\n" +
+            "\r\n" +
+            Base64.getEncoder().encodeToString(image) + "\r\n" +
+            "--REL--\r\n"
+        ).toByteArray(Charsets.UTF_8)
 
     private fun fixtureMessage(
         uid: Long,

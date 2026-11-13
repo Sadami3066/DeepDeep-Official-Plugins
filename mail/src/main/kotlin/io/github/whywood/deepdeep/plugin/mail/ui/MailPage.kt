@@ -1,5 +1,11 @@
 package io.github.whywood.deepdeep.plugin.mail.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +45,7 @@ import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.mail.MailAccount
 import io.github.whywood.deepdeep.plugin.mail.MailDraft
 import io.github.whywood.deepdeep.plugin.mail.MailFolderRole
+import io.github.whywood.deepdeep.plugin.mail.MailMessageSummary
 import io.github.whywood.deepdeep.plugin.mail.MailRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -56,6 +63,8 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
     val now = System.currentTimeMillis()
 
     var overlay by remember { mutableStateOf<MailOverlay?>(null) }
+    var thread by remember { mutableStateOf<MailThreadRequest?>(null) }
+    var displayedThread by remember { mutableStateOf<MailThreadRequest?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
     var selectedAccountId by rememberSaveable { mutableStateOf<String?>(null) }
     var onlyUnread by rememberSaveable { mutableStateOf(false) }
@@ -129,16 +138,17 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
         }
     }
 
-    fun beginRemoval(row: MailThreadRow, kind: MailRemovalKind) {
+    fun beginRemoval(messages: List<MailMessageSummary>, kind: MailRemovalKind) {
+        if (messages.isEmpty()) return
         pendingRemoval?.let { previous ->
             pendingRemoval = null
             commitRemoval(previous)
         }
-        if (kind == MailRemovalKind.TRASH && !state.trashAccountIds.contains(row.accountId)) {
-            confirmPermanentDelete = MailPendingRemoval(row.messages, MailRemovalKind.DELETE)
+        if (kind == MailRemovalKind.TRASH && !state.trashAccountIds.contains(messages.first().accountId)) {
+            confirmPermanentDelete = MailPendingRemoval(messages, MailRemovalKind.DELETE)
             return
         }
-        val removal = MailPendingRemoval(row.messages, kind)
+        val removal = MailPendingRemoval(messages, kind)
         hiddenIds = hiddenIds + removal.messages.map { it.id }
         pendingRemoval = removal
     }
@@ -186,12 +196,10 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
         cardRequest = null
         when (request) {
             is MailCardNavigation.Request.OpenThread -> {
-                overlay = MailOverlay.Thread(
-                    MailThreadRequest(
-                        accountId = request.accountId,
-                        threadId = request.threadId,
-                        messageId = request.messageId,
-                    ),
+                thread = MailThreadRequest(
+                    accountId = request.accountId,
+                    threadId = request.threadId,
+                    messageId = request.messageId,
                 )
             }
 
@@ -233,7 +241,7 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
         val messageId = arguments.messageId
         if (messageId != null && accountId != null) {
             pageArgumentsHandled = true
-            overlay = MailOverlay.Thread(MailThreadRequest(accountId, threadId, messageId))
+            thread = MailThreadRequest(accountId, threadId, messageId)
             return@LaunchedEffect
         }
         val match = state.messages
@@ -241,7 +249,7 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
             .maxByOrNull { it.dateMillis }
         if (match != null) {
             pageArgumentsHandled = true
-            overlay = MailOverlay.Thread(MailThreadRequest(match.accountId, match.threadId, match.id))
+            thread = MailThreadRequest(match.accountId, match.threadId, match.id)
         }
     }
 
@@ -402,9 +410,7 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
                         chinese = chinese,
                         onlyUnread = onlyUnread,
                         onOpen = { row ->
-                            overlay = MailOverlay.Thread(
-                                MailThreadRequest(row.accountId, row.threadId, row.latest.id),
-                            )
+                            thread = MailThreadRequest(row.accountId, row.threadId, row.latest.id)
                         },
                         onRetry = { searchAttempt++ },
                         onClear = { query = "" },
@@ -424,12 +430,10 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
                         refreshing = pullRefreshing,
                         swipeEnabled = true,
                         onOpen = { row ->
-                            overlay = MailOverlay.Thread(
-                                MailThreadRequest(row.accountId, row.threadId, row.latest.id),
-                            )
+                            thread = MailThreadRequest(row.accountId, row.threadId, row.latest.id)
                         },
-                        onArchive = { row -> beginRemoval(row, MailRemovalKind.ARCHIVE) },
-                        onDelete = { row -> beginRemoval(row, MailRemovalKind.TRASH) },
+                        onArchive = { row -> beginRemoval(row.messages, MailRemovalKind.ARCHIVE) },
+                        onDelete = { row -> beginRemoval(row.messages, MailRemovalKind.TRASH) },
                         onRefresh = { pullRefresh() },
                     )
                 }
@@ -466,18 +470,44 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
                 }
             }
         }
-        overlay?.let { current ->
-            when (current) {
-                is MailOverlay.Thread -> MailThreadSheet(
+        AnimatedVisibility(
+            visible = thread != null,
+            enter = slideInHorizontally(
+                animationSpec = tween(durationMillis = 260),
+                initialOffsetX = { width -> width },
+            ) + fadeIn(animationSpec = tween(durationMillis = 180)),
+            exit = slideOutHorizontally(
+                animationSpec = tween(durationMillis = 220),
+                targetOffsetX = { width -> width },
+            ) + fadeOut(animationSpec = tween(durationMillis = 160)),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            val request = displayedThread ?: thread
+            if (request != null) {
+                MailThreadPage(
                     host = host,
                     repository = repository,
-                    request = current.request,
-                    onDismiss = { overlay = null },
-                    onCompose = { request ->
-                        overlay = MailOverlay.Compose(request, returnTo = current)
+                    request = request,
+                    onBack = { thread = null },
+                    onCompose = { composeRequest ->
+                        overlay = MailOverlay.Compose(composeRequest, returnTo = null)
+                    },
+                    onArchive = { messages ->
+                        beginRemoval(messages, MailRemovalKind.ARCHIVE)
+                        thread = null
+                    },
+                    onDelete = { messages ->
+                        beginRemoval(messages, MailRemovalKind.TRASH)
+                        thread = null
                     },
                 )
-
+            }
+        }
+        LaunchedEffect(thread) {
+            if (thread != null) displayedThread = thread
+        }
+        overlay?.let { current ->
+            when (current) {
                 is MailOverlay.Compose -> MailComposeSheet(
                     host = host,
                     repository = repository,

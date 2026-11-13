@@ -48,4 +48,6 @@ interface MailRepository {
     suspend fun search(query: String, accountId: String?): List<MailMessageSummary>
 
     suspend fun loadAttachment(accountId: String, messageId: String, attachmentId: String): String?
+
+    suspend fun loadInlineImage(accountId: String, messageId: String, contentId: String): String?
 }

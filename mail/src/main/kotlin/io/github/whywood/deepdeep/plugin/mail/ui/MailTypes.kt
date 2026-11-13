@@ -45,8 +45,6 @@ internal data class MailComposeRequest(
 )
 
 internal sealed interface MailOverlay {
-    data class Thread(val request: MailThreadRequest) : MailOverlay
-
     data class Compose(val request: MailComposeRequest, val returnTo: MailOverlay?) : MailOverlay
 
     data class Accounts(val startAdding: Boolean) : MailOverlay

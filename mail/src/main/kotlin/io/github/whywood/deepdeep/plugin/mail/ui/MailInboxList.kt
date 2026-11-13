@@ -21,7 +21,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +40,8 @@ import io.github.whywood.deepdeep.design.DdPullToRefresh
 import io.github.whywood.deepdeep.design.DdRadius
 import io.github.whywood.deepdeep.design.DdRowDivider
 import io.github.whywood.deepdeep.design.DdSectionLabel
+import io.github.whywood.deepdeep.design.DdSwipeAction
+import io.github.whywood.deepdeep.design.DdSwipeRow
 import io.github.whywood.deepdeep.design.DdType
 import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.PluginHost
@@ -67,12 +73,18 @@ internal fun MailThreadList(
     onRefresh: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    val colors = deepDeepColors()
     val chinese = host.chinese
     val todayLabel = host.t("今天", "Today")
     val yesterdayLabel = host.t("昨天", "Yesterday")
     val earlierLabel = host.t("更早", "Earlier")
     val entries = remember(rows, now, todayLabel, yesterdayLabel, earlierLabel) {
         buildEntries(rows, now, todayLabel, yesterdayLabel, earlierLabel)
+    }
+    var openSwipeKey by remember { mutableStateOf<Any?>(null) }
+    LaunchedEffect(rows) {
+        val keys = rows.mapTo(HashSet()) { row -> "thread-${row.accountId}-${row.threadId}" }
+        if (openSwipeKey != null && openSwipeKey !in keys) openSwipeKey = null
     }
     val listContent: @Composable () -> Unit = {
         LazyColumn(
@@ -83,41 +95,56 @@ internal fun MailThreadList(
                 when (entry) {
                     is MailListEntry.Header -> DdSectionLabel(
                         text = entry.label,
-                        modifier = Modifier.padding(top = 18.dp, bottom = 4.dp),
+                        modifier = Modifier.animateItem().padding(top = 18.dp, bottom = 4.dp),
                     )
 
                     is MailListEntry.Row -> {
                         val row = entry.row
+                        val rowKey = entry.key
                         val canArchive = archiveAccountIds.contains(row.accountId)
-                        Column(Modifier.fillMaxWidth()) {
-                            if (swipeEnabled) {
-                                MailSwipeRow(
-                                    archiveLabel = if (canArchive) host.t("归档", "Archive") else null,
-                                    onArchive = if (canArchive) {
-                                        { onArchive(row) }
-                                    } else {
-                                        null
-                                    },
-                                    deleteLabel = host.t("删除", "Delete"),
-                                    onDelete = { onDelete(row) },
-                                ) { revealed, closeActions ->
-                                    MailThreadItem(
-                                        host = host,
-                                        row = row,
-                                        now = now,
-                                        chinese = chinese,
-                                        onClick = {
-                                            if (revealed) closeActions() else onOpen(row)
-                                        },
-                                    )
-                                }
-                            } else {
+                        Column(Modifier.fillMaxWidth().animateItem()) {
+                            DdSwipeRow(
+                                key = rowKey,
+                                actions = if (!swipeEnabled) {
+                                    emptyList()
+                                } else {
+                                    buildList {
+                                        if (canArchive) {
+                                            add(
+                                                DdSwipeAction(
+                                                    icon = DdIcons.Archive,
+                                                    label = host.t("归档", "Archive"),
+                                                    tint = colors.accent,
+                                                    background = colors.accentSoft,
+                                                    onClick = { onArchive(row) },
+                                                ),
+                                            )
+                                        }
+                                        add(
+                                            DdSwipeAction(
+                                                icon = DdIcons.Trash,
+                                                label = host.t("删除", "Delete"),
+                                                tint = colors.danger,
+                                                background = colors.danger.copy(alpha = 0.12f),
+                                                onClick = { onDelete(row) },
+                                            ),
+                                        )
+                                    }
+                                },
+                                openKey = openSwipeKey,
+                                onOpenChange = { openSwipeKey = it },
+                                enabled = swipeEnabled,
+                            ) {
                                 MailThreadItem(
                                     host = host,
                                     row = row,
                                     now = now,
                                     chinese = chinese,
-                                    onClick = { onOpen(row) },
+                                    onClick = {
+                                        val rowWasOpen = openSwipeKey == rowKey
+                                        openSwipeKey = null
+                                        if (!rowWasOpen) onOpen(row)
+                                    },
                                 )
                             }
                             if (entry.dividerAfter) DdRowDivider(leadingInset = 52.dp)
