@@ -17,6 +17,89 @@ internal object HotelCli {
 
     fun uninstallCommand(): String = "$ENV npm uninstall -g @rollinggo/hotel >/dev/null 2>&1; rm -rf $CONFIG_DIR; true"
 
+    fun searchCommand(
+        query: String,
+        place: String,
+        placeType: String,
+        checkIn: String?,
+        nights: Int,
+        adults: Int,
+        size: Int,
+        starRatings: String?,
+    ): String = buildList {
+        add(ENV)
+        add(BINARY)
+        add("search-hotels")
+        add("--origin-query")
+        add(quote(query))
+        add("--place")
+        add(quote(place))
+        add("--place-type")
+        add(quote(placeType))
+        checkIn?.takeIf(String::isNotBlank)?.let {
+            add("--check-in-date")
+            add(quote(it))
+        }
+        add("--stay-nights")
+        add(nights.toString())
+        add("--adult-count")
+        add(adults.toString())
+        add("--size")
+        add(size.toString())
+        starRatings?.takeIf(String::isNotBlank)?.let {
+            add("--star-ratings")
+            add(quote(it))
+        }
+        add("2>&1")
+    }.joinToString(" ")
+
+    fun detailCommand(
+        hotelId: Long?,
+        name: String?,
+        checkIn: String?,
+        checkOut: String?,
+        rooms: Int,
+        adults: Int,
+    ): String = buildList {
+        add(ENV)
+        add(BINARY)
+        add("hotel-detail")
+        hotelId?.let {
+            add("--hotel-id")
+            add(it.toString())
+        }
+        name?.takeIf(String::isNotBlank)?.let {
+            add("--name")
+            add(quote(it))
+        }
+        checkIn?.takeIf(String::isNotBlank)?.let {
+            add("--check-in-date")
+            add(quote(it))
+        }
+        checkOut?.takeIf(String::isNotBlank)?.let {
+            add("--check-out-date")
+            add(quote(it))
+        }
+        add("--room-count")
+        add(rooms.toString())
+        add("--adult-count")
+        add(adults.toString())
+        add("2>&1")
+    }.joinToString(" ")
+
+    fun ordersCommand(status: String?): String = buildList {
+        add(ENV)
+        add(BINARY)
+        add("orders")
+        status?.takeIf(String::isNotBlank)?.let {
+            add("--status")
+            add(quote(it))
+        }
+        add("2>&1")
+    }.joinToString(" ")
+
+    fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+
     fun parseVersion(output: String): String? =
         Regex("""(?m)^\s*([0-9]+\.[0-9]+\.[0-9]+)\s*$""").find(output)?.groupValues?.get(1)
             ?: Regex("""([0-9]+\.[0-9]+\.[0-9]+)""").find(output)?.groupValues?.get(1)

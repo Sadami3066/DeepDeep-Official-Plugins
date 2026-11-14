@@ -1,6 +1,6 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.themes",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiLevel": 6,
   "minHostVersion": "1.0.8",
   "capabilities": [],

@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.micloud"
         minSdk = 29
         targetSdk = 36
-        versionCode = 6
-        versionName = "2.2.0"
+        versionCode = 7
+        versionName = "2.2.1"
     }
 
     compileOptions {

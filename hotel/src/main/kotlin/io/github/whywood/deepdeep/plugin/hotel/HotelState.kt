@@ -5,4 +5,5 @@ internal data class HotelSnapshot(
     val loggedIn: Boolean = false,
     val account: String? = null,
     val checkedAt: Long = 0L,
+    val linuxAvailable: Boolean = true,
 )

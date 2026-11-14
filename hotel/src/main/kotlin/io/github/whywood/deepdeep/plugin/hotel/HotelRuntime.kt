@@ -3,7 +3,6 @@ package io.github.whywood.deepdeep.plugin.hotel
 import io.github.whywood.deepdeep.plugin.api.LinuxChunkKind
 import io.github.whywood.deepdeep.plugin.api.LinuxService
 import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.localizedText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,11 +11,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-internal enum class HotelOperation { NONE, INSTALL, LOGIN, LOGOUT }
+internal enum class HotelOperation { NONE, INSTALL, LOGIN, LOGOUT, CHECK }
 
 internal data class HotelPageState(
     val snapshot: HotelSnapshot? = null,
     val operation: HotelOperation = HotelOperation.NONE,
+    val failedOperation: HotelOperation? = null,
     val stage: String? = null,
     val loginUrl: String? = null,
     val error: String? = null,
@@ -35,17 +35,23 @@ internal class HotelRuntime {
     fun currentSnapshot(): HotelSnapshot? = memory
 
     suspend fun refresh(host: PluginHost) {
-        val linux = linuxOrNull(host) ?: run {
-            memory = HotelSnapshot()
-            pageState.update { it.copy(snapshot = HotelSnapshot(), checking = false, error = null) }
+        val linux = linuxOrNull(host)
+        if (linux == null) {
+            val snapshot = HotelSnapshot(linuxAvailable = false)
+            memory = snapshot
+            pageState.update {
+                it.copy(snapshot = snapshot, checking = false, error = null)
+            }
             return
         }
         val versionResult = linux.exec(HotelCli.versionCommand(), timeoutMs = 20_000)
         val version = HotelCli.parseVersion(versionResult.stdout)
         if (version == null) {
-            val snapshot = HotelSnapshot(checkedAt = System.currentTimeMillis())
+            val snapshot = HotelSnapshot(checkedAt = System.currentTimeMillis(), linuxAvailable = true)
             memory = snapshot
-            pageState.update { it.copy(snapshot = snapshot, checking = false) }
+            pageState.update {
+                it.copy(snapshot = snapshot, checking = false)
+            }
             return
         }
         val statusResult = linux.exec(HotelCli.statusCommand(), timeoutMs = 20_000)
@@ -55,6 +61,7 @@ internal class HotelRuntime {
             loggedIn = status.loggedIn,
             account = status.account,
             checkedAt = System.currentTimeMillis(),
+            linuxAvailable = true,
         )
         memory = snapshot
         pageState.update {
@@ -69,11 +76,15 @@ internal class HotelRuntime {
     fun check(host: PluginHost) {
         if (pageState.value.operation != HotelOperation.NONE) return
         host.scope.launch {
-            pageState.update { it.copy(checking = true) }
+            pageState.update { it.copy(checking = true, failedOperation = null) }
             runCatching { refresh(host) }
                 .onFailure { error ->
                     pageState.update {
-                        it.copy(checking = false, error = error.message ?: host.text(ERROR_UNKNOWN))
+                        it.copy(
+                            checking = false,
+                            error = error.message ?: host.text(ERROR_UNKNOWN),
+                            failedOperation = HotelOperation.CHECK,
+                        )
                     }
                 }
         }
@@ -96,6 +107,16 @@ internal class HotelRuntime {
         }
     }
 
+    fun retry(host: PluginHost) {
+        when (pageState.value.failedOperation) {
+            HotelOperation.INSTALL -> startInstall(host)
+            HotelOperation.LOGIN -> startLogin(host)
+            HotelOperation.LOGOUT -> startLogout(host)
+            HotelOperation.CHECK, null -> check(host)
+            HotelOperation.NONE -> check(host)
+        }
+    }
+
     fun openAuthUrl(host: PluginHost) {
         pageState.value.loginUrl?.let { url -> runCatching { host.ui().openUrl(url) } }
     }
@@ -110,8 +131,15 @@ internal class HotelRuntime {
         operationJob?.cancel()
         operationJob = null
         pageState.update {
-            it.copy(operation = HotelOperation.NONE, stage = null, loginUrl = null)
+            it.copy(
+                operation = HotelOperation.NONE,
+                stage = null,
+                loginUrl = null,
+                failedOperation = null,
+                error = null,
+            )
         }
+        host.requestContributionsRefresh()
     }
 
     suspend fun reset(host: PluginHost) {
@@ -133,6 +161,7 @@ internal class HotelRuntime {
                 stage = null,
                 loginUrl = null,
                 error = null,
+                failedOperation = null,
                 checking = false,
             )
         }
@@ -140,14 +169,19 @@ internal class HotelRuntime {
             operationLock.withLock {
                 try {
                     block()
-                    pageState.update { it.copy(stage = null, operation = HotelOperation.NONE, loginUrl = null) }
+                    pageState.update {
+                        it.copy(stage = null, operation = HotelOperation.NONE, loginUrl = null)
+                    }
                 } catch (cancelled: CancellationException) {
-                    pageState.update { it.copy(stage = null, operation = HotelOperation.NONE, loginUrl = null) }
+                    pageState.update {
+                        it.copy(stage = null, operation = HotelOperation.NONE, loginUrl = null)
+                    }
                     throw cancelled
                 } catch (error: Exception) {
                     pageState.update {
                         it.copy(
                             operation = HotelOperation.NONE,
+                            failedOperation = operation,
                             stage = null,
                             error = error.message ?: host.text(ERROR_UNKNOWN),
                         )
@@ -165,10 +199,12 @@ internal class HotelRuntime {
         val versionResult = linux.exec(HotelCli.versionCommand(), timeoutMs = 20_000)
         val version = HotelCli.parseVersion(versionResult.stdout)
         if (result.exitCode != 0 || version == null) {
-            throw IllegalStateException(host.text(ERROR_INSTALL, (result.stdout + versionResult.stdout).takeLast(400).trim()))
+            host.logs().warn("hotel install failed: ${(result.stdout + versionResult.stdout).takeLast(800)}")
+            throw IllegalStateException(host.t("安装没有完成，请检查网络后重试。", "Install didn't finish. Check your connection and try again."))
         }
         pageState.update { it.copy(stage = host.text(STAGE_CHECK)) }
         refresh(host)
+        pageState.update { it.copy(failedOperation = null, error = null) }
         host.requestContributionsRefresh()
         host.ui().snackbar(host.text(SNACKBAR_INSTALLED))
     }
@@ -176,14 +212,17 @@ internal class HotelRuntime {
     private suspend fun login(host: PluginHost) {
         val linux = requireLinux(host)
         pageState.update { it.copy(stage = host.text(STAGE_LOGIN)) }
-        val tail = StringBuilder()
+        var opened = false
         linux.stream(HotelCli.loginCommand()).collect { chunk ->
             if (chunk.kind == LinuxChunkKind.STDOUT) {
                 val text = chunk.text.orEmpty()
-                if (tail.length < 8000) tail.append(text).append('\n')
-                if (pageState.value.loginUrl == null) {
-                    HotelCli.parseLoginUrl(text)?.let { url ->
+                HotelCli.parseLoginUrl(text)?.let { url ->
+                    if (pageState.value.loginUrl == null) {
                         pageState.update { it.copy(loginUrl = url, stage = host.text(STAGE_WAITING)) }
+                        if (!opened) {
+                            opened = true
+                            runCatching { host.ui().openUrl(url) }
+                        }
                     }
                 }
             }
@@ -196,6 +235,7 @@ internal class HotelRuntime {
             throw IllegalStateException(host.text(ERROR_LOGIN))
         }
         refresh(host)
+        pageState.update { it.copy(failedOperation = null, error = null) }
         host.requestContributionsRefresh()
         host.ui().snackbar(host.text(SNACKBAR_LOGGED_IN))
     }
@@ -205,5 +245,4 @@ internal class HotelRuntime {
 
     private fun linuxOrNull(host: PluginHost): LinuxService? =
         runCatching { host.linux() }.getOrNull()?.takeIf { it.available }
-
 }

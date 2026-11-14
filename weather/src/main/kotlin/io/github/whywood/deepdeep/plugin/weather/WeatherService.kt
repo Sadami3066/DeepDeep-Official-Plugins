@@ -1,12 +1,18 @@
 package io.github.whywood.deepdeep.plugin.weather
 
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import java.net.HttpURLConnection
+import java.net.URL
 import java.net.URLEncoder
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 
 internal class WeatherException(message: String) : Exception(message)
 
 internal class WeatherService(private val host: PluginHost) {
-    private val json = kotlinx.serialization.json.Json {
+    private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
     }
@@ -22,16 +28,12 @@ internal class WeatherService(private val host: PluginHost) {
             append("&timezone=auto")
             append("&forecast_days=").append(days.coerceIn(1, 7))
         }
-        val response = host.network().request(method = "GET", url = url)
-        if (response.statusCode !in 200..299) {
-            throw WeatherException(host.t("天气服务返回 ${response.statusCode}", "Weather service returned ${response.statusCode}"))
-        }
-        val body = runCatching { json.decodeFromString(ForecastResponse.serializer(), response.body) }
-            .getOrElse { throw WeatherException(host.t("天气数据解析失败", "Could not parse weather data")) }
-        val current = body.current ?: throw WeatherException(host.t("天气数据不完整", "Weather data is incomplete"))
-        val daily = body.daily
-        val currentTemperature = current.temperature_2m
-            ?: throw WeatherException(host.t("天气数据不完整", "Weather data is incomplete"))
+        val body = request(url)
+        val parsed = runCatching { json.decodeFromString(ForecastResponse.serializer(), body) }
+            .getOrElse { throw WeatherException(parseFailed()) }
+        val current = parsed.current ?: throw WeatherException(incomplete())
+        val daily = parsed.daily
+        val currentTemperature = current.temperature_2m ?: throw WeatherException(incomplete())
         return WeatherDetails(
             location = WeatherLocation(
                 name = place.name,
@@ -39,7 +41,7 @@ internal class WeatherService(private val host: PluginHost) {
                 country = place.country,
                 latitude = place.latitude,
                 longitude = place.longitude,
-                timezone = body.timezone ?: place.timezone,
+                timezone = parsed.timezone ?: place.timezone,
             ),
             current = WeatherCurrent(
                 temperature = currentTemperature,
@@ -69,23 +71,75 @@ internal class WeatherService(private val host: PluginHost) {
 
     private suspend fun resolve(query: String): GeoPlace {
         val trimmed = query.trim()
-        if (trimmed.isEmpty()) throw WeatherException(host.t("请告诉我城市名", "Tell me a city name"))
+        if (trimmed.isEmpty()) throw WeatherException(host.t("请输入城市名", "Enter a city name"))
         coordinates(trimmed)?.let { (latitude, longitude) ->
             return GeoPlace(name = "${latitude.format()}, ${longitude.format()}", latitude = latitude, longitude = longitude)
         }
+        val language = if (host.app().info.language.startsWith("zh")) "zh" else "en"
         val url = "https://geocoding-api.open-meteo.com/v1/search?name=" +
             URLEncoder.encode(trimmed, "UTF-8") +
-            "&count=1&language=zh&format=json"
-        val response = host.network().request(method = "GET", url = url)
-        if (response.statusCode !in 200..299) {
-            throw WeatherException(host.t("找不到这个城市", "Could not find that city"))
-        }
-        val results = runCatching { json.decodeFromString(GeoResponse.serializer(), response.body) }
+            "&count=1&language=$language&format=json"
+        val body = request(url)
+        val results = runCatching { json.decodeFromString(GeoResponse.serializer(), body) }
             .getOrNull()
             ?.results
             .orEmpty()
-        return results.firstOrNull() ?: throw WeatherException(host.t("找不到这个城市", "Could not find that city"))
+        return results.firstOrNull() ?: throw WeatherException(cityNotFound())
     }
+
+    private suspend fun request(url: String): String = withContext(Dispatchers.IO) {
+        val connection = try {
+            (URL(url).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 20_000
+                readTimeout = 20_000
+                setRequestProperty("Accept", "application/json")
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            host.logs().warn("weather connection failed", error)
+            throw WeatherException(networkFailed())
+        }
+        try {
+            val status = connection.responseCode
+            if (status !in 200..299) throw WeatherException(statusMessage(status))
+            connection.inputStream.bufferedReader().use { it.readText() }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: WeatherException) {
+            throw error
+        } catch (error: Throwable) {
+            host.logs().warn("weather request failed", error)
+            throw WeatherException(networkFailed())
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun statusMessage(code: Int): String = when {
+        code == 429 -> host.t(
+            "查询太频繁了，请稍后再试。",
+            "Too many requests. Try again in a moment.",
+        )
+        code in 500..599 -> host.t(
+            "天气服务暂时不可用，请稍后重试。",
+            "The weather service is unavailable. Try again later.",
+        )
+        else -> host.t("天气服务返回 $code，请稍后重试。", "The weather service returned $code. Try again later.")
+    }
+
+    private fun networkFailed(): String =
+        host.t("网络连接失败，请检查网络后重试。", "Network error. Check your connection and try again.")
+
+    private fun parseFailed(): String =
+        host.t("天气数据解析失败，请稍后重试。", "Could not parse the weather data. Try again later.")
+
+    private fun incomplete(): String =
+        host.t("天气数据不完整，请稍后重试。", "The weather data is incomplete. Try again later.")
+
+    private fun cityNotFound(): String =
+        host.t("找不到这个城市，换个名称试试。", "Could not find that city. Try a different name.")
 
     private fun coordinates(query: String): Pair<Double, Double>? {
         val parts = query.split(',', '，', ' ').map { it.trim() }.filter { it.isNotEmpty() }
@@ -97,5 +151,4 @@ internal class WeatherService(private val host: PluginHost) {
     }
 
     private fun Double.format(): String = if (this % 1.0 == 0.0) toLong().toString() else toString()
-
 }

@@ -1,12 +1,13 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.hotel",
-  "version": "0.2.2",
+  "version": "1.0.1",
   "apiLevel": 6,
-  "minHostVersion": "1.0.8",
+  "minHostVersion": "1.1.0",
   "capabilities": [
     "clipboard",
     "files",
     "linux",
+    "logs",
     "settings",
     "ui"
   ],
@@ -17,14 +18,14 @@
     "en": "Hotels"
   },
   "summary": {
-    "default": "用 RollingGo 官方 rgh CLI 搜索与预订酒店",
-    "zh": "用 RollingGo 官方 rgh CLI 搜索与预订酒店",
-    "en": "Search and book hotels with the official RollingGo rgh CLI"
+    "default": "在对话里搜索酒店、查看房型与订单，去 RollingGo 完成预订",
+    "zh": "在对话里搜索酒店、查看房型与订单，去 RollingGo 完成预订",
+    "en": "Search hotels, view rooms and orders in chat, then book on RollingGo"
   },
   "description": {
-    "default": "管理官方 rgh CLI 的安装、更新与 OAuth 登录；在对话里搜索酒店、查房型报价、锁价下单和查订单，不需要 API Key。",
-    "zh": "管理官方 rgh CLI 的安装、更新与 OAuth 登录；在对话里搜索酒店、查房型报价、锁价下单和查订单，不需要 API Key。",
-    "en": "Manage the official rgh CLI install, updates and OAuth sign-in; search hotels, check rooms, confirm prices and book in chat without an API key."
+    "default": "连接 RollingGo 后，在对话里搜索酒店、查看实时房型与订单；结果以卡片展示，需要预订时打开官方页面完成。插件页管理服务安装与登录，不需要 API Key。",
+    "zh": "连接 RollingGo 后，在对话里搜索酒店、查看实时房型与订单；结果以卡片展示，需要预订时打开官方页面完成。插件页管理服务安装与登录，不需要 API Key。",
+    "en": "Connect RollingGo to search hotels, view live rooms and check orders from chat. Results appear as cards; bookings open the official RollingGo page. The plugin page manages installation and sign-in, with no API key."
   },
   "publisher": {
     "name": "milous"
@@ -33,11 +34,19 @@
     "apiLevel": 2
   },
   "provides": {
-    "tools": [],
+    "tools": [
+      "hotel_search",
+      "hotel_detail",
+      "hotel_orders"
+    ],
     "skills": [
       "deepdeep-hotel"
     ],
-    "uiSlots": [],
+    "uiSlots": [
+      "tool.card.content:hotel_search",
+      "tool.card.content:hotel_detail",
+      "tool.card.content:hotel_orders"
+    ],
     "pages": [
       "main"
     ]

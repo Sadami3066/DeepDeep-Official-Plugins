@@ -6,8 +6,8 @@
 
 | 文件 | 职责 |
 |---|---|
-| `build.gradle.kts` | application 模块配置（namespace/applicationId/versionName 2.2.0/Compose，plugin-api 1.2.0、design 0.9.0）；打包签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
-| `src/main/assets/plugin.json` | 清单：id/version 2.2.0/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.0.8/capabilities/entryClass/provides（skills `deepdeep-wecom`、page `main`） |
+| `build.gradle.kts` | application 模块配置（namespace/applicationId/versionName 2.2.2/Compose，plugin-api 1.2.0、design 0.9.0）；打包签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
+| `src/main/assets/plugin.json` | 清单：id/version 2.2.2/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.0.8/capabilities/entryClass/provides（skills `deepdeep-wecom`、page `main`） |
 | `src/main/kotlin/.../WecomCli.kt` | CLI 常量、双下载源、sha256、版本/授权/二维码解析、解包/安装/回滚/卸载命令 |
 | `src/main/kotlin/.../WecomStatus.kt` | `host.settings()`：CLI 版本、授权、Bot ID（旧 `wecom-status.json` 首次读入后迁移删除） |
 | `src/main/kotlin/.../WecomPlugin.kt` | `DeepDeepPlugin` 入口：availability / uninstall / skills / promptSections / ui |

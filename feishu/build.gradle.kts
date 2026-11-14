@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.feishu"
         minSdk = 29
         targetSdk = 36
-        versionCode = 8
-        versionName = "2.2.2"
+        versionCode = 9
+        versionName = "2.2.3"
     }
 
     compileOptions {

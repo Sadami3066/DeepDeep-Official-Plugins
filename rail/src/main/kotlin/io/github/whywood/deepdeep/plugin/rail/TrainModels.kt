@@ -6,9 +6,12 @@ import kotlinx.serialization.Serializable
 internal data class TrainSearchDetails(
     val from: String,
     val to: String,
+    val fromCode: String = "",
+    val toCode: String = "",
     val date: String,
     val trains: List<TrainOption>,
     val fetchedAt: Long,
+    val bookingUrl: String = "",
 )
 
 @Serializable
@@ -29,7 +32,7 @@ internal data class SeatAvailability(
 )
 
 @Serializable
-internal data class TicketResponse(val data: TicketData? = null)
-
-@Serializable
-internal data class TicketData(val result: List<String> = emptyList())
+internal data class RecentRoute(
+    val from: String,
+    val to: String,
+)
