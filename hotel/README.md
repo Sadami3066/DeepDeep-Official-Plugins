@@ -1,35 +1,33 @@
-# hotel · RollingGo 酒店 MCP 渲染插件
+# hotel · RollingGo 酒店 CLI 插件
 
-为 [RollingGo Hotel MCP](https://github.com/RollingGo-AI/RollingGo-hotel-MCP-CN) 的 `searchHotels` / `getHotelDetail` 工具提供聊天卡片。插件本身不保存 API Key，也不直接调用酒店接口；连接器和鉴权由宿主的 MCP 配置负责。
+管理官方 `rgh` CLI（`@rollinggo/hotel`）的安装、更新与 OAuth 登录，并提供 `deepdeep-hotel` 技能。酒店数据、房型、锁价和下单全部由 `rgh` CLI 完成，不需要 API Key。
 
-## 使用
+## 页面
 
-1. 在 [RollingGo 合作方中心](https://travelportal-partner-center.dida.com/register?lang=zh) 申请 API Key。
-2. 在宿主的「连接器 → 我的 → +」中导入：
+- 安装 / 更新 `rgh` CLI；
+- 登录 RollingGo：打开或复制 OAuth 授权链接；
+- 退出登录；
+- 显示 CLI 版本与当前登录状态。
 
-```json
-{
-  "mcpServers": {
-    "rollinggo-hotel": {
-      "type": "streamable-http",
-      "url": "https://mcp.rollinggo.cn/mcp",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY"
-      }
-    }
-  }
-}
-```
+## 技能
 
-3. 在对话里说「帮我找杭州西湖附近明天入住的酒店」，Agent 调用 MCP 后，结果会显示成酒店价格卡片。
-
-## 本地 mock
-
-`server/mock_hotel_mcp.py` 提供固定酒店数据，用于没有 API Key 时验证渲染链路：
+`deepdeep-hotel` 指导 Agent 使用：
 
 ```bash
-python3 server/mock_hotel_mcp.py 8766
-adb reverse tcp:8766 tcp:8766
+rgh status
+rgh search-hotels --origin-query "杭州西湖附近五星酒店" --place "杭州西湖" --place-type 景点 --check-in-date 2026-06-20 --size 5
+rgh hotel-detail --hotel-id 12345 --check-in-date 2026-06-20 --check-out-date 2026-06-21
+rgh price-confirm ...
+rgh book ...
+rgh orders
+rgh pre-cancel ...
+rgh confirm-cancel ...
 ```
 
-连接器地址填 `http://127.0.0.1:8766/mcp`。
+搜索和详情是只读操作；锁价、下单、取消需要在对话里让用户明确确认。
+
+## 构建
+
+```bash
+./scripts/gradlew-locked :hotel:verifyPlugin
+```

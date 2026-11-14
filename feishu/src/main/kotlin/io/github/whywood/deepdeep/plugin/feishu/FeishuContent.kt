@@ -74,7 +74,7 @@ internal const val ACTION_OPEN_PAGE = "open-page"
 internal val ACTION_OPEN_PAGE_LABEL = literal("打开插件页", "Open plugin page")
 internal val NOTIFY_CLI_TITLE = literal("飞书 CLI 已就绪", "Feishu CLI is ready")
 internal val NOTIFY_CLI_BODY = literal(
-    "CLI 安装完成，打开插件页完成飞书应用创建与账号授权。",
+    "CLI 安装完成。",
     "The CLI is installed. Open the plugin page to create the Feishu app and authorize your account.",
 )
 
@@ -109,14 +109,13 @@ internal val SKILL_MARKDOWN = """
 
     # 飞书 CLI
 
-    DeepDeep 飞书插件把官方 `lark-cli` 安装在 `/usr/local/bin/lark-cli`，在 bash 中直接运行；命令默认输出 JSON，成功与否以退出码或输出字段为准。若提示 `lark-cli: command not found`，说明 CLI 尚未安装，请让用户打开插件页的飞书页面点「安装/更新 CLI」，不要自行下载或安装。
+    DeepDeep 飞书插件把官方 `lark-cli` 安装在 `/usr/local/bin/lark-cli`，在 bash 中直接运行；命令默认输出 JSON，成功与否以退出码或输出字段为准。
 
     - 读取用户个人数据必须使用 `--as user`；`--as bot` 只能访问应用自己的资源。
     - 调用前先看用法：`lark-cli <domain> --help`。
     - 不熟悉的业务域先读指南：`lark-cli skills list`、`lark-cli skills read lark-im`。
     - 命令返回 `missing_scopes` 或登录时提示缺少权限，说明飞书应用本身未开通该权限；不要反复重新授权。
     - 电子表格/多维表格没有直读权限时，改用导出兜底：`mkdir -p <download-directory> && lark-cli drive +export --url <链接> --file-extension xlsx --output-dir <download-directory>`（电子表格），多维表格把 `xlsx` 换成 `base`，导出到 `<download-directory>` 后再解析文件。
-    - 需要直读时，请用户在插件页面点「应用权限」，到飞书开放平台为应用开通对应权限，再重新授权。
     - 已授权范围内直接执行；超出授权的发送、修改、删除、授权等操作先询问；支持时可用 `--dry-run` 预览。
     - 高风险写入会要求确认参数或返回退出码 10，先向用户说明再继续。
 
@@ -131,5 +130,4 @@ internal val SKILL_MARKDOWN = """
     - 邮箱：`lark-cli mail ...`
     - 任务：`lark-cli task ...`
 
-    不要自行创建定时任务或总结流程，除非用户明确要求。
 """.trimIndent()

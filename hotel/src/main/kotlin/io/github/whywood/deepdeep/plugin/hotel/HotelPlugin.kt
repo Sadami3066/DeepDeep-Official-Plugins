@@ -1,191 +1,96 @@
 package io.github.whywood.deepdeep.plugin.hotel
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdGroupCard
-import io.github.whywood.deepdeep.design.DdHairline
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.deepDeepColors
+import io.github.whywood.deepdeep.plugin.api.Contributions
 import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
+import io.github.whywood.deepdeep.plugin.api.NotificationActionEvent
 import io.github.whywood.deepdeep.plugin.api.PluginAvailability
+import io.github.whywood.deepdeep.plugin.api.PluginHooks
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.PluginPage
+import io.github.whywood.deepdeep.plugin.api.PluginSkill
 import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
-import io.github.whywood.deepdeep.plugin.api.ToolResultRendererContributor
-import io.github.whywood.deepdeep.plugin.api.ToolResultSource
-import io.github.whywood.deepdeep.plugin.api.ToolResultState
+import io.github.whywood.deepdeep.plugin.api.PromptSection
+import io.github.whywood.deepdeep.plugin.api.SlotBinding
+import io.github.whywood.deepdeep.plugin.api.assetIcon
 import io.github.whywood.deepdeep.plugin.api.available
-import io.github.whywood.deepdeep.plugin.api.toolResultMatch
-import io.github.whywood.deepdeep.plugin.api.toolResultRenderer
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonPrimitive
+import io.github.whywood.deepdeep.plugin.api.contributions
+import io.github.whywood.deepdeep.plugin.api.pluginPage
+import io.github.whywood.deepdeep.plugin.api.pluginSkill
+import io.github.whywood.deepdeep.plugin.api.promptSection
+import io.github.whywood.deepdeep.plugin.api.unavailable
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 
 class HotelPlugin : DeepDeepPlugin {
-    override suspend fun availability(host: PluginHost): PluginAvailability = available()
+    private val runtime = HotelRuntime()
 
-    override fun ui(host: PluginHost): PluginUiContributions = object : PluginUiContributions, ToolResultRendererContributor {
-        override val bindings = emptyList<io.github.whywood.deepdeep.plugin.api.SlotBinding>()
-        override val pages = emptyList<io.github.whywood.deepdeep.plugin.api.PluginPage>()
+    override suspend fun availability(host: PluginHost): PluginAvailability =
+        if (runCatching { host.linux().available }.getOrDefault(false)) {
+            available()
+        } else {
+            unavailable(host.text(ERROR_LINUX))
+        }
 
-        override val toolResultRenderers = listOf(
-        toolResultRenderer(
-            id = "rollinggo-hotel-search",
-            match = toolResultMatch(source = ToolResultSource.MCP, tool = "searchHotels"),
-            priority = 20,
-        ) { state -> HotelSearchCard(state) },
-        toolResultRenderer(
-            id = "rollinggo-hotel-detail",
-            match = toolResultMatch(source = ToolResultSource.MCP, tool = "getHotelDetail"),
-            priority = 20,
-        ) { state -> HotelDetailCard(state) },
+    override suspend fun onEnable(host: PluginHost) {
+        host.scope.launch { runCatching { runtime.refresh(host) } }
+    }
+
+    override suspend fun onUpgrade(host: PluginHost, fromVersion: String) {
+        host.scope.launch { runCatching { runtime.refresh(host) } }
+    }
+
+    override suspend fun uninstall(host: PluginHost) {
+        withContext(NonCancellable) {
+            runtime.reset(host)
+        }
+        runCatching { host.settings().clear() }
+    }
+
+    override fun contributions(host: PluginHost): Contributions = contributions(
+        hooks = object : PluginHooks {
+            override suspend fun notificationAction(event: NotificationActionEvent) {
+                if (event.actionId == ACTION_OPEN_PAGE) host.ui().openPage(HOTEL_PAGE_ID)
+            }
+        },
+    )
+
+    override fun skills(host: PluginHost): List<PluginSkill> = listOf(
+        pluginSkill(id = HOTEL_SKILL_ID, markdown = HOTEL_SKILL_MARKDOWN),
+    )
+
+    override fun promptSections(host: PluginHost): List<PromptSection> = listOf(
+        promptSection(HOTEL_SECTION_ID, promptBody(host, runtime.currentSnapshot())),
+    )
+
+    override fun ui(host: PluginHost): PluginUiContributions = object : PluginUiContributions {
+        override val bindings: List<SlotBinding> = emptyList()
+
+        override val pages: List<PluginPage> = listOf(
+            pluginPage(
+                id = HOTEL_PAGE_ID,
+                title = literal("酒店", "Hotels"),
+                icon = assetIcon(HOTEL_ICON_ASSET),
+                content = { HotelPage(host, runtime) },
+            ),
         )
     }
-}
 
-@Composable
-private fun HotelSearchCard(state: ToolResultState) {
-    val colors = deepDeepColors()
-    val payload = state.structuredContent ?: HotelPayload.parseText(state.result?.text)
-    val hotels = HotelPayload.hotels(payload)
-    val place = (state.arguments["place"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull
-        ?: (state.arguments["originQuery"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull
-        ?: "酒店"
-    val nights = (state.arguments["checkInParam"] as? JsonObject)
-        ?.get("stayNights")?.jsonPrimitive?.intOrNull
-    DdGroupCard {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = DdSpacing.Card, vertical = DdSpacing.Lg),
-            verticalArrangement = Arrangement.spacedBy(DdSpacing.Sm),
-        ) {
-            DdText(
-                text = place,
-                style = DdType.heading,
-                color = colors.ink,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            DdText(
-                text = if (nights != null) "酒店 · $nights 晚" else "酒店",
-                style = DdType.bodySmall,
-                color = colors.inkTertiary,
-            )
-            if (hotels.isEmpty()) {
-                DdHairline()
-                DdText(
-                    text = state.result?.text ?: "没有解析到酒店列表。",
-                    style = DdType.bodySmall,
-                    color = colors.inkSecondary,
-                )
-            } else {
-                DdHairline()
-                hotels.take(8).forEachIndexed { index, hotel ->
-                    HotelRow(hotel)
-                    if (index < hotels.take(8).lastIndex) DdHairline()
-                }
-                DdText(
-                    text = "结果来自 RollingGo 酒店 MCP，价格以实际查询为准",
-                    style = DdType.bodySmall,
-                    color = colors.inkTertiary,
-                )
-            }
+    private fun promptBody(host: PluginHost, snapshot: HotelSnapshot?): String {
+        if (!runCatching { host.linux().available }.getOrDefault(false)) {
+            return "酒店插件当前不可用：需要 Linux 运行环境。"
         }
+        if (snapshot == null) return "酒店插件状态尚未加载完成。"
+        val version = snapshot.installedVersion
+        if (version == null) return "酒店 CLI 尚未安装。"
+        if (!snapshot.loggedIn) return "酒店 CLI 已安装（v$version），但尚未登录。"
+        val account = snapshot.account?.takeIf { it.isNotBlank() }?.let { "，账号 $it" }.orEmpty()
+        return "酒店插件已登录$account。命令用法见 deepdeep-hotel 技能。"
     }
-}
 
-@Composable
-private fun HotelRow(hotel: HotelItem) {
-    val colors = deepDeepColors()
-    Column(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            DdText(
-                text = hotel.name,
-                modifier = Modifier.weight(1f),
-                style = DdType.body,
-                color = colors.ink,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            hotel.price?.let {
-                Spacer(Modifier.width(DdSpacing.Sm))
-                DdText(text = it, style = DdType.body, color = colors.ink)
-            }
-        }
-        val meta = listOfNotNull(hotel.star?.let { if (it.endsWith("星")) it else "$it 星" }, hotel.distance).joinToString(" · ")
-        if (meta.isNotBlank() || hotel.address != null) {
-            DdText(
-                text = listOfNotNull(meta.takeIf { it.isNotBlank() }, hotel.address).joinToString(" · "),
-                style = DdType.bodySmall,
-                color = colors.inkSecondary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (hotel.tags.isNotEmpty()) {
-            DdText(
-                text = hotel.tags.joinToString(" · "),
-                style = DdType.bodySmall,
-                color = colors.inkTertiary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
-@Composable
-private fun HotelDetailCard(state: ToolResultState) {
-    val colors = deepDeepColors()
-    val payload = state.structuredContent ?: HotelPayload.parseText(state.result?.text)
-    val rooms = HotelPayload.rooms(payload)
-    val hotelName = HotelPayload.hotelName(payload) ?: "酒店房型"
-    DdGroupCard {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = DdSpacing.Card, vertical = DdSpacing.Lg),
-            verticalArrangement = Arrangement.spacedBy(DdSpacing.Sm),
-        ) {
-            DdText(hotelName, style = DdType.heading, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (rooms.isEmpty()) {
-                DdText(
-                    text = state.result?.text ?: "没有解析到房型。",
-                    style = DdType.bodySmall,
-                    color = colors.inkSecondary,
-                )
-            } else {
-                DdHairline()
-                rooms.take(8).forEachIndexed { index, room ->
-                    Column(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            DdText(
-                                text = room.name,
-                                modifier = Modifier.weight(1f),
-                                style = DdType.body,
-                                color = colors.ink,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            room.price?.let { DdText(it, style = DdType.body, color = colors.ink) }
-                        }
-                        room.policy?.let {
-                            DdText(it, style = DdType.bodySmall, color = colors.inkSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                    if (index < rooms.take(8).lastIndex) DdHairline()
-                }
-            }
-            DdText("价格和退改规则以实际查询为准", style = DdType.bodySmall, color = colors.inkTertiary)
-        }
+    private companion object {
+        const val ACTION_OPEN_PAGE = "open_hotel_page"
     }
 }

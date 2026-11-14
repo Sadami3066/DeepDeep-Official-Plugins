@@ -19,4 +19,5 @@ fi
   :mail:verifyPlugin \
   :themes:verifyPlugin \
   :weather:verifyPlugin \
-  :rail:verifyPlugin
+  :rail:verifyPlugin \
+  :hotel:verifyPlugin

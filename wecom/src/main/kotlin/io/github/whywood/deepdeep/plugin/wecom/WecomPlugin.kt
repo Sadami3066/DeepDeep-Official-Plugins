@@ -96,10 +96,7 @@ class WecomPlugin : DeepDeepPlugin {
         }
     } else {
         val label = if (status.installed) "企业微信未连接" else "企业微信 CLI 未安装"
-        buildString {
-            appendLine("企业微信插件当前不可用或未连接：$label。")
-            append("其余情况下如需使用企业微信能力，先向用户说明需要完成插件连接。")
-        }
+        "企业微信插件当前不可用或未连接：$label。"
     }
 
     private companion object {
@@ -122,13 +119,12 @@ class WecomPlugin : DeepDeepPlugin {
             DeepDeep 已安装官方 `wecom-cli`，在 bash 中直接运行。命令默认输出 compact JSON，以退出码和输出字段判断结果。
 
             - 先确认命令与参数：`wecom-cli --help`、`wecom-cli <service> --help`；需要文档或 schema 时加 `--doc` / `--schema`。
-            - 服务目录在线获取，需要已授权与网络；鉴权失败时提示用户在插件页重新授权，不要自行运行 `auth init`。
+            - 服务目录在线获取，需要已授权与网络。
             - 已授权范围内直接执行；超出授权的发送、修改、删除等操作先询问；支持时可用 `--dry-run` 预览。
             - 请求体可用命名参数、`--json '<JSON>'` 或 `--set path=value` 组合给出。
             - 发消息前先 `wecom-cli message aibot sessions list`，用本次返回的 `chat_id`；给授权人发消息可用 `wecom-cli identity whoami` 的 ID 作为 chat_id。
             - 发送图片、文件、语音或视频前，先经 `wecom-cli media` 上传拿到 `media_id`。
             - 拉取多页数据用 `--page-count <n>`；下载文件用 `--output-dir <download-directory>` 落到工作区，再按当前运行支持的交付方式返回文件绝对路径。
-            - 不要自行创建定时任务或总结流程，除非用户明确要求。
         """.trimIndent()
     }
 }

@@ -70,8 +70,8 @@ internal object WecomTexts {
     val recheck = literal("重新检查", "Check again")
 
     val statusLoading = literal(
-        "企业微信插件状态尚未加载完成，请让用户打开插件页查看。",
-        "The WeCom plugin status is not loaded yet; ask the user to open the plugin page.",
+        "企业微信插件状态尚未加载完成。",
+        "The WeCom plugin status is not loaded yet.",
     )
 
     val confirmLogoutTitle = literal("退出企业微信登录？", "Sign out of WeCom?")
@@ -96,7 +96,7 @@ internal object WecomTexts {
     val actionOpenPage = literal("打开插件页", "Open plugin page")
     val notifyTitle = literal("企业微信组件已就绪", "WeCom component is ready")
     val notifyBody = literal(
-        "组件安装完成，打开插件页扫码连接企业微信。",
+        "组件安装完成。",
         "The component is installed. Open the plugin page to scan and connect WeCom.",
     )
 
