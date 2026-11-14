@@ -1,0 +1,47 @@
+{
+  "id": "io.github.whywood.deepdeep.plugin.weather",
+  "version": "1.0.0",
+  "apiLevel": 6,
+  "minHostVersion": "1.0.8",
+  "capabilities": [
+    "network",
+    "ui",
+    "logs"
+  ],
+  "entryClass": "io.github.whywood.deepdeep.plugin.weather.WeatherPlugin",
+  "name": {
+    "default": "天气",
+    "zh": "天气",
+    "en": "Weather"
+  },
+  "summary": {
+    "default": "查询全球城市的实时天气与多日预报",
+    "zh": "查询全球城市的实时天气与多日预报",
+    "en": "Current conditions and multi-day forecasts for cities worldwide"
+  },
+  "description": {
+    "default": "用 Open-Meteo 查询城市天气：当前温度、体感、湿度、风、天气现象与未来 1–7 天预报；不需要 API Key。聊天里会以天气卡片展示结果。",
+    "zh": "用 Open-Meteo 查询城市天气：当前温度、体感、湿度、风、天气现象与未来 1–7 天预报；不需要 API Key。聊天里会以天气卡片展示结果。",
+    "en": "Current temperature, feels-like, humidity, wind, conditions and a 1–7 day forecast for any city via Open-Meteo; no API key required. Results appear as a weather card in chat."
+  },
+  "publisher": {
+    "name": "milous"
+  },
+  "ui": {
+    "apiLevel": 2
+  },
+  "provides": {
+    "tools": [
+      "weather_forecast"
+    ],
+    "skills": [],
+    "uiSlots": [
+      "tool.card.content:weather_forecast"
+    ],
+    "pages": [
+      "main"
+    ]
+  },
+  "defaultEnabled": true,
+  "icon": "asset:icon.png"
+}
