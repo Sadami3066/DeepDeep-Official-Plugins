@@ -8,7 +8,7 @@ The official external-plugin source repository maintained by the DeepDeep projec
 
 DeepDeep is a personal AI agent on Android ([app repository](https://github.com/Sadami3066/DeepDeep)). Plugins implement the host contract `plugin-api` in Kotlin, load inside the App process, and extend the agent with tools, skills, prompt sections and self-drawn pages. Plugins are installed only from `.ddp` files, and every plugin is a separate Android application module.
 
-This repository contains ten official plugins, published by `milous`:
+This repository contains eleven official plugins, published by `milous`:
 
 | Module | Plugin | Version | What it does | For |
 |---|---|---|---|---|
@@ -18,18 +18,19 @@ This repository contains ten official plugins, published by `milous`:
 | `wechat` | WeChat Export | 0.5.1 | Sync and decrypt the local WeChat database, export complete chat records for a date range and let the agent summarize | Users who need a complete WeChat export |
 | `micloud` | Xiaomi Cloud | 2.2.0 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
 | `mail` | Mail | 1.4.2 | Connect an IMAP/SMTP mailbox with an authorization code: inbox, conversations, composing with attachments, account management and in-chat mail cards, with agent search, reading, archiving, drafting and sending | Users of standard IMAP/SMTP mailboxes such as QQ, 163, Gmail or iCloud |
+| `ride` | Ride | 0.1.1 | Didi ride estimates, app links, orders and driver location; sandbox/production switchable | Commuters and travellers who need a ride, price comparison or driver status |
 | `hotel` | Hotels | 0.2.2 | Manages install and OAuth sign-in for the RollingGo `rgh` CLI; search, compare and book hotels in chat | Anyone who wants AI help finding, checking or booking hotels |
 | `rail` | Trains | 0.2.1 | Search 12306 trains, times and seat availability; results render as a train card in chat | Anyone travelling by rail who wants train and seat options first |
 | `weather` | Weather | 1.0.0 | Current conditions and multi-day forecasts for cities worldwide, rendered as a weather card in chat; Open-Meteo, no API key | Anyone who checks the weather before heading out |
 | `themes` | Themes | 1.0.0 | Provides eight light and dark colour themes that can be switched from the host appearance settings | Users who want a different visual mood |
 
-Versions follow `version` in each module's `src/main/assets/plugin.json`. All ten manifests declare `apiLevel` 6 and are built against `plugin-api` 1.2.0; all ten require DeepDeep 1.0.8+. Runtime dependencies: Feishu uses `lark-cli` 1.0.98, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.4.2; WeChat Export bundles its own `wechat` CLI and needs Root plus local WeChat data; Weather uses Open-Meteo and needs no API key; Trains queries 12306 directly; Hotels uses the official `rgh` CLI with OAuth (Node.js/npm required); Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page; the Mail plugin needs no CLI and connects to IMAP/SMTP directly over the JVM network stack (QQ, 163, 126, Tencent Exmail, Alibaba Mail, Gmail, iCloud, Fastmail, Yahoo, Zoho and custom servers).
+Versions follow `version` in each module's `src/main/assets/plugin.json`. All eleven manifests declare `apiLevel` 6 and are built against `plugin-api` 1.2.0; all eleven require DeepDeep 1.0.8+. Runtime dependencies: Feishu uses `lark-cli` 1.0.98, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.4.2; WeChat Export bundles its own `wechat` CLI and needs Root plus local WeChat data; Weather uses Open-Meteo and needs no API key; Trains queries 12306 directly; Hotels uses the official `rgh` CLI with OAuth (Node.js/npm required); Ride calls the Didi MCP HTTP API directly with a key configured on its plugin page; Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page; the Mail plugin needs no CLI and connects to IMAP/SMTP directly over the JVM network stack (QQ, 163, 126, Tencent Exmail, Alibaba Mail, Gmail, iCloud, Fastmail, Yahoo, Zoho and custom servers).
 
 ## What's in the repository
 
 | Path | Description |
 |---|---|
-| `feishu/`, `wecom/`, `sysu/`, `wechat/`, `micloud/`, `mail/`, `themes/`, `weather/`, `rail/` | The ten plugin modules: Kotlin sources, `src/main/assets/plugin.json` manifests, icons and pages |
+| `feishu/`, `wecom/`, `sysu/`, `wechat/`, `micloud/`, `mail/`, `themes/`, `weather/`, `rail/` | The eleven plugin modules: Kotlin sources, `src/main/assets/plugin.json` manifests, icons and pages |
 | `gradle/plugin-bundle.gradle.kts` | Shared packaging script providing the `assemblePlugin`, `signPlugin` and `verifyPlugin` tasks |
 | `settings.gradle.kts` | Module list and repositories; dependencies come from `io.github.sadami3066.deepdeep:plugin-api` on `https://sadami3066.github.io/deepdeep-maven` (use the latest release there; `api()` brings in the matching `design`), Google and Maven Central |
 | `gradle/wrapper/`, `gradlew` | Gradle 9.8.2 wrapper; no local Gradle installation needed |
