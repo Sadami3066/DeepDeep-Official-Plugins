@@ -18,4 +18,5 @@ fi
   :micloud:verifyPlugin \
   :mail:verifyPlugin \
   :themes:verifyPlugin \
-  :weather:verifyPlugin
+  :weather:verifyPlugin \
+  :rail:verifyPlugin

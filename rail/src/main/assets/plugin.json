@@ -1,0 +1,47 @@
+{
+  "id": "io.github.whywood.deepdeep.plugin.rail",
+  "version": "0.2.1",
+  "apiLevel": 6,
+  "minHostVersion": "1.0.8",
+  "capabilities": [
+    "network",
+    "ui",
+    "logs"
+  ],
+  "entryClass": "io.github.whywood.deepdeep.plugin.rail.RailPlugin",
+  "name": {
+    "default": "火车票",
+    "zh": "火车票",
+    "en": "Trains"
+  },
+  "summary": {
+    "default": "查询 12306 车次、时刻与余票",
+    "zh": "查询 12306 车次、时刻与余票",
+    "en": "Search 12306 trains, times and seat availability"
+  },
+  "description": {
+    "default": "按出发站、到达站和日期查询 12306 车次、时刻、历时与余票，结果可在聊天中显示为车次卡片。",
+    "zh": "按出发站、到达站和日期查询 12306 车次、时刻、历时与余票，结果可在聊天中显示为车次卡片。",
+    "en": "Search 12306 trains for a route and date with times, duration and seat availability; results render as a train card in chat."
+  },
+  "publisher": {
+    "name": "milous"
+  },
+  "ui": {
+    "apiLevel": 2
+  },
+  "provides": {
+    "tools": [
+      "train_search"
+    ],
+    "skills": [],
+    "uiSlots": [
+      "tool.card.content:train_search"
+    ],
+    "pages": [
+      "main"
+    ]
+  },
+  "defaultEnabled": true,
+  "icon": "asset:icon.png"
+}
