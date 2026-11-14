@@ -21,7 +21,7 @@ DeepDeep 是一个运行在 Android 上的个人智能体（[应用仓库](https
 | `themes` | 主题包 | 1.0.0 | 给宿主提供 8 套浅色/深色主题配色，在设置的外观里一键切换 | 想换个界面气质的用户 |
 | `zanao` | 校园集市 | 1.0.13 | 内置离线 Token 捕捉器，导入账号后浏览帖子、评论、点赞、搜索、消息与发帖；附带 `zanao` CLI 技能 | 赞噢校园集市用户 |
 
-版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。八个插件的清单均为 `apiLevel` 6，使用 `plugin-api` 1.2.0 构建；都要求 DeepDeep 1.0.8+。运行时依赖：飞书使用 `lark-cli` 1.0.98，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.4.2；微信导出插件自带 `wechat` CLI，需要 Root 和微信本地数据；小米云服务没有 CLI，通过插件页内 WebView 登录；邮箱插件不依赖 CLI，用 JVM 网络栈直连 IMAP/SMTP（QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义服务器）。
+版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。八个插件的清单均为 `apiLevel` 6，使用 `plugin-api` 1.2.0 构建；都要求 DeepDeep 1.0.8+。运行时依赖：飞书使用 `lark-cli` 1.0.98，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.4.2；微信导出插件自带 `wechat` CLI，需要 Root 和微信本地数据；小米云服务没有 CLI，通过插件页内 WebView 登录；邮箱插件不依赖 CLI，用 JVM 网络栈直连 IMAP/SMTP（QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义服务器）；校园集市插件内置离线 Token 捕捉器和 Python CLI，不需要外部 CLI。
 
 ## 仓库里有什么
 
