@@ -90,12 +90,23 @@ sh ./zanao hot
 sh ./zanao categories
 ```
 
+图片先上传拿 img_paths，再带进评论或帖子（评论和发帖都支持多图，逗号分隔）：
+
+```bash
+python3 ./zanao.py upload ./a.jpg ./b.png          # 每行输出一个 img_paths
+python3 ./zanao.py comment <thread_id> --content "..." \
+  --images "upload/2026/11/14/xxx.png" --yes
+python3 ./zanao.py post --title "标题" --content "正文" --cate 校园趣事 \
+  --images "upload/2026/11/14/xxx.png" --yes
+```
+
 写操作默认 dry-run，确认后加 `--yes`：
 
 ```bash
 python3 ./zanao.py like <thread_id> --yes
 python3 ./zanao.py unlike <thread_id> --yes
 python3 ./zanao.py comment <thread_id> --content "..." --yes
+python3 ./zanao.py comment <thread_id> --images "..." --yes   # 纯图片评论
 python3 ./zanao.py post --title "标题" --content "正文" --cate 校园趣事 --yes
 ```
 

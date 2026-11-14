@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any
 
 BASE = "http://api.app.zanao.com"
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 CODEBOOK = "HySuiITldDszAQ9ZCx2pkePtE0qgUr_JYn1KNjO-afc4b7M658BFGLRVWXhmovw3"
 SCAN_CACHE_DIR = Path(os.environ.get("ZANAO_SCAN_CACHE", str(Path.home() / ".cache" / "zanao" / "scan")))
 FAST_GENERIC = 12
@@ -655,6 +655,92 @@ def cmd_scan(args: argparse.Namespace) -> int:
     return 0
 
 
+def upload_image(path: str) -> str:
+    """上传一张图片到 /common/imgupload，返回可直接用于 img_paths 的路径。"""
+    cfg = load_config()
+    file = Path(path)
+    if not file.is_file():
+        raise ZanaoError(f"文件不存在: {path}")
+    payload = file.read_bytes()
+    if not payload:
+        raise ZanaoError(f"文件为空: {path}")
+    if len(payload) > 20 * 1024 * 1024:
+        raise ZanaoError(f"图片超过 20MB: {path}")
+    mime = {
+        ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+        ".gif": "image/gif", ".webp": "image/webp", ".heic": "image/heic",
+    }.get(file.suffix.lower(), "image/jpeg")
+
+    timestamp = str(int(time.time()))
+    randnum = "".join(str(random.randrange(10)) for _ in range(20))
+    signature = sign({"timestamp__": timestamp, "randnum__": randnum})
+    boundary = "----Zanao" + hashlib.md5(f"{timestamp}{randnum}".encode()).hexdigest()[:20]
+    head = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="uploadImg"; filename="{file.name}"\r\n'
+        f"Content-Type: {mime}\r\n\r\n"
+    ).encode("utf-8")
+    tail = f"\r\n--{boundary}--\r\n".encode("utf-8")
+    body = head + payload + tail
+
+    req = urllib.request.Request(BASE + "/common/imgupload", data=body, method="POST")
+    headers = {
+        "X-Requested-With": "XMLHttpRequest",
+        "X-Sc-Alias": cfg["alias"],
+        "X-Sc-Token": cfg["token"],
+        "X-Sc-Device": cfg["device"],
+        "X-Sc-Client": "app",
+        "X-Sc-Platform": "Android",
+        "X-Sc-Hb-V": "210",
+        "X-Sc-Nt-V": "310",
+        "X-Sc-Version": "3.1.0",
+        "X-Sc-Nd": randnum,
+        "X-Sc-Td": timestamp,
+        "X-Sc-Ah": signature,
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+    }
+    for key, value in headers.items():
+        req.add_header(key, value)
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            text = response.read().decode("utf-8", "replace")
+            encrypted = response.headers.get("x-sc-encrypt") == "1"
+    except urllib.error.HTTPError as exc:
+        raise ZanaoError(f"上传失败 HTTP {exc.code}") from exc
+    except OSError as exc:
+        raise ZanaoError(f"上传失败: {exc}") from exc
+
+    if encrypted or not text.lstrip().startswith("{"):
+        text = unhash(text)
+    try:
+        envelope = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ZanaoError(f"上传返回非 JSON: {text[:160]}") from exc
+    if envelope.get("errno") != 0:
+        raise ZanaoError(f"errno={envelope.get('errno')} {envelope.get('errmsg', '')}".strip())
+    data = envelope.get("data")
+    if isinstance(data, dict):
+        for key in ("path", "img_path", "url", "src"):
+            value = data.get(key)
+            if isinstance(value, str) and value:
+                return value
+    if isinstance(data, str) and data:
+        return data
+    raise ZanaoError(f"上传返回缺少路径: {text[:160]}")
+
+
+def cmd_upload(args: argparse.Namespace) -> int:
+    paths: list[str] = []
+    for item in args.files:
+        paths.append(upload_image(item))
+        if not args.json:
+            print(paths[-1])
+    if args.json:
+        print_json({"count": len(paths), "img_paths": paths})
+    return 0
+
+
 def cmd_toplist(args: argparse.Namespace) -> int:
     data = api("GET", "/thread/toplist", {})
     rows = [_thread_row(t) for t in _list_of(data)]
@@ -830,6 +916,11 @@ def cmd_comment(args: argparse.Namespace) -> int:
         "use_anon": "1" if args.anon else "0",
         "from": "detail",
     }
+    images = ",".join(item.strip() for item in (args.images or "").split(",") if item.strip())
+    if images:
+        payload["img_paths"] = images
+    if not args.content.strip() and not images:
+        raise ZanaoError("评论内容或图片至少给一个")
     if not args.yes:
         if args.json:
             print_json({"dry_run": True, "would_comment": payload})
@@ -1145,6 +1236,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("tags", parents=[common], help="热门话题标签")
     p.set_defaults(func=cmd_tags)
 
+    p = sub.add_parser("upload", parents=[common], help="上传图片，输出 img_paths")
+    p.add_argument("files", nargs="+", help="本地图片路径，可多个")
+    p.set_defaults(func=cmd_upload)
+
     p = sub.add_parser("post", parents=[common], help="发帖（默认 dry-run）")
     p.add_argument("--title", required=True)
     p.add_argument("--content", required=True)
@@ -1169,7 +1264,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("comment", parents=[common], help="发表评论（默认 dry-run）")
     p.add_argument("thread_id")
-    p.add_argument("--content", required=True)
+    p.add_argument("--content", default="", help="评论内容（可只发图片）")
+    p.add_argument("--images", default="", help="逗号分隔的 img_paths，最多 9 张")
     p.add_argument("--reply", default="0", help="回复的 comment_id")
     p.add_argument("--root", default="0", help="根评论 comment_id")
     p.add_argument("--anon", action="store_true")
