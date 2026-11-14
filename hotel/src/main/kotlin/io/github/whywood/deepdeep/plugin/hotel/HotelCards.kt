@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.whywood.deepdeep.design.DdGroupCard
@@ -78,6 +79,7 @@ private fun HotelSummaryRow(host: PluginHost, hotel: HotelSummary) {
         DdPressable(
             onClick = open,
             modifier = Modifier.fillMaxWidth(),
+            shape = RectangleShape,
             contentDescription = hotel.name,
         ) {
             HotelSummaryBody(host, hotel)

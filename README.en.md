@@ -19,7 +19,7 @@ This repository contains eleven official plugins, published by `milous`:
 | `micloud` | Xiaomi Cloud | 2.2.1 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
 | `mail` | Mail | 1.4.3 | Connect an IMAP/SMTP mailbox with an authorization code: inbox, conversations, composing with attachments, account management and in-chat mail cards, with agent search, reading, archiving, drafting and sending | Users of standard IMAP/SMTP mailboxes such as QQ, 163, Gmail or iCloud |
 | `ride` | Ride | 1.0.0 | Didi estimates, ride links, orders and driver location; finish the booking in the Didi app or mini program | Commuters and travellers who need a ride, price comparison or driver status |
-| `hotel` | Hotels | 1.0.1 | Search hotels, view rooms and orders in chat, then book on RollingGo; the plugin page manages the connection | Anyone who wants AI help finding, checking or booking hotels |
+| `hotel` | Hotels | 1.0.7 | Search hotels, view rooms and orders in chat, then book on RollingGo; the plugin page manages the connection | Anyone who wants AI help finding, checking or booking hotels |
 | `rail` | Trains | 1.0.1 | Search 12306 trains, times and seat availability, then book on 12306 | Anyone travelling by rail who wants train and seat options first |
 | `weather` | Weather | 1.1.2 | Current conditions and 3/5/7-day forecasts for cities worldwide, remembered recent city and a weather card in chat; Open-Meteo, no API key | Anyone who checks the weather before heading out |
 | `themes` | Themes | 1.0.1 | Provides eight light and dark colour themes that can be switched from the host appearance settings | Users who want a different visual mood |

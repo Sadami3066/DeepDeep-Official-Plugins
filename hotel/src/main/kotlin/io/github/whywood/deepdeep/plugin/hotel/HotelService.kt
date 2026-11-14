@@ -30,7 +30,9 @@ internal class HotelService(private val host: PluginHost) {
             ),
         )
         return parseHotelSearch(output, query, place, placeType, checkIn, nights)
-            ?: throw HotelToolException(host.t("酒店搜索没有返回可用结果，请稍后再试。", "The hotel search returned no usable results. Try again."))
+            ?: run {
+                throw HotelToolException(host.t("酒店搜索没有返回可用结果，请稍后再试。", "The hotel search returned no usable results. Try again."))
+            }
     }
 
     suspend fun detail(

@@ -10,15 +10,56 @@ import kotlinx.serialization.json.contentOrNull
 
 internal val HotelJson = Json { ignoreUnknownKeys = true; isLenient = true }
 
-internal fun extractJsonElement(raw: String?): JsonElement? {
+internal fun extractJsonElement(raw: String?): JsonElement? = extractJsonElements(raw).firstOrNull()
+
+internal fun extractJsonElements(raw: String?): List<JsonElement> {
     val text = raw?.trim().orEmpty()
-    if (text.isEmpty()) return null
-    runCatching { HotelJson.parseToJsonElement(text) }.getOrNull()?.let { return it }
-    val start = text.indexOfFirst { it == '{' || it == '[' }
-    if (start < 0) return null
-    val end = maxOf(text.lastIndexOf('}'), text.lastIndexOf(']'))
-    if (end <= start) return null
-    return runCatching { HotelJson.parseToJsonElement(text.substring(start, end + 1)) }.getOrNull()
+    if (text.isEmpty()) return emptyList()
+    runCatching { HotelJson.parseToJsonElement(text) }.getOrNull()?.let { return listOf(it) }
+    val elements = mutableListOf<JsonElement>()
+    var index = 0
+    while (index < text.length) {
+        if (text[index] != '{' && text[index] != '[') {
+            index += 1
+            continue
+        }
+        val end = matchingJsonEnd(text, index)
+        if (end == null) {
+            index += 1
+            continue
+        }
+        runCatching { HotelJson.parseToJsonElement(text.substring(index, end + 1)) }
+            .getOrNull()
+            ?.let(elements::add)
+        index = end + 1
+    }
+    return elements
+}
+
+private fun matchingJsonEnd(text: String, start: Int): Int? {
+    var depth = 0
+    var inString = false
+    var escaped = false
+    for (index in start until text.length) {
+        val char = text[index]
+        if (inString) {
+            when {
+                escaped -> escaped = false
+                char == '\\' -> escaped = true
+                char == '"' -> inString = false
+            }
+            continue
+        }
+        when (char) {
+            '"' -> inString = true
+            '{', '[' -> depth += 1
+            '}', ']' -> {
+                depth -= 1
+                if (depth == 0) return index
+            }
+        }
+    }
+    return null
 }
 
 internal fun parseHotelSearch(
@@ -29,7 +70,8 @@ internal fun parseHotelSearch(
     checkIn: String?,
     nights: Int,
 ): HotelSearchDetails? {
-    val root = extractJsonElement(raw) as? JsonObject ?: return null
+    val root = extractJsonElements(raw).filterIsInstance<JsonObject>()
+        .firstOrNull { it["hotelInformationList"] is JsonArray } ?: return null
     val list = root["hotelInformationList"] as? JsonArray ?: return null
     val hotels = list.mapNotNull { element ->
         val item = element as? JsonObject ?: return@mapNotNull null
@@ -56,7 +98,9 @@ internal fun parseHotelSearch(
 }
 
 internal fun parseHotelDetail(raw: String, fallbackName: String): HotelDetailDetails? {
-    val root = extractJsonElement(raw) as? JsonObject ?: return null
+    val root = extractJsonElements(raw).filterIsInstance<JsonObject>()
+        .firstOrNull { it["roomRatePlans"] is JsonArray || it["name"] != null || it["hotelName"] != null || it["bookingUrl"] != null }
+        ?: return null
     val plans = root["roomRatePlans"] as? JsonArray
     val explicitName = root.string("name", "hotelName")
     val bookingUrl = root.string("bookingUrl", "booking_url")
@@ -82,11 +126,12 @@ internal fun parseHotelDetail(raw: String, fallbackName: String): HotelDetailDet
 }
 
 internal fun parseHotelOrders(raw: String): HotelOrdersDetails? {
-    val element = extractJsonElement(raw) ?: return null
-    val list = when (element) {
-        is JsonArray -> element
-        is JsonObject -> element["orders"] as? JsonArray ?: element["orderList"] as? JsonArray
-        else -> null
+    val list = extractJsonElements(raw).firstNotNullOfOrNull { element ->
+        when (element) {
+            is JsonArray -> element.takeIf { array -> array.any { it is JsonObject && it["hotelBookingInfo"] != null } }
+            is JsonObject -> (element["orders"] as? JsonArray) ?: (element["orderList"] as? JsonArray)
+            else -> null
+        }
     } ?: return null
     val orders = list.mapNotNull { row ->
         val item = row as? JsonObject ?: return@mapNotNull null

@@ -107,6 +107,19 @@ class HotelJsonTest {
     }
 
     @Test
+    fun ignoresDotenvTipObjectBeforeResult() {
+        val raw = """
+            ◇ injected env (1) from ../../root/.hotel-cli/.env // tip: override existing { override: true }
+            {"success":true,"hotelInformationList":[{"name":"A","price":{"lowestPrice":119,"currency":"CNY"}}]}
+        """.trimIndent()
+
+        val details = requireNotNull(parseHotelSearch(raw, "q", "p", "城市", null, 1))
+
+        assertEquals("A", details.hotels.single().name)
+        assertEquals("¥119", details.hotels.single().priceText)
+    }
+
+    @Test
     fun toleratesTrailingNoiseAndMissingLists() {
         assertNotNull(extractJsonElement("notice\n{\"success\":true}\nnotice"))
         assertNull(extractJsonElement("not json"))
