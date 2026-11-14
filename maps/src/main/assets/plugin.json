@@ -1,6 +1,6 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.maps",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "apiLevel": 6,
   "minHostVersion": "1.0.8",
   "capabilities": [
@@ -29,9 +29,13 @@
     "apiLevel": 2
   },
   "provides": {
-    "tools": [],
+    "tools": [
+      "map_show"
+    ],
     "skills": [],
-    "uiSlots": [],
+    "uiSlots": [
+      "tool.card.content:map_show"
+    ],
     "pages": [
       "main"
     ]

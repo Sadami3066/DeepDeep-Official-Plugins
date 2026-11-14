@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.21"
 }
 
 android {
@@ -11,8 +12,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.maps"
         minSdk = 29
         targetSdk = 36
-        versionCode = 24
-        versionName = "0.4.1"
+        versionCode = 25
+        versionName = "0.5.0"
     }
 
     compileOptions {
