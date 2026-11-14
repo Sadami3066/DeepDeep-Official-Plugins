@@ -17,4 +17,5 @@ fi
   :wechat:verifyPlugin \
   :micloud:verifyPlugin \
   :mail:verifyPlugin \
-  :themes:verifyPlugin
+  :themes:verifyPlugin \
+  :zanao:verifyPlugin
