@@ -1,0 +1,52 @@
+{
+  "id": "io.github.whywood.deepdeep.plugin.ride",
+  "version": "0.1.1",
+  "apiLevel": 6,
+  "minHostVersion": "1.1.0",
+  "capabilities": [
+    "logs",
+    "network",
+    "settings",
+    "ui"
+  ],
+  "entryClass": "io.github.whywood.deepdeep.plugin.ride.RidePlugin",
+  "name": {
+    "default": "打车",
+    "zh": "打车",
+    "en": "Ride"
+  },
+  "summary": {
+    "default": "滴滴 MCP 的车型预估、下单链接与订单卡片",
+    "zh": "滴滴 MCP 的车型预估、下单链接与订单卡片",
+    "en": "Didi MCP cards for estimates, ride links and orders"
+  },
+  "description": {
+    "default": "为滴滴出行 MCP 的 taxi_estimate、taxi_generate_ride_app_link、taxi_query_order 等工具提供聊天卡片；不直接下单，真实发单前必须由用户确认。",
+    "zh": "为滴滴出行 MCP 的 taxi_estimate、taxi_generate_ride_app_link、taxi_query_order 等工具提供聊天卡片；不直接下单，真实发单前必须由用户确认。",
+    "en": "Chat cards for Didi MCP taxi_estimate, taxi_generate_ride_app_link, taxi_query_order and more; never books without user confirmation."
+  },
+  "publisher": {
+    "name": "milous"
+  },
+  "ui": {
+    "apiLevel": 2
+  },
+  "provides": {
+    "tools": [
+      "ride_place_search",
+      "ride_estimate",
+      "ride_app_link",
+      "ride_order_status",
+      "ride_driver_location"
+    ],
+    "skills": [
+      "deepdeep-ride"
+    ],
+    "uiSlots": [],
+    "pages": [
+      "main"
+    ]
+  },
+  "defaultEnabled": true,
+  "icon": "asset:icon.png"
+}
