@@ -140,3 +140,5 @@ The source code and documentation in this repository are licensed under [Apache-
 - Please report problems, suggestions and feedback via [GitHub Issues](https://github.com/Sadami3066/DeepDeep-Official-Plugins/issues). Do not post signing private keys, credentials or security vulnerabilities publicly; contact the maintainer privately on GitHub first.
 - The project is provided as-is and maintained on a best-effort basis, with no guarantee of service availability, response time or continued availability of third-party APIs.
 - Related repositories: [DeepDeep app](https://github.com/Sadami3066/DeepDeep) · [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) · [DeepDeep-Plugins](https://github.com/Sadami3066/DeepDeep-Plugins)
+
+Development sample: [`mcpui-demo/`](mcpui-demo/README.md) renders MCP tool results with a plugin card. It is not in the market and requires `plugin-api 1.3.0` / host 1.1.0+.

@@ -1,0 +1,41 @@
+{
+  "id": "io.github.whywood.deepdeep.plugin.mcpuidemo",
+  "version": "0.1.0",
+  "apiLevel": 6,
+  "minHostVersion": "1.1.0",
+  "capabilities": [
+    "ui"
+  ],
+  "entryClass": "io.github.whywood.deepdeep.plugin.mcpuidemo.McpUiDemoPlugin",
+  "name": {
+    "default": "MCP UI Demo",
+    "zh": "MCP UI 示例",
+    "en": "MCP UI Demo"
+  },
+  "summary": {
+    "default": "用插件卡片渲染 MCP 工具结果",
+    "zh": "用插件卡片渲染 MCP 工具结果",
+    "en": "Render MCP tool results with a plugin card"
+  },
+  "description": {
+    "default": "示例插件：把 MCP 服务器返回的结构化天气结果渲染成一张卡片。需要配置名为 demo 的 MCP 服务器。",
+    "zh": "示例插件：把 MCP 服务器返回的结构化天气结果渲染成一张卡片。需要配置名为 demo 的 MCP 服务器。",
+    "en": "Demo plugin that renders structured weather results from an MCP server named demo as a card."
+  },
+  "publisher": {
+    "name": "milous"
+  },
+  "provides": {
+    "tools": [],
+    "skills": [],
+    "uiSlots": [],
+    "pages": [
+      "demo"
+    ]
+  },
+  "defaultEnabled": true,
+  "icon": "asset:icon.png",
+  "ui": {
+    "apiLevel": 2
+  }
+}
