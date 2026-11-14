@@ -1,0 +1,39 @@
+{
+  "id": "io.github.whywood.deepdeep.plugin.hotel",
+  "version": "0.1.1",
+  "apiLevel": 6,
+  "minHostVersion": "1.1.0",
+  "capabilities": [
+    "ui"
+  ],
+  "entryClass": "io.github.whywood.deepdeep.plugin.hotel.HotelPlugin",
+  "name": {
+    "default": "酒店",
+    "zh": "酒店",
+    "en": "Hotels"
+  },
+  "summary": {
+    "default": "把酒店搜索结果展示成可比较的价格卡片",
+    "zh": "把酒店搜索结果展示成可比较的价格卡片",
+    "en": "Render hotel search results as comparable price cards"
+  },
+  "description": {
+    "default": "为 RollingGo 酒店 MCP 的 searchHotels / getHotelDetail 工具提供聊天卡片：酒店名称、星级、价格、地址与房型。",
+    "zh": "为 RollingGo 酒店 MCP 的 searchHotels / getHotelDetail 工具提供聊天卡片：酒店名称、星级、价格、地址与房型。",
+    "en": "Chat cards for RollingGo Hotel MCP searchHotels / getHotelDetail: names, stars, prices, addresses and room types."
+  },
+  "publisher": {
+    "name": "milous"
+  },
+  "ui": {
+    "apiLevel": 2
+  },
+  "provides": {
+    "tools": [],
+    "skills": [],
+    "uiSlots": [],
+    "pages": []
+  },
+  "defaultEnabled": true,
+  "icon": "asset:icon.png"
+}
