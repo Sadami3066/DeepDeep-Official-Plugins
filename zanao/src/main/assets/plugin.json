@@ -1,0 +1,56 @@
+{
+  "id": "io.github.whywood.deepdeep.plugin.zanao",
+  "version": "1.0.17",
+  "publisher": {
+    "name": "milous"
+  },
+  "apiLevel": 6,
+  "minHostVersion": "1.0.8",
+  "capabilities": [
+    "background",
+    "device",
+    "network",
+    "notifications",
+    "packages",
+    "privilege",
+    "secrets",
+    "settings",
+    "ui"
+  ],
+  "permissions": [
+    "notifications.post"
+  ],
+  "components": {
+    "foregroundService": true
+  },
+  "entryClass": "io.github.whywood.deepdeep.plugin.zanao.ZanaoPlugin",
+  "name": {
+    "default": "校园集市",
+    "zh": "校园集市",
+    "en": "Campus Market"
+  },
+  "summary": {
+    "default": "赞噢校园集市 · 作者资料与历史检索",
+    "zh": "赞噢校园集市 · 作者资料与历史检索",
+    "en": "Zanao market with author profiles and history search"
+  },
+  "description": {
+    "default": "内置 Token 捕捉器与离线签名 CLI，可浏览、发帖，并支持查看帖子/评论的作者资料、按昵称或头像检索历史帖子。",
+    "zh": "内置 Token 捕捉器与离线签名 CLI，可浏览、发帖，并支持查看帖子/评论的作者资料、按昵称或头像检索历史帖子。",
+    "en": "Bundled token catcher and offline-signing CLI: browse, post, view post/comment author profiles, and search history by nickname or avatar."
+  },
+  "icon": "asset:icon.png",
+  "ui": {
+    "apiLevel": 2
+  },
+  "provides": {
+    "tools": [],
+    "skills": [
+      "zanao-cli"
+    ],
+    "uiSlots": [],
+    "pages": [
+      "main"
+    ]
+  }
+}

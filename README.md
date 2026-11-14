@@ -8,7 +8,7 @@ DeepDeep 官方维护的外部插件源码仓库：把飞书、企业微信、�
 
 DeepDeep 是一个运行在 Android 上的个人智能体（[应用仓库](https://github.com/Sadami3066/DeepDeep)）。插件用 Kotlin 实现宿主契约 `plugin-api`，在 App 进程内加载，通过工具、技能、提示词和自绘页面扩展助手能力；插件只从 `.ddp` 安装，每个插件是一个独立的 Android application 模块。
 
-本仓库包含七个官方插件，发布者为 `milous`：
+本仓库包含八个官方插件，发布者为 `milous`：
 
 | 模块 | 插件 | 版本 | 作用 | 适合 |
 |---|---|---|---|---|
@@ -19,19 +19,20 @@ DeepDeep 是一个运行在 Android 上的个人智能体（[应用仓库](https
 | `micloud` | 小米云服务 | 2.2.0 | 登录小米账号后读取笔记、待办、短信、联系人、相册与录音 | 使用小米云服务的用户 |
 | `mail` | 邮箱 | 1.4.2 | 用授权码接入 IMAP/SMTP 邮箱：收件箱、会话、写信（含附件）、账户管理，聊天内邮件卡片，并让 Agent 搜信、读信、归档、起草与发送 | 使用 QQ、163、Gmail、iCloud 等标准 IMAP/SMTP 邮箱的用户 |
 | `themes` | 主题包 | 1.0.0 | 给宿主提供 8 套浅色/深色主题配色，在设置的外观里一键切换 | 想换个界面气质的用户 |
+| `zanao` | 校园集市 | 1.0.13 | 内置离线 Token 捕捉器，导入账号后浏览帖子、评论、点赞、搜索、消息与发帖；附带 `zanao` CLI 技能 | 赞噢校园集市用户 |
 
-版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。七个插件的清单均为 `apiLevel` 6，使用 `plugin-api` 1.2.0 构建；都要求 DeepDeep 1.0.8+。运行时依赖：飞书使用 `lark-cli` 1.0.98，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.4.2；微信导出插件自带 `wechat` CLI，需要 Root 和微信本地数据；小米云服务没有 CLI，通过插件页内 WebView 登录；邮箱插件不依赖 CLI，用 JVM 网络栈直连 IMAP/SMTP（QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义服务器）。
+版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。八个插件的清单均为 `apiLevel` 6，使用 `plugin-api` 1.2.0 构建；都要求 DeepDeep 1.0.8+。运行时依赖：飞书使用 `lark-cli` 1.0.98，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.4.2；微信导出插件自带 `wechat` CLI，需要 Root 和微信本地数据；小米云服务没有 CLI，通过插件页内 WebView 登录；邮箱插件不依赖 CLI，用 JVM 网络栈直连 IMAP/SMTP（QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义服务器）。
 
 ## 仓库里有什么
 
 | 路径 | 说明 |
 |---|---|
-| `feishu/`、`wecom/`、`sysu/`、`wechat/`、`micloud/`、`mail/`、`themes/` | 七个插件模块：Kotlin 源码、`src/main/assets/plugin.json` 清单、图标与页面 |
+| `feishu/`、`wecom/`、`sysu/`、`wechat/`、`micloud/`、`mail/`、`themes/`、`zanao/` | 八个插件模块：Kotlin 源码、`src/main/assets/plugin.json` 清单、图标与页面 |
 | `gradle/plugin-bundle.gradle.kts` | 共享打包脚本，提供 `assemblePlugin`、`signPlugin`、`verifyPlugin` 三个任务 |
 | `settings.gradle.kts` | 模块列表与仓库配置；依赖来自 `https://sadami3066.github.io/deepdeep-maven` 的 `io.github.sadami3066.deepdeep:plugin-api`（版本以该仓库最新发布为准，`api()` 传递配套的 `design`）、Google 与 Maven Central |
 | `gradle/wrapper/`、`gradlew` | Gradle 9.8.2 wrapper，无需本机预装 Gradle |
 | `scripts/gradlew-locked` | 串行 Gradle 包装：flock 构建锁、默认单 worker、限制 JVM 内存，避免小内存机器并发构建 OOM |
-| `scripts/check.sh` | 构建、签名并验签全部七个插件 |
+| `scripts/check.sh` | 构建、签名并验签全部八个插件 |
 | `keys/` | 本机签名密钥目录，密钥文件不入库（`.gitignore` 忽略 `keys/*.pem` 与 `keys/*.pub`） |
 
 各模块编译配置一致：`compileSdk`/`targetSdk` 36、`minSdk` 29、Java 17。仓库只保存源码与打包脚本，不包含私钥，也不托管已签名制品；`.ddp` 产物在构建时生成。

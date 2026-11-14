@@ -26,4 +26,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "deepdeep-official-plugins"
-include(":feishu", ":mail", ":micloud", ":sysu", ":themes", ":wechat", ":wecom")
+include(":feishu", ":mail", ":micloud", ":sysu", ":themes", ":wechat", ":wecom", ":zanao")
