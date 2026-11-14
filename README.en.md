@@ -18,7 +18,7 @@ This repository contains ten official plugins, published by `milous`:
 | `wechat` | WeChat Export | 0.5.1 | Sync and decrypt the local WeChat database, export complete chat records for a date range and let the agent summarize | Users who need a complete WeChat export |
 | `micloud` | Xiaomi Cloud | 2.2.0 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
 | `mail` | Mail | 1.4.2 | Connect an IMAP/SMTP mailbox with an authorization code: inbox, conversations, composing with attachments, account management and in-chat mail cards, with agent search, reading, archiving, drafting and sending | Users of standard IMAP/SMTP mailboxes such as QQ, 163, Gmail or iCloud |
-| `hotel` | Hotels | 0.2.1 | Manages install and OAuth sign-in for the RollingGo `rgh` CLI; search, compare and book hotels in chat | Anyone who wants AI help finding, checking or booking hotels |
+| `hotel` | Hotels | 0.2.2 | Manages install and OAuth sign-in for the RollingGo `rgh` CLI; search, compare and book hotels in chat | Anyone who wants AI help finding, checking or booking hotels |
 | `rail` | Trains | 0.2.1 | Search 12306 trains, times and seat availability; results render as a train card in chat | Anyone travelling by rail who wants train and seat options first |
 | `weather` | Weather | 1.0.0 | Current conditions and multi-day forecasts for cities worldwide, rendered as a weather card in chat; Open-Meteo, no API key | Anyone who checks the weather before heading out |
 | `themes` | Themes | 1.0.0 | Provides eight light and dark colour themes that can be switched from the host appearance settings | Users who want a different visual mood |
