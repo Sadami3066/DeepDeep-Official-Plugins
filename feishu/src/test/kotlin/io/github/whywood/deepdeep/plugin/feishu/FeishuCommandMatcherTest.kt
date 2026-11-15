@@ -1,5 +1,7 @@
 package io.github.whywood.deepdeep.plugin.feishu
 
+import io.github.whywood.deepdeep.plugin.cli.CliCommandLine
+import io.github.whywood.deepdeep.plugin.cli.CliJsonEnvelope
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -79,12 +81,12 @@ class FeishuCommandMatcherTest {
     }
 }
 
-class FeishuCliOutputTest {
+class FeishuJsonEnvelopeTest {
     @Test
     fun extractsEnvelopeFromRealCliOutput() {
-        val envelope = FeishuCliOutput.findEnvelope(loadFixture("chats.json"))
+        val envelope = CliJsonEnvelope.DEFAULT.find(loadFixture("chats.json"))
         assertNotNull(envelope)
-        assertTrue(FeishuCliOutput.isSuccess(envelope!!))
+        assertTrue(CliJsonEnvelope.DEFAULT.isSuccess(envelope!!))
         val data = envelope["data"] as JsonObject
         assertEquals(3, data["chats"]!!.jsonArray.size)
     }
@@ -93,16 +95,16 @@ class FeishuCliOutputTest {
     fun extractsEnvelopeWithAnsiGarbageAndDotenvPrefix() {
         val noisy = "\u001B[32mINFO\u001B[0m some log line\nLARKSUITE_CLI_NO_UPDATE_NOTIFIER=1\n" +
             loadFixture("chats.json") + "\n[exit: 0]"
-        val envelope = FeishuCliOutput.findEnvelope(noisy)
+        val envelope = CliJsonEnvelope.DEFAULT.find(noisy)
         assertNotNull(envelope)
-        assertTrue(FeishuCliOutput.isSuccess(envelope!!))
+        assertTrue(CliJsonEnvelope.DEFAULT.isSuccess(envelope!!))
     }
 
     @Test
     fun extractsEnvelopeWhenContentContainsBraces() {
         val body = """{"ok":true,"identity":"user","data":{"messages":[{"message_id":"om_1",""" +
             """"content":"评价 {不是 JSON} 也要能解析","msg_type":"text"}]}}"""
-        val envelope = FeishuCliOutput.findEnvelope("command output:\n$body\n[exit: 0]")
+        val envelope = CliJsonEnvelope.DEFAULT.find("command output:\n$body\n[exit: 0]")
         assertNotNull(envelope)
         val data = envelope!!["data"] as JsonObject
         assertEquals(1, data["messages"]!!.jsonArray.size)
@@ -110,31 +112,33 @@ class FeishuCliOutputTest {
 
     @Test
     fun stripsNoticeField() {
-        val envelope = FeishuCliOutput.findEnvelope(loadFixture("chats-with-notice.json"))
+        val envelope = CliJsonEnvelope.DEFAULT.find(loadFixture("chats-with-notice.json"))
         assertNotNull(envelope)
         assertNotNull(envelope!!["_notice"])
-        val stripped = FeishuCliOutput.stripNotice(envelope)
+        val stripped = CliJsonEnvelope.DEFAULT.stripNotice(envelope)
         assertNull(stripped["_notice"])
-        assertTrue(FeishuCliOutput.isSuccess(stripped))
+        assertTrue(CliJsonEnvelope.DEFAULT.isSuccess(stripped))
     }
 
     @Test
     fun malformedOrErrorOutputIsIgnored() {
-        assertNull(FeishuCliOutput.findEnvelope(""))
-        assertNull(FeishuCliOutput.findEnvelope("not json at all"))
-        assertNull(FeishuCliOutput.findEnvelope("""{"ok":"""))
-        val error = FeishuCliOutput.findEnvelope(
+        assertNull(CliJsonEnvelope.DEFAULT.find(""))
+        assertNull(CliJsonEnvelope.DEFAULT.find("not json at all"))
+        assertNull(CliJsonEnvelope.DEFAULT.find("""{"ok":"""))
+        val error = CliJsonEnvelope.DEFAULT.find(
             """{"ok":false,"identity":"user","error":{"type":"authentication","message":"invalid token"}}""",
         )
         assertNotNull(error)
-        assertFalse(FeishuCliOutput.isSuccess(error!!))
+        assertFalse(CliJsonEnvelope.DEFAULT.isSuccess(error!!))
     }
 }
 
 class FeishuBridgeDiagnosticsTest {
+    private fun diagnosticSummary(raw: String) = CliCommandLine.diagnosticSummary(raw, "lark-cli")
+
     @Test
     fun diagnosticSummaryKeepsShapeAndMasksFlagValues() {
-        val summary = larkCliDiagnosticSummary(
+        val summary = diagnosticSummary(
             "LARKSUITE_CLI_NO_UPDATE_NOTIFIER=1 lark-cli im +chat-list --page-size 50 --chat-id oc_5ce6d572455d361153b7cb51da133945",
         )
         assertTrue(summary.contains("cmd=cli"))
@@ -148,7 +152,7 @@ class FeishuBridgeDiagnosticsTest {
 
     @Test
     fun diagnosticSummaryDescribesNonCliCommands() {
-        assertEquals("cmd=empty", larkCliDiagnosticSummary(""))
-        assertTrue(larkCliDiagnosticSummary("ls -la /tmp").startsWith("cmd=not-cli"))
+        assertEquals("cmd=empty", diagnosticSummary(""))
+        assertTrue(diagnosticSummary("ls -la /tmp").startsWith("cmd=not-cli"))
     }
 }

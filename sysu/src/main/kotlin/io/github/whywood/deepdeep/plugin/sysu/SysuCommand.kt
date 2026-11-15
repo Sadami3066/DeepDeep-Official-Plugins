@@ -1,5 +1,7 @@
 package io.github.whywood.deepdeep.plugin.sysu
 
+import io.github.whywood.deepdeep.plugin.cli.CliCommandLine
+
 internal enum class SysuCommandKind {
     Schedule,
     Scores,
@@ -29,9 +31,11 @@ internal object SysuCommandParser {
     fun parse(command: String): SysuInvocation? {
         val source = command.trim()
         if (source.isEmpty()) return null
-        val tokens = tokenize(source) ?: return null
+        if (CliCommandLine.hasShellOperators(source)) return null
+        val tokens = CliCommandLine.tokenize(source)
         if (tokens.isEmpty()) return null
-        if (tokens.first().substringAfterLast('/') != EXECUTABLE) return null
+        if (CliCommandLine.envPrefixLength(tokens) != 0) return null
+        if (!CliCommandLine.isBinary(tokens.first(), EXECUTABLE)) return null
         return match(tokens.drop(1)) ?: SysuInvocation.Other(source)
     }
 
@@ -164,47 +168,6 @@ internal object SysuCommandParser {
 
     private fun isAllowed(keys: Set<String>, allowed: Set<String>): Boolean = keys.all { it in allowed }
 
-    private fun tokenize(input: String): List<String>? {
-        val tokens = mutableListOf<String>()
-        val current = StringBuilder()
-        var quote: Char? = null
-        var hasToken = false
-        for (character in input) {
-            if (quote != null) {
-                if (character == quote) {
-                    quote = null
-                } else {
-                    current.append(character)
-                }
-                continue
-            }
-            when {
-                character == '\'' || character == '"' -> {
-                    quote = character
-                    hasToken = true
-                }
-
-                character == '\\' || character in SHELL_CONTROL -> return null
-                character == ' ' || character == '\t' -> {
-                    if (hasToken) {
-                        tokens += current.toString()
-                        current.clear()
-                        hasToken = false
-                    }
-                }
-
-                else -> {
-                    current.append(character)
-                    hasToken = true
-                }
-            }
-        }
-        if (quote != null) return null
-        if (hasToken) tokens += current.toString()
-        return tokens
-    }
-
     private const val EXECUTABLE = "sysu"
     private const val JSON_FLAG = "--json"
-    private const val SHELL_CONTROL = "|&;<>`$()#\n\r"
 }

@@ -7,16 +7,17 @@ import io.github.whywood.deepdeep.plugin.api.NetworkService
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.notificationAction
 import io.github.whywood.deepdeep.plugin.api.pluginNotificationWithActions
-import java.io.File
+import io.github.whywood.deepdeep.plugin.cli.update.CliInstallEvent
+import io.github.whywood.deepdeep.plugin.cli.update.CliInstallStage
+import io.github.whywood.deepdeep.plugin.cli.update.CliUpdateCheck
+import io.github.whywood.deepdeep.plugin.cli.update.CliUpdateCheckController
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 
 internal enum class FeishuOperation {
     NONE,
@@ -42,12 +43,6 @@ internal data class FeishuPageState(
     val updateFailed: Boolean = false,
 )
 
-internal data class FeishuUpdateResult(
-    val latestVersion: String?,
-    val release: FeishuRelease?,
-    val failed: Boolean,
-)
-
 internal class FeishuRuntime {
     val pageState = MutableStateFlow(FeishuPageState())
 
@@ -61,11 +56,9 @@ internal class FeishuRuntime {
 
     private val refreshLock = Mutex()
 
-    private val updateCheckLock = Mutex()
+    private val updateChecker = CliUpdateCheckController(FeishuReleaseSource, FeishuUpdate.CHECK_INTERVAL_MS)
 
     private var operationJob: Job? = null
-
-    private var updateCheckJob: Job? = null
 
     fun currentSnapshot(): FeishuSnapshot? = memory
 
@@ -189,8 +182,7 @@ internal class FeishuRuntime {
     suspend fun reset(host: PluginHost) {
         operationJob?.cancel()
         operationJob = null
-        updateCheckJob?.cancel()
-        updateCheckJob = null
+        updateChecker.cancel()
         availableRelease = null
         memory = null
         FeishuStateStore.delete(host)
@@ -296,197 +288,72 @@ internal class FeishuRuntime {
 
     private fun checkUpdate(host: PluginHost, snapshot: FeishuSnapshot, force: Boolean) {
         val installed = snapshot.installedVersion ?: return
-        if (updateCheckJob?.isActive == true) return
-        val now = System.currentTimeMillis()
-        if (!force && !FeishuUpdate.shouldCheck(snapshot.lastUpdateCheckAt, now)) return
         val cachedLatest = snapshot.latestVersion?.takeIf { FeishuUpdate.compareVersions(it, installed) >= 0 }
-        pageState.update { it.copy(updateChecking = true) }
-        updateCheckJob = host.scope.launch {
-            updateCheckLock.withLock {
-                val result = discoverLatest(host, installed)
-                val checkedAt = System.currentTimeMillis()
-                val latest = result.latestVersion ?: cachedLatest
-                val updated = (memory ?: snapshot).copy(
-                    latestVersion = latest,
-                    latestSha256 = result.release?.sha256 ?: (memory ?: snapshot).latestSha256,
-                    lastUpdateCheckAt = checkedAt,
-                )
-                memory = updated
-                FeishuStateStore.save(host, updated)
-                if (!result.failed) availableRelease = result.release
-                pageState.update {
-                    it.copy(
-                        snapshot = updated,
-                        latestVersion = latest,
-                        lastCheckedAt = checkedAt,
-                        updateChecking = false,
-                        updateFailed = result.failed,
-                    )
-                }
-                if (result.failed) {
-                    runCatching { host.logs().warn("feishu update check failed") }
-                }
-            }
-        }
+        updateChecker.request(
+            scope = host.scope,
+            network = networkOrNull(host),
+            installedVersion = installed,
+            lastCheckedAt = snapshot.lastUpdateCheckAt,
+            force = force,
+            onStart = { pageState.update { it.copy(updateChecking = true) } },
+            onResult = { result -> handleUpdateCheckResult(host, snapshot, cachedLatest, result) },
+        )
     }
 
-    private suspend fun discoverLatest(host: PluginHost, installed: String): FeishuUpdateResult {
-        val network = networkOrNull(host) ?: return FeishuUpdateResult(null, null, true)
-        val github = try {
-            val response = network.request(
-                "GET",
-                FeishuUpdate.GITHUB_LATEST_URL,
-                mapOf("Accept" to "application/vnd.github+json", "User-Agent" to "DeepDeep-Feishu-Plugin"),
-                timeoutMs = UPDATE_CHECK_TIMEOUT_MS,
+    private suspend fun handleUpdateCheckResult(
+        host: PluginHost,
+        snapshot: FeishuSnapshot,
+        cachedLatest: String?,
+        result: CliUpdateCheck,
+    ) {
+        val checkedAt = System.currentTimeMillis()
+        val latest = result.latestVersion ?: cachedLatest
+        val updated = (memory ?: snapshot).copy(
+            latestVersion = latest,
+            latestSha256 = result.release?.sha256 ?: (memory ?: snapshot).latestSha256,
+            lastUpdateCheckAt = checkedAt,
+        )
+        memory = updated
+        FeishuStateStore.save(host, updated)
+        if (!result.failed) availableRelease = result.release
+        pageState.update {
+            it.copy(
+                snapshot = updated,
+                latestVersion = latest,
+                lastCheckedAt = checkedAt,
+                updateChecking = false,
+                updateFailed = result.failed,
             )
-            val version = if (response.statusCode in 200..299) {
-                FeishuUpdate.parseGithubLatestVersion(response.body)
-            } else {
-                null
-            }
-            if (version == null) {
-                null
-            } else {
-                val checksums = fetchChecksums(network, FeishuUpdate.checksumsUrls(version)).orEmpty()
-                FeishuUpdate.releaseFromChecksums(version, checksums)
-            }
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } catch (error: Throwable) {
-            null
         }
-        if (github != null) {
-            return updateResult(github, installed)
+        if (result.failed) {
+            runCatching { host.logs().warn("feishu update check failed") }
         }
-        val npmmirror = try {
-            val response = network.request(
-                "GET",
-                FeishuUpdate.NPMMIRROR_INDEX_URL,
-                timeoutMs = UPDATE_CHECK_TIMEOUT_MS,
-            )
-            val latest = if (response.statusCode in 200..299) {
-                FeishuUpdate.latestVersion(FeishuUpdate.parseNpmmirrorVersions(response.body))
-            } else {
-                null
-            }
-            if (latest == null) {
-                null
-            } else {
-                val checksums = fetchChecksums(network, FeishuUpdate.checksumsUrls(latest)).orEmpty()
-                FeishuUpdate.releaseFromChecksums(latest, checksums)
-            }
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } catch (error: Throwable) {
-            null
-        }
-        if (npmmirror != null) {
-            return updateResult(npmmirror, installed)
-        }
-        return FeishuUpdateResult(null, null, true)
-    }
-
-    private fun updateResult(release: FeishuRelease, installed: String): FeishuUpdateResult {
-        val latest = FeishuUpdate.latestVersion(listOf(release.version, installed))
-        val available = release.takeIf { FeishuUpdate.isNewer(it.version, installed) }
-        return FeishuUpdateResult(latest, available, failed = false)
-    }
-
-    private suspend fun fetchChecksums(network: NetworkService, urls: List<String>): Map<String, String>? {
-        for (url in urls) {
-            val checksums = try {
-                val response = network.request("GET", url, timeoutMs = UPDATE_CHECK_TIMEOUT_MS)
-                if (response.statusCode !in 200..299) {
-                    null
-                } else {
-                    FeishuUpdate.parseChecksums(response.body).takeIf { it.isNotEmpty() }
-                }
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (error: Throwable) {
-                null
-            }
-            if (checksums != null) return checksums
-        }
-        return null
     }
 
     private suspend fun install(host: PluginHost, release: FeishuRelease, update: Boolean) {
         val linux = requireLinux(host)
-        val staging = File(host.dataDir, STAGING_DIR)
-        val hadBinary = hasExistingBinary(linux)
-        var installed = false
-        try {
-            staging.deleteRecursively()
-            staging.mkdirs()
-            pageState.update { it.copy(stage = STAGE_DOWNLOADING, progress = 0) }
-            val archive = File(staging, release.archiveName)
-            downloadArchive(host, archive, release) { percent ->
-                pageState.update { it.copy(progress = percent) }
-            }
-            pageState.update { it.copy(stage = STAGE_VERIFYING, progress = null) }
-            val extract = linux.exec(extractCommand(release.archiveName), cwd = staging.absolutePath, timeoutMs = EXTRACT_TIMEOUT_MS)
-            val stagedVersion = FeishuCli.parseVersion(extract.stdout)
-            if (extract.exitCode != 0 || stagedVersion != release.version) {
-                throw IllegalStateException(host.text(ERROR_VERSION, extract.stdout.takeLast(400).trim()))
-            }
-            pageState.update { it.copy(stage = if (update) STAGE_UPDATING else STAGE_INSTALLING) }
-            val install = linux.exec(INSTALL_COMMAND, cwd = staging.absolutePath, timeoutMs = INSTALL_TIMEOUT_MS)
-            val installedVersion = FeishuCli.parseVersion(install.stdout)
-            if (install.exitCode != 0 || installedVersion != release.version) {
-                throw IllegalStateException(host.text(ERROR_INSTALL, install.stdout.takeLast(400).trim()))
-            }
-            installed = true
-            pageState.update { it.copy(stage = if (update) STAGE_UPDATE_FINISHING else STAGE_INSTALL_FINISHING) }
-            memory = (memory ?: FeishuSnapshot()).copy(
-                installedVersion = release.version,
-                latestVersion = release.version,
-                latestSha256 = release.sha256,
-                lastUpdateCheckAt = System.currentTimeMillis(),
-            )
-            availableRelease = null
-            refresh(host)
-            host.requestContributionsRefresh()
-            notifyInstalled(host)
-            host.ui().snackbar(host.text(if (update) SNACKBAR_UPDATE_DONE else SNACKBAR_INSTALL_DONE))
-        } catch (error: CancellationException) {
-            withContext(NonCancellable) {
-                if (!installed) {
-                    runCatching { linux.exec(feishuRestoreCommand(hadBinary), timeoutMs = CLEANUP_TIMEOUT_MS) }
-                }
-                staging.deleteRecursively()
-            }
-            throw error
-        } catch (error: Exception) {
-            if (!installed) {
-                runCatching { linux.exec(feishuRestoreCommand(hadBinary), timeoutMs = CLEANUP_TIMEOUT_MS) }
-            }
-            throw error
-        } finally {
-            staging.deleteRecursively()
+        val network = networkOrNull(host) ?: throw IllegalStateException(host.text(ERROR_UNKNOWN))
+        FeishuInstall.run(host, linux, network, release) { event ->
+            pageState.update { it.copy(stage = installStage(event, update), progress = event.progress) }
         }
+        memory = (memory ?: FeishuSnapshot()).copy(
+            installedVersion = release.version,
+            latestVersion = release.version,
+            latestSha256 = release.sha256,
+            lastUpdateCheckAt = System.currentTimeMillis(),
+        )
+        availableRelease = null
+        refresh(host)
+        host.requestContributionsRefresh()
+        notifyInstalled(host)
+        host.ui().snackbar(host.text(if (update) SNACKBAR_UPDATE_DONE else SNACKBAR_INSTALL_DONE))
     }
 
-    private suspend fun downloadArchive(
-        host: PluginHost,
-        target: File,
-        release: FeishuRelease,
-        onProgress: (Int?) -> Unit,
-    ) {
-        val network = networkOrNull(host) ?: throw IllegalStateException(host.text(ERROR_UNKNOWN))
-        var lastError: Exception? = null
-        for (url in release.downloadUrls) {
-            try {
-                network.download(url, target.absolutePath, release.sha256, onProgress)
-                return
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                lastError = error
-                target.delete()
-            }
-        }
-        throw IllegalStateException(host.text(ERROR_DOWNLOAD, lastError?.message?.takeLast(300).orEmpty()))
+    private fun installStage(event: CliInstallEvent, update: Boolean): LocalizedText = when (event.stage) {
+        CliInstallStage.DOWNLOADING -> STAGE_DOWNLOADING
+        CliInstallStage.VERIFYING -> STAGE_VERIFYING
+        CliInstallStage.INSTALLING -> if (update) STAGE_UPDATING else STAGE_INSTALLING
+        CliInstallStage.FINISHING -> if (update) STAGE_UPDATE_FINISHING else STAGE_INSTALL_FINISHING
     }
 
     private suspend fun connect(host: PluginHost) {
@@ -584,10 +451,6 @@ internal class FeishuRuntime {
         return FeishuCli.parseAuthStatus(result.stdout)
     }
 
-    private suspend fun hasExistingBinary(linux: LinuxService): Boolean = runCatching {
-        linux.exec(EXISTS_COMMAND, timeoutMs = VERSION_TIMEOUT_MS).stdout.contains("yes")
-    }.getOrDefault(false)
-
     private fun linuxOrNull(host: PluginHost): LinuxService? =
         runCatching { host.linux() }.getOrNull()?.takeIf { it.available }
 
@@ -595,28 +458,4 @@ internal class FeishuRuntime {
 
     private fun requireLinux(host: PluginHost): LinuxService =
         linuxOrNull(host) ?: throw IllegalStateException(host.text(ERROR_LINUX))
-
-    private companion object {
-        const val EXISTS_COMMAND = "if [ -x ${FeishuCli.INSTALL_PATH} ]; then echo yes; else echo no; fi"
-
-        fun extractCommand(archiveName: String): String = """
-            set -e
-            rm -rf extract
-            mkdir -p extract
-            tar -xzf $archiveName -C extract
-            chmod 755 extract/lark-cli
-            ./extract/lark-cli --version
-        """.trimIndent()
-
-        val INSTALL_COMMAND = """
-            set -e
-            mkdir -p /usr/local/bin
-            if [ -f ${FeishuCli.INSTALL_PATH} ]; then cp -f ${FeishuCli.INSTALL_PATH} $LARK_CLI_BACKUP_PATH; fi
-            cp -f extract/lark-cli $LARK_CLI_TEMP_PATH
-            chmod 755 $LARK_CLI_TEMP_PATH
-            mv -f $LARK_CLI_TEMP_PATH ${FeishuCli.INSTALL_PATH}
-            ${FeishuCli.INSTALL_PATH} --version
-            rm -f $LARK_CLI_BACKUP_PATH
-        """.trimIndent()
-    }
 }

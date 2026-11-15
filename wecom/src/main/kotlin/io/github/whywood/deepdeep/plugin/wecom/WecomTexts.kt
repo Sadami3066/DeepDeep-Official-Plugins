@@ -50,10 +50,6 @@ internal object WecomTexts {
     val checkingUpdate = literal("正在检查组件更新…", "Checking for updates…")
     val updateCheckFailed = literal("检查更新失败：%s", "Update check failed: %s")
     val updateNotice = literal("企业微信组件有新版本，建议更新。", "A newer WeCom component is available.")
-    val errorIntegrityMissing = literal(
-        "更新包缺少 sha512 校验信息，已拒绝更新。",
-        "The update package has no sha512 checksum; the update was rejected.",
-    )
     val errorIntegrityMismatch = literal(
         "更新包校验失败，已取消更新，现有组件保持不变。",
         "The update package failed verification; the update was cancelled and the current component is unchanged.",

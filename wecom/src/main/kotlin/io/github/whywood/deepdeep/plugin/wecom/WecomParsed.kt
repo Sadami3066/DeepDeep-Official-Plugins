@@ -1,5 +1,9 @@
 package io.github.whywood.deepdeep.plugin.wecom
 
+import io.github.whywood.deepdeep.plugin.cli.boolValue
+import io.github.whywood.deepdeep.plugin.cli.intValue
+import io.github.whywood.deepdeep.plugin.cli.objValue
+import io.github.whywood.deepdeep.plugin.cli.stringValue
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -138,17 +142,17 @@ internal object WecomParsedParser {
         val groups = items.mapNotNull { element ->
             val item = element as? JsonObject ?: return@mapNotNull null
             WecomParsed.Group(
-                chatId = item.stringOrNull("chat_id"),
-                name = item.stringOrNull("chat_name") ?: item.stringOrNull("name"),
-                lastMessageTime = item.stringOrNull("last_msg_time"),
-                messageCount = item.intOrNull("msg_count"),
+                chatId = item.stringValue("chat_id"),
+                name = item.stringValue("chat_name") ?: item.stringValue("name"),
+                lastMessageTime = item.stringValue("last_msg_time"),
+                messageCount = item.intValue("msg_count"),
             )
         }
         return WecomParsed.Groups(
             items = groups,
-            count = payload.intOrNull("chats_count") ?: groups.size,
-            hasMore = payload.booleanOrNull("has_more") ?: false,
-            nextCursor = payload.stringOrNull("next_cursor"),
+            count = payload.intValue("chats_count") ?: groups.size,
+            hasMore = payload.boolValue("has_more") ?: false,
+            nextCursor = payload.stringValue("next_cursor"),
         )
     }
 
@@ -156,12 +160,12 @@ internal object WecomParsedParser {
         val items = payload.responseArray("messages", "messages_count", MESSAGES_KEYS) ?: return null
         val messages = items.mapNotNull { element ->
             val item = element as? JsonObject ?: return@mapNotNull null
-            val type = item.stringOrNull("msg_type")
+            val type = item.stringValue("msg_type")
             val summary = messageSummary(item, type)
             WecomParsed.Message(
-                sendTime = item.stringOrNull("send_time"),
-                senderName = item.stringOrNull("user_name"),
-                senderId = item.stringOrNull("userid"),
+                sendTime = item.stringValue("send_time"),
+                senderName = item.stringValue("user_name"),
+                senderId = item.stringValue("userid"),
                 type = type,
                 summary = summary.first,
                 mediaId = summary.second,
@@ -169,27 +173,27 @@ internal object WecomParsedParser {
         }
         return WecomParsed.Messages(
             items = messages,
-            count = payload.intOrNull("messages_count") ?: messages.size,
-            hasMore = payload.booleanOrNull("has_more") ?: false,
-            nextCursor = payload.stringOrNull("next_cursor"),
+            count = payload.intValue("messages_count") ?: messages.size,
+            hasMore = payload.boolValue("has_more") ?: false,
+            nextCursor = payload.stringValue("next_cursor"),
         )
     }
 
     private fun messageSummary(item: JsonObject, type: String?): Pair<String?, String?> = when (type) {
-        "text" -> item.objectOrNull("text")?.stringOrNull("content") to null
-        "image" -> "[图片]" to item.objectOrNull("image")?.stringOrNull("media_id")
-        "voice" -> "[语音]" to item.objectOrNull("voice")?.stringOrNull("media_id")
-        "video" -> "[视频]" to item.objectOrNull("video")?.stringOrNull("media_id")
+        "text" -> item.objValue("text")?.stringValue("content") to null
+        "image" -> "[图片]" to item.objValue("image")?.stringValue("media_id")
+        "voice" -> "[语音]" to item.objValue("voice")?.stringValue("media_id")
+        "video" -> "[视频]" to item.objValue("video")?.stringValue("media_id")
         "file" -> {
-            val file = item.objectOrNull("file")
-            val name = file?.stringOrNull("file_name")
-            ("[文件] ${name ?: "未命名文件"}") to file?.stringOrNull("media_id")
+            val file = item.objValue("file")
+            val name = file?.stringValue("file_name")
+            ("[文件] ${name ?: "未命名文件"}") to file?.stringValue("media_id")
         }
         "mixed" -> {
-            val parts = item.objectOrNull("mixed")?.arrayOrMissing("items").orEmpty().mapNotNull { element ->
+            val parts = item.objValue("mixed")?.arrayOrMissing("items").orEmpty().mapNotNull { element ->
                 val entry = element as? JsonObject ?: return@mapNotNull null
-                when (entry.stringOrNull("msg_type")) {
-                    "text" -> entry.objectOrNull("text")?.stringOrNull("content")
+                when (entry.stringValue("msg_type")) {
+                    "text" -> entry.objValue("text")?.stringValue("content")
                     "image" -> "[图片]"
                     else -> null
                 }
@@ -204,34 +208,34 @@ internal object WecomParsedParser {
         val docs = items.mapNotNull { element ->
             val item = element as? JsonObject ?: return@mapNotNull null
             WecomParsed.Doc(
-                docId = item.stringOrNull("docid") ?: item.stringOrNull("doc_id"),
-                name = item.stringOrNull("doc_name") ?: item.stringOrNull("name"),
-                type = item.stringOrNull("doc_type"),
-                creatorName = item.stringOrNull("creator_name"),
-                createTime = item.stringOrNull("create_time"),
-                modifyTime = item.stringOrNull("modify_time"),
-                url = item.stringOrNull("url"),
+                docId = item.stringValue("docid") ?: item.stringValue("doc_id"),
+                name = item.stringValue("doc_name") ?: item.stringValue("name"),
+                type = item.stringValue("doc_type"),
+                creatorName = item.stringValue("creator_name"),
+                createTime = item.stringValue("create_time"),
+                modifyTime = item.stringValue("modify_time"),
+                url = item.stringValue("url"),
             )
         }
         return WecomParsed.Docs(
             items = docs,
-            count = payload.intOrNull("docs_count") ?: docs.size,
-            hasMore = payload.booleanOrNull("has_more") ?: false,
-            nextCursor = payload.stringOrNull("next_cursor"),
+            count = payload.intValue("docs_count") ?: docs.size,
+            hasMore = payload.boolValue("has_more") ?: false,
+            nextCursor = payload.stringValue("next_cursor"),
         )
     }
 
     private fun parseDocContent(payload: JsonObject): WecomParsed.DocContent? {
-        val name = payload.stringOrNull("name")
-        val url = payload.stringOrNull("url")
-        val content = payload.stringOrNull("content")
-            ?: payload.stringOrNull("file_path")?.let { "内容较大，已写入文件：$it" }
+        val name = payload.stringValue("name")
+        val url = payload.stringValue("url")
+        val content = payload.stringValue("content")
+            ?: payload.stringValue("file_path")?.let { "内容较大，已写入文件：$it" }
             ?: ""
         if (name == null && url == null && content.isBlank()) return null
         return WecomParsed.DocContent(
             name = name,
             url = url,
-            version = payload.intOrNull("version"),
+            version = payload.intValue("version"),
             content = content,
         )
     }
@@ -241,23 +245,23 @@ internal object WecomParsedParser {
         val schedules = items.mapNotNull { element ->
             val item = element as? JsonObject ?: return@mapNotNull null
             WecomParsed.Schedule(
-                scheduleId = item.stringOrNull("schedule_id"),
-                subject = item.stringOrNull("subject"),
-                beginTime = item.stringOrNull("begin_time"),
-                endTime = item.stringOrNull("end_time"),
-                location = item.stringOrNull("location"),
-                calendarName = item.stringOrNull("calendar_name"),
+                scheduleId = item.stringValue("schedule_id"),
+                subject = item.stringValue("subject"),
+                beginTime = item.stringValue("begin_time"),
+                endTime = item.stringValue("end_time"),
+                location = item.stringValue("location"),
+                calendarName = item.stringValue("calendar_name"),
                 attendees = item.arrayOrMissing("attendees").orEmpty().mapNotNull { attendee ->
                     val entry = attendee as? JsonObject ?: return@mapNotNull null
-                    entry.stringOrNull("name") ?: entry.stringOrNull("userid")
+                    entry.stringValue("name") ?: entry.stringValue("userid")
                 },
-                meetingRoom = item.objectOrNull("meeting_room")?.stringOrNull("meeting_room_name"),
-                allDay = item.booleanOrNull("is_all_day") ?: false,
+                meetingRoom = item.objValue("meeting_room")?.stringValue("meeting_room_name"),
+                allDay = item.boolValue("is_all_day") ?: false,
             )
         }
         return WecomParsed.Schedules(
             items = schedules,
-            count = payload.intOrNull("schedule_list_count") ?: schedules.size,
+            count = payload.intValue("schedule_list_count") ?: schedules.size,
         )
     }
 
@@ -266,26 +270,26 @@ internal object WecomParsedParser {
         val todos = items.mapNotNull { element ->
             val item = element as? JsonObject ?: return@mapNotNull null
             WecomParsed.Todo(
-                todoId = item.stringOrNull("todo_id"),
-                title = item.stringOrNull("title"),
-                status = item.stringOrNull("status"),
-                deadline = item.objectOrNull("deadline")?.stringOrNull("value"),
-                creator = item.objectOrNull("creator")?.let { creator ->
-                    creator.stringOrNull("user_name") ?: creator.stringOrNull("userid")
+                todoId = item.stringValue("todo_id"),
+                title = item.stringValue("title"),
+                status = item.stringValue("status"),
+                deadline = item.objValue("deadline")?.stringValue("value"),
+                creator = item.objValue("creator")?.let { creator ->
+                    creator.stringValue("user_name") ?: creator.stringValue("userid")
                 },
                 followers = item.arrayOrMissing("followers").orEmpty().mapNotNull { follower ->
                     val entry = follower as? JsonObject ?: return@mapNotNull null
-                    entry.stringOrNull("user_name") ?: entry.stringOrNull("userid")
+                    entry.stringValue("user_name") ?: entry.stringValue("userid")
                 },
-                updateTime = item.stringOrNull("update_time"),
-                description = item.stringOrNull("description"),
+                updateTime = item.stringValue("update_time"),
+                description = item.stringValue("description"),
             )
         }
         return WecomParsed.Todos(
             items = todos,
-            count = payload.intOrNull("items_count") ?: todos.size,
-            hasMore = payload.booleanOrNull("has_more") ?: false,
-            nextCursor = payload.stringOrNull("next_cursor"),
+            count = payload.intValue("items_count") ?: todos.size,
+            hasMore = payload.boolValue("has_more") ?: false,
+            nextCursor = payload.stringValue("next_cursor"),
         )
     }
 
@@ -294,19 +298,19 @@ internal object WecomParsedParser {
         val contacts = items.mapNotNull { element ->
             val item = element as? JsonObject ?: return@mapNotNull null
             WecomParsed.Contact(
-                userId = item.stringOrNull("userid"),
-                name = item.stringOrNull("name"),
-                alias = item.stringOrNull("alias"),
+                userId = item.stringValue("userid"),
+                name = item.stringValue("name"),
+                alias = item.stringValue("alias"),
                 departments = item.arrayOrMissing("departments").orEmpty().mapNotNull { department ->
                     (department as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
                 },
-                position = item.stringOrNull("position"),
-                email = item.stringOrNull("email"),
+                position = item.stringValue("position"),
+                email = item.stringValue("email"),
             )
         }
         return WecomParsed.Contacts(
             items = contacts,
-            count = payload.intOrNull("users_count") ?: contacts.size,
+            count = payload.intValue("users_count") ?: contacts.size,
         )
     }
 
@@ -315,8 +319,8 @@ internal object WecomParsedParser {
             is JsonArray -> value
             null -> {
                 if (!keys.all { it in allowedKeys }) return null
-                val count = intOrNull(countKey)
-                val hasMore = booleanOrNull("has_more")
+                val count = intValue(countKey)
+                val hasMore = boolValue("has_more")
                 if (keys.isEmpty() || count == 0 || hasMore != null) JsonArray(emptyList()) else null
             }
             else -> null

@@ -21,13 +21,12 @@ import io.github.whywood.deepdeep.plugin.api.unavailable
 import java.io.File
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 
 class WecomPlugin : DeepDeepPlugin {
     @Volatile
     private var lastStatus: WecomStatus? = null
 
-    private val callTracker = WecomCallTracker()
+    private val toolBridge = WecomToolBridge()
 
     internal fun updateStatus(status: WecomStatus) {
         lastStatus = status
@@ -59,29 +58,12 @@ class WecomPlugin : DeepDeepPlugin {
     }
 
     override fun contributions(host: PluginHost): Contributions = contributions(
-        hooks = object : PluginHooks by wecomHooks(host) {
+        hooks = object : PluginHooks by toolBridge.hooks(host) {
             override suspend fun notificationAction(event: NotificationActionEvent) {
                 if (event.actionId == WecomTexts.ACTION_OPEN_PAGE) host.ui().openPage(PAGE_ID)
             }
         },
     )
-
-    private fun wecomHooks(host: PluginHost): WecomHooks = WecomHooks(callTracker) { sessionId, kind, payload, observation ->
-        runCatching {
-            withTimeoutOrNull(CARD_POST_TIMEOUT_MS) {
-                host.chat().postCustomMessage(
-                    sessionId = sessionId,
-                    customType = kind.customType,
-                    payload = WecomCardPayloads.encode(payload),
-                    text = observation.lineSequence().firstOrNull().orEmpty().take(120),
-                    display = true,
-                )
-            }
-        }.onFailure { error ->
-            runCatching { host.logs().warn("wecom card post failed: ${kind.customType}", error) }
-        }
-        Unit
-    }
 
     override fun skills(host: PluginHost): List<PluginSkill> {
         val workspace = runCatching { host.files().workspaceDir }.getOrNull() ?: host.dataDir.absolutePath
@@ -128,7 +110,6 @@ class WecomPlugin : DeepDeepPlugin {
         const val CLI_STAGING_DIR = "cli-staging"
         const val DOWNLOAD_DIRECTORY_PLACEHOLDER = "<download-directory>"
         const val UNINSTALL_TIMEOUT_MS = 60_000L
-        const val CARD_POST_TIMEOUT_MS = 1_200L
 
         val SKILL_MARKDOWN = """
             ---

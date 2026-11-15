@@ -1,5 +1,6 @@
 package io.github.whywood.deepdeep.plugin.feishu
 
+import io.github.whywood.deepdeep.plugin.cli.CliJsonEnvelope
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
@@ -12,7 +13,7 @@ import org.junit.Test
 class FeishuObservationTest {
     private val zhHost = FakeFeishuHost(language = "zh")
 
-    private fun envelope(fixture: String) = FeishuCliOutput.findEnvelope(loadFixture(fixture))!!
+    private fun envelope(fixture: String) = CliJsonEnvelope.DEFAULT.find(loadFixture(fixture))!!
 
     @Test
     fun chatListObservationCarriesNamesIdsCountsAndLinks() {
@@ -56,7 +57,7 @@ class FeishuObservationTest {
             "sender":{"id":"ou_1","name":"张三"},"create_time":"2025-11-15 09:40",
             "message_app_link":"https://applink.feishu.cn/client/chat/open?openChatId=oc_1"}],"total":1}}
         """.trimIndent()
-        val envelope = FeishuCliOutput.findEnvelope(payload)!!
+        val envelope = CliJsonEnvelope.DEFAULT.find(payload)!!
         val command = FeishuCommand(FeishuCommandKind.CHAT_MESSAGES, chatId = "oc_1")
         val observation = buildFeishuObservation(zhHost, command, envelope)!!
         assertTrue(observation.text.contains("交互消息"))
@@ -84,7 +85,7 @@ class FeishuObservationTest {
 
     @Test
     fun emptyAgendaIsAValidEmptyResult() {
-        val envelope = FeishuCliOutput.findEnvelope("""{"ok":true,"identity":"user","data":[],"meta":{"count":0}}""")!!
+        val envelope = CliJsonEnvelope.DEFAULT.find("""{"ok":true,"identity":"user","data":[],"meta":{"count":0}}""")!!
         val observation = buildFeishuObservation(
             zhHost,
             FeishuCommand(FeishuCommandKind.CALENDAR_AGENDA, start = "2026-11-16", end = "2026-11-16"),
@@ -98,7 +99,7 @@ class FeishuObservationTest {
 
     @Test
     fun emptyTasksIsAValidEmptyResult() {
-        val envelope = FeishuCliOutput.findEnvelope("""{"ok":true,"identity":"user","data":{"items":[],"has_more":false}}""")!!
+        val envelope = CliJsonEnvelope.DEFAULT.find("""{"ok":true,"identity":"user","data":{"items":[],"has_more":false}}""")!!
         val observation = buildFeishuObservation(zhHost, FeishuCommand(FeishuCommandKind.TASKS), envelope)!!
         assertTrue(observation.text.contains("飞书任务（共 0 条，未完成 0 条）"))
         assertTrue(observation.text.contains("正常的空结果"))
@@ -155,7 +156,7 @@ class FeishuObservationTest {
 
     @Test
     fun malformedDataReturnsNoObservation() {
-        val broken = FeishuCliOutput.findEnvelope(loadFixture("chats.json"))!!
+        val broken = CliJsonEnvelope.DEFAULT.find(loadFixture("chats.json"))!!
         assertNull(buildFeishuObservation(zhHost, FeishuCommand(FeishuCommandKind.CHAT_LIST), broken.removeTest("data")))
         assertNull(buildFeishuObservation(zhHost, FeishuCommand(FeishuCommandKind.DOCS_FETCH), broken))
     }

@@ -1,5 +1,8 @@
 package io.github.whywood.deepdeep.plugin.sysu
 
+import io.github.whywood.deepdeep.plugin.cli.CliJsonEnvelope
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -7,9 +10,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SysuJsonTest {
+    private fun payload(fixture: String): JsonElement =
+        CliJsonEnvelope.LENIENT.element(SysuFixtures.text(fixture)) ?: error("no payload in $fixture")
+
+    private fun bashPayload(fixture: String): JsonElement =
+        CliJsonEnvelope.LENIENT.element(SysuFixtures.bashOutput(fixture)) ?: error("no payload in $fixture")
+
     @Test
     fun parsesScheduleFixtureWithExitMarker() {
-        val data = SysuJson.schedule(SysuFixtures.bashOutput("schedule.json"))
+        val data = SysuJson.schedule(bashPayload("schedule.json"))
         assertNotNull(data)
         assertEquals("2026-1", data!!.term)
         assertEquals("10", data.week.scalarText())
@@ -21,7 +30,7 @@ class SysuJsonTest {
 
     @Test
     fun parsesScoresFixtureWithoutPoint() {
-        val semesters = SysuJson.scores(SysuFixtures.bashOutput("scores.json"))
+        val semesters = SysuJson.scores(payload("scores.json"))
         assertNotNull(semesters)
         val semester = semesters!!.single()
         assertEquals("2025-2", semester.semester)
@@ -34,7 +43,7 @@ class SysuJsonTest {
 
     @Test
     fun parsesExamsFixtureWithFullDates() {
-        val data = SysuJson.exams(SysuFixtures.bashOutput("exams.json"))
+        val data = SysuJson.exams(payload("exams.json"))
         assertNotNull(data)
         assertEquals(2, data!!.exams.size)
         assertEquals("2026-11-26", data.exams.first().date)
@@ -43,7 +52,7 @@ class SysuJsonTest {
 
     @Test
     fun parsesCreditsFixtureWithNullableFinishCredit() {
-        val plans = SysuJson.credits(SysuFixtures.bashOutput("credits.json"))
+        val plans = SysuJson.credits(payload("credits.json"))
         assertNotNull(plans)
         assertEquals(2, plans!!.size)
         assertEquals("n020109T00", plans[0].professionNumber)
@@ -55,19 +64,19 @@ class SysuJsonTest {
 
     @Test
     fun parsesLmsFixtures() {
-        val courses = SysuJson.lmsCourses(SysuFixtures.bashOutput("lms_courses.json"))
+        val courses = SysuJson.lmsCourses(payload("lms_courses.json"))
         assertNotNull(courses)
         assertEquals(3, courses!!.size)
         assertEquals("1005339", courses[0].id.scalarText())
         assertNull(courses[2].progress)
-        val todo = SysuJson.lmsTodo(SysuFixtures.bashOutput("lms_todo.json"))
+        val todo = SysuJson.lmsTodo(payload("lms_todo.json"))
         assertNotNull(todo)
         assertEquals("2026-12-11T15:00:00.000Z", todo!!.single().at)
     }
 
     @Test
     fun parsesGymFixtureWithCapitalisedFeeKeys() {
-        val data = SysuJson.gymSlots(SysuFixtures.bashOutput("gym_slots.json"))
+        val data = SysuJson.gymSlots(payload("gym_slots.json"))
         assertNotNull(data)
         assertTrue(data!!.ok == true)
         assertEquals(2, data.types.size)
@@ -82,11 +91,11 @@ class SysuJsonTest {
 
     @Test
     fun parsesNetpayVariants() {
-        val expired = SysuJson.netpay(SysuFixtures.bashOutput("netpay_expired.json"))
+        val expired = SysuJson.netpay(payload("netpay_expired.json"))
         assertNotNull(expired)
         assertEquals("false", expired!!.info?.get("success").scalarText())
         assertTrue(expired.services.isEmpty())
-        val services = SysuJson.netpay(SysuFixtures.bashOutput("netpay_services.json"))
+        val services = SysuJson.netpay(payload("netpay_services.json"))
         assertNotNull(services)
         assertEquals("校园网-学生宿舍", services!!.services.single().service)
         assertEquals("2027-06-30", services.services.single().expire)
@@ -96,22 +105,29 @@ class SysuJsonTest {
     @Test
     fun toleratesLeadingNoticeBeforeJson() {
         val output = "（会话已用 TGC 静默续期）\n" + SysuFixtures.bashOutput("exams.json")
-        val data = SysuJson.exams(output)
+        val element = CliJsonEnvelope.LENIENT.element(output)
+        assertNotNull(element)
+        val data = SysuJson.exams(element!!)
         assertNotNull(data)
         assertEquals(2, data!!.exams.size)
     }
 
     @Test
     fun returnsNullForInvalidJson() {
-        assertNull(SysuJson.schedule("boom"))
-        assertNull(SysuJson.schedule(""))
-        assertNull(SysuJson.gymSlots("[exit: 0]"))
-        assertNull(SysuJson.netpay("not json"))
+        assertNull(CliJsonEnvelope.LENIENT.element("boom"))
+        assertNull(CliJsonEnvelope.LENIENT.element(""))
+        assertNull(CliJsonEnvelope.LENIENT.element("[exit: 0]"))
+        assertNull(SysuJson.schedule(JsonNull))
+        assertNull(SysuJson.gymSlots(JsonNull))
     }
 
     @Test
-    fun stripsAnsiAndExitMarker() {
-        val clean = SysuToolOutput.clean("\u001B[2m2026-1\u001B[0m\n\n[exit: 0]")
-        assertEquals("2026-1", clean)
+    fun extractsJsonFromAnsiAndExitMarker() {
+        val output = "\u001B[2m{\"term\":\"2026-2\",\"week\":1,\"days\":[]}\u001B[0m\n\n[exit: 0]"
+        val element = CliJsonEnvelope.LENIENT.element(output)
+        assertNotNull(element)
+        val data = SysuJson.schedule(element!!)
+        assertNotNull(data)
+        assertEquals("2026-2", data!!.term)
     }
 }

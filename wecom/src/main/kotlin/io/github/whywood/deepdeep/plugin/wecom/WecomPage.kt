@@ -44,18 +44,21 @@ import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.notificationAction
 import io.github.whywood.deepdeep.plugin.api.pluginNotificationWithActions
 import io.github.whywood.deepdeep.plugin.api.uiConfirmRequest
+import io.github.whywood.deepdeep.plugin.cli.update.CliInstallEvent
+import io.github.whywood.deepdeep.plugin.cli.update.CliInstallStage
+import io.github.whywood.deepdeep.plugin.cli.update.CliRelease
+import io.github.whywood.deepdeep.plugin.cli.update.CliUpdateCheck
+import io.github.whywood.deepdeep.plugin.cli.update.CliUpdateCheckController
+import io.github.whywood.deepdeep.plugin.cli.update.CliUpdateThrottle
 import java.io.File
-import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal enum class WecomOperation {
@@ -110,14 +113,6 @@ internal data class WecomPageState(
     val updateBusy: Boolean get() = update.status == WecomUpdateStatus.CHECKING
 }
 
-internal data class WecomInstallRelease(
-    val version: String,
-    val tarballUrl: String,
-    val sha512: String?,
-    val sha256: String?,
-    val requireSha512: Boolean,
-)
-
 internal class WecomPageController(
     private val host: PluginHost,
     private val plugin: WecomPlugin,
@@ -128,6 +123,8 @@ internal class WecomPageController(
 
     private val store = WecomStatusStore(host)
     private val releaseStore = WecomReleaseStore(host)
+    private val releaseSource = WecomReleaseSource()
+    private val updateChecker = CliUpdateCheckController(releaseSource, WecomReleases.THROTTLE_MS)
 
     private var operationJob: Job? = null
 
@@ -282,34 +279,44 @@ internal class WecomPageController(
 
     private suspend fun checkUpdate(force: Boolean) {
         if (state.updateBusy) return
-        val now = System.currentTimeMillis()
-        if (!force) {
-            val cached = releaseStore.read()
-            if (cached != null && now - cached.checkedAt in 0 until WecomReleases.THROTTLE_MS) {
-                applyRelease(cached)
-                return
-            }
+        val cached = releaseStore.read()
+        if (!force && cached != null && !CliUpdateThrottle.shouldCheck(cached.checkedAt, System.currentTimeMillis())) {
+            applyRelease(cached)
+            return
         }
-        state = state.copy(
-            update = state.update.copy(status = WecomUpdateStatus.CHECKING, error = null),
+        updateChecker.request(
+            scope = scope,
+            network = runCatching { host.network() }.getOrNull(),
+            installedVersion = state.cliVersion ?: "",
+            lastCheckedAt = cached?.checkedAt ?: 0L,
+            force = force,
+            onStart = {
+                state = state.copy(
+                    update = state.update.copy(status = WecomUpdateStatus.CHECKING, error = null),
+                )
+            },
+            onResult = { result -> handleUpdateResult(result) },
         )
-        val result = runCatching {
-            host.network().request("GET", WecomReleases.REGISTRY_URL, timeoutMs = UPDATE_CHECK_TIMEOUT_MS)
-        }
-        val response = result.getOrNull()
-        if (response == null || response.statusCode !in 200..299) {
-            val reason = result.exceptionOrNull()?.message?.take(120)
-                ?: host.t("网络不可用", "Network unavailable")
+    }
+
+    private suspend fun handleUpdateResult(result: CliUpdateCheck) {
+        if (result.failed) {
+            val reason = releaseSource.failure ?: host.t("网络不可用", "Network unavailable")
             failUpdate(host.text(WecomTexts.updateCheckFailed, reason))
             return
         }
-        when (val parsed = WecomReleases.parseRegistryRelease(response.body, now)) {
-            is WecomReleaseResult.Success -> {
-                releaseStore.write(parsed.release)
-                applyRelease(parsed.release)
-            }
-            is WecomReleaseResult.Failure -> failUpdate(host.text(WecomTexts.updateCheckFailed, parsed.message))
+        val release = result.release?.let { WecomReleases.fromCheck(it, System.currentTimeMillis()) }
+        if (release == null) {
+            failUpdate(
+                host.text(
+                    WecomTexts.updateCheckFailed,
+                    host.t("无法获取更新信息", "Couldn't fetch update info"),
+                ),
+            )
+            return
         }
+        releaseStore.write(release)
+        applyRelease(release)
     }
 
     private fun applyRelease(release: WecomRelease) {
@@ -340,124 +347,67 @@ internal class WecomPageController(
     }
 
     private suspend fun installCli(update: Boolean) {
-        val staging = File(host.dataDir, STAGING_DIR)
-        var hadBinary: Boolean? = null
-        var installed = false
         val release = resolveInstallRelease(update)
-        val version = release.version
-        val archiveName = WecomCli.archiveName(version)
-        val archive = File(staging, archiveName)
-        try {
-            hadBinary = hasExistingBinary()
-            staging.deleteRecursively()
-            staging.mkdirs()
-            state = state.copy(stage = WecomTexts.stageDownloading, progress = 0.02f, percent = 0)
-            downloadArchive(archive, release)
-            state = state.copy(stage = WecomTexts.stageVerifying, progress = 0.85f, percent = null)
-            verifyArchiveIntegrity(archive, release)
-            val extract = host.linux().exec(
-                WecomCli.extractCommand(archiveName),
-                cwd = staging.absolutePath,
-                timeoutMs = EXTRACT_TIMEOUT_MS,
-            )
-            val stagedVersion = WecomCli.parseVersion(extract.stdout)
-            if (extract.exitCode != 0 || stagedVersion != version) {
-                throw IllegalStateException(
-                    host.text(WecomTexts.errorVersion, extract.stdout.takeLast(400).trim()),
-                )
-            }
-            state = state.copy(stage = WecomTexts.stageInstalling, progress = 0.92f)
-            val install = host.linux().exec(
-                WecomCli.installCommand(),
-                cwd = staging.absolutePath,
-                timeoutMs = INSTALL_TIMEOUT_MS,
-            )
-            val installedVersion = WecomCli.parseVersion(install.stdout)
-            if (install.exitCode != 0 || installedVersion != version) {
-                throw IllegalStateException(
-                    host.text(WecomTexts.errorInstall, install.stdout.takeLast(400).trim()),
-                )
-            }
-            host.linux().exec(WecomCli.commitInstallCommand(), timeoutMs = CLEANUP_TIMEOUT_MS)
-            state = state.copy(
-                stage = WecomTexts.stageFinishingInstall,
-                progress = 0.98f,
-                canCancel = false,
-            )
-            installed = true
-            refresh()
-            host.requestContributionsRefresh()
-            if (!update) notifyInstalled()
-            if (state.error == null) {
-                val message = if (update) WecomTexts.snackbarUpdated else WecomTexts.installDone
-                host.ui().snackbar(host.text(message))
-            }
-        } catch (error: Exception) {
-            val previous = hadBinary
-            if (!installed && previous != null) restore(previous)
-            throw error
-        } finally {
-            staging.deleteRecursively()
+        WecomInstall.run(
+            host = host,
+            linux = host.linux(),
+            network = host.network(),
+            release = release,
+        ) { event -> applyInstallEvent(event) }
+        state = state.copy(
+            stage = WecomTexts.stageFinishingInstall,
+            progress = 0.98f,
+            canCancel = false,
+        )
+        refresh()
+        host.requestContributionsRefresh()
+        if (!update) notifyInstalled()
+        if (state.error == null) {
+            val message = if (update) WecomTexts.snackbarUpdated else WecomTexts.installDone
+            host.ui().snackbar(host.text(message))
         }
     }
 
-    private suspend fun resolveInstallRelease(update: Boolean): WecomInstallRelease {
+    private suspend fun resolveInstallRelease(update: Boolean): CliRelease {
         val cached = state.update.release ?: releaseStore.read()
-        if (cached != null) {
-            return WecomInstallRelease(
-                version = cached.version,
-                tarballUrl = cached.tarballUrl,
-                sha512 = cached.sha512,
-                sha256 = null,
-                requireSha512 = true,
-            )
-        }
-        if (!update) {
-            return WecomInstallRelease(
-                version = WecomCli.VERSION,
-                tarballUrl = WecomCli.DOWNLOAD_URLS.first(),
-                sha512 = null,
-                sha256 = WecomCli.ARCHIVE_SHA256,
-                requireSha512 = false,
-            )
-        }
+        if (cached != null) return WecomReleases.toCliRelease(cached)
+        if (!update) return WecomReleases.pinnedRelease()
         val message = state.update.error
             ?: host.text(WecomTexts.updateCheckFailed, host.t("无法获取更新信息", "Couldn't fetch update info"))
         throw IllegalStateException(message)
     }
 
-    private fun verifyArchiveIntegrity(archive: File, release: WecomInstallRelease) {
-        if (release.requireSha512) {
-            val expected = release.sha512
-            if (expected.isNullOrBlank()) {
-                archive.delete()
-                throw IllegalStateException(host.text(WecomTexts.errorIntegrityMissing))
+    private fun applyInstallEvent(event: CliInstallEvent) {
+        state = when (event.stage) {
+            CliInstallStage.DOWNLOADING -> {
+                val percent = event.progress
+                state.copy(
+                    stage = WecomTexts.stageDownloading,
+                    progress = percent?.let(::downloadProgress) ?: 0.05f,
+                    percent = percent,
+                )
             }
-            if (!WecomReleases.verifySha512(archive, expected)) {
-                archive.delete()
-                throw IllegalStateException(host.text(WecomTexts.errorIntegrityMismatch))
-            }
-            return
-        }
-        val expected = release.sha256
-        if (expected.isNullOrBlank() || !sha256Matches(archive, expected)) {
-            archive.delete()
-            throw IllegalStateException(host.text(WecomTexts.errorIntegrityMismatch))
+            CliInstallStage.VERIFYING -> state.copy(
+                stage = WecomTexts.stageVerifying,
+                progress = 0.85f,
+                percent = null,
+            )
+            CliInstallStage.INSTALLING -> state.copy(
+                stage = WecomTexts.stageInstalling,
+                progress = 0.92f,
+                percent = null,
+            )
+            CliInstallStage.FINISHING -> state.copy(
+                stage = WecomTexts.stageFinishingInstall,
+                progress = 0.98f,
+                percent = null,
+                canCancel = false,
+            )
         }
     }
 
-    private fun sha256Matches(file: File, expected: String): Boolean = runCatching {
-        val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input ->
-            val buffer = ByteArray(64 * 1024)
-            while (true) {
-                val read = input.read(buffer)
-                if (read < 0) break
-                digest.update(buffer, 0, read)
-            }
-        }
-        digest.digest().joinToString("") { "%02x".format(it) } == expected
-    }.getOrDefault(false)
+    private fun downloadProgress(percent: Int): Float =
+        0.05f + 0.75f * percent.coerceIn(0, 100) / 100f
 
     private suspend fun connect() {
         val workspace = host.files().workspaceDir
@@ -565,60 +515,6 @@ internal class WecomPageController(
         }
     }
 
-    private suspend fun downloadArchive(archive: File, release: WecomInstallRelease) {
-        var lastError: Exception? = null
-        val urls = WecomCli.releaseDownloadUrls(release.tarballUrl, release.version)
-        for (url in urls) {
-            try {
-                host.network().download(
-                    url = url,
-                    targetPath = archive.absolutePath,
-                    expectedSha256 = release.sha256,
-                    onProgress = { percent ->
-                        if (percent != null && !state.cancelling && state.operation != WecomOperation.NONE) {
-                            val clamped = percent.coerceIn(0, 100)
-                            state = state.copy(
-                                progress = downloadProgress(clamped),
-                                percent = clamped,
-                            )
-                        }
-                    },
-                )
-                return
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                lastError = error
-                archive.delete()
-            }
-        }
-        throw IllegalStateException(
-            host.text(WecomTexts.errorDownload, lastError?.message?.takeLast(300).orEmpty()),
-        )
-    }
-
-    private fun downloadProgress(percent: Int): Float =
-        0.05f + 0.75f * percent.coerceIn(0, 100) / 100f
-
-    private suspend fun hasExistingBinary(): Boolean = try {
-        host.linux().exec(
-            "if [ -x ${WecomCli.INSTALL_PATH} ]; then echo yes; else echo no; fi",
-            timeoutMs = VERSION_TIMEOUT_MS,
-        ).stdout.contains("yes")
-    } catch (error: CancellationException) {
-        throw error
-    } catch (_: Exception) {
-        false
-    }
-
-    private suspend fun restore(hadBinary: Boolean) {
-        withContext(NonCancellable) {
-            runCatching {
-                host.linux().exec(WecomCli.restoreCommand(hadBinary), timeoutMs = CLEANUP_TIMEOUT_MS)
-            }
-        }
-    }
-
     private fun publishQrUrl(pageUrl: AtomicReference<String?>, output: String, qrFile: File) {
         val url = WecomCli.parseQrPageUrl(output) ?: return
         if (pageUrl.compareAndSet(null, url)) {
@@ -635,17 +531,12 @@ internal class WecomPageController(
         tail.toString().trim().ifEmpty { host.text(WecomTexts.errorExitCode, exitCode) }
 
     private companion object {
-        const val STAGING_DIR = "cli-staging"
         const val QR_POLL_INTERVAL_MS = 400L
         const val ERROR_TAIL = 800
-        const val EXTRACT_TIMEOUT_MS = 120_000L
-        const val INSTALL_TIMEOUT_MS = 120_000L
         const val VERSION_TIMEOUT_MS = 20_000L
         const val STATUS_TIMEOUT_MS = 30_000L
         const val INIT_TIMEOUT_MS = 6 * 60_000L
         const val LOGOUT_TIMEOUT_MS = 60_000L
-        const val CLEANUP_TIMEOUT_MS = 30_000L
-        const val UPDATE_CHECK_TIMEOUT_MS = 10_000L
     }
 }
 

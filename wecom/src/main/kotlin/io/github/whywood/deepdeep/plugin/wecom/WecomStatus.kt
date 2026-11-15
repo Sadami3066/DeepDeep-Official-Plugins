@@ -1,15 +1,14 @@
 package io.github.whywood.deepdeep.plugin.wecom
 
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.cli.boolValue
+import io.github.whywood.deepdeep.plugin.cli.longValue
+import io.github.whywood.deepdeep.plugin.cli.stringValue
 import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
 internal data class WecomStatus(
@@ -52,10 +51,10 @@ internal class WecomStatusStore(private val host: PluginHost) {
     }
 
     private fun decode(root: JsonObject): WecomStatus = WecomStatus(
-        cliVersion = (root["cliVersion"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
-        authorized = (root["authorized"] as? JsonPrimitive)?.booleanOrNull ?: false,
-        botId = (root["botId"] as? JsonPrimitive)?.contentOrNull,
-        checkedAt = (root["checkedAt"] as? JsonPrimitive)?.longOrNull ?: 0L,
+        cliVersion = root.stringValue("cliVersion"),
+        authorized = root.boolValue("authorized") ?: false,
+        botId = root.stringValue("botId"),
+        checkedAt = root.longValue("checkedAt") ?: 0L,
     )
 
     companion object {

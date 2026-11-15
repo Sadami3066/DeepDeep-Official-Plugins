@@ -206,47 +206,24 @@ internal object SysuJson {
         isLenient = true
     }
 
-    fun schedule(text: String): SysuSchedule? = decode(text)
+    fun schedule(payload: JsonElement): SysuSchedule? = decode(payload)
 
-    fun scores(text: String): List<SysuScoreSemester>? = decode(text)
+    fun scores(payload: JsonElement): List<SysuScoreSemester>? = decode(payload)
 
-    fun exams(text: String): SysuExamTerm? = decode(text)
+    fun exams(payload: JsonElement): SysuExamTerm? = decode(payload)
 
-    fun credits(text: String): List<SysuCreditPlan>? = decode(text)
+    fun credits(payload: JsonElement): List<SysuCreditPlan>? = decode(payload)
 
-    fun lmsCourses(text: String): List<SysuLmsCourse>? = decode(text)
+    fun lmsCourses(payload: JsonElement): List<SysuLmsCourse>? = decode(payload)
 
-    fun lmsTodo(text: String): List<SysuLmsTodo>? = decode(text)
+    fun lmsTodo(payload: JsonElement): List<SysuLmsTodo>? = decode(payload)
 
-    fun gymSlots(text: String): SysuGymSlots? = decode(text)
+    fun gymSlots(payload: JsonElement): SysuGymSlots? = decode(payload)
 
-    fun netpay(text: String): SysuNetpayRoot? = decode(text)
+    fun netpay(payload: JsonElement): SysuNetpayRoot? = decode(payload)
 
-    fun element(text: String): JsonElement? {
-        val cleaned = SysuToolOutput.clean(text)
-        if (cleaned.isEmpty()) return null
-        parse(cleaned)?.let { return it }
-        val start = cleaned.indexOfFirst { it == '{' || it == '[' }
-        if (start < 0) return null
-        val candidate = cleaned.substring(start)
-        val end = maxOf(candidate.lastIndexOf('}'), candidate.lastIndexOf(']'))
-        if (end < 0) return null
-        return parse(candidate.substring(0, end + 1))
-    }
-
-    private fun parse(text: String): JsonElement? = runCatching { json.parseToJsonElement(text) }.getOrNull()
-
-    private inline fun <reified T> decode(text: String): T? {
-        val element = element(text) ?: return null
-        return runCatching { json.decodeFromJsonElement<T>(element) }.getOrNull()
-    }
-}
-
-internal object SysuToolOutput {
-    private val ANSI = Regex("\u001B\\[[0-9;]*[A-Za-z]")
-    private val EXIT_MARKER = Regex("\\n\\n\\[exit: -?\\d+]\\s*$")
-
-    fun clean(text: String): String = EXIT_MARKER.replace(ANSI.replace(text, ""), "").trim()
+    private inline fun <reified T> decode(payload: JsonElement): T? =
+        runCatching { json.decodeFromJsonElement<T>(payload) }.getOrNull()
 }
 
 internal fun JsonElement?.scalarText(): String? {

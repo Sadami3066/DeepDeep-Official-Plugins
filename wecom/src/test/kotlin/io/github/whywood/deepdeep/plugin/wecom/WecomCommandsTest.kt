@@ -1,6 +1,7 @@
 package io.github.whywood.deepdeep.plugin.wecom
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -28,6 +29,7 @@ class WecomCommandsTest {
         assertEquals(WecomCommandKind.CHAT_MESSAGES, command!!.kind)
         assertEquals("wrOgQhDgAA001", command.chatId)
         assertTrue(command.contextLabel!!.contains("会话 wrOgQhDgAA001"))
+        assertFalse(command.toString().contains("wrOgQhDgAA001"))
     }
 
     @Test
@@ -96,18 +98,23 @@ class WecomCommandsTest {
     }
 
     @Test
-    fun trackerIsBoundedDedupedAndClearedBySession() {
-        val tracker = WecomCallTracker(maxSize = 2)
-        val command = WecomCommands.parse("wecom-cli todo list")!!
-        tracker.remember("call-1", "session-a", command)
-        tracker.remember("call-2", "session-a", command)
-        tracker.remember("call-3", "session-b", command)
-        assertEquals(2, tracker.size())
-        assertNull(tracker.take("call-1"))
-        assertNotNull(tracker.take("call-2"))
-        assertNull(tracker.take("call-2"))
-        tracker.remember("call-4", "session-b", command)
-        tracker.clearSession("session-b")
-        assertEquals(0, tracker.size())
+    fun acceptsEnvPrefixQuotesAndAbsolutePath() {
+        val command = WecomCommands.parse(
+            "HOME=/root /usr/local/bin/wecom-cli chats messages list --chat-id abc --begin-time '2026-11-08 00:00:00'",
+        )
+        assertNotNull(command)
+        assertEquals(WecomCommandKind.CHAT_MESSAGES, command!!.kind)
+        assertEquals("abc", command.chatId)
+        assertEquals("2026-11-08 00:00:00", command.beginTime)
+    }
+
+    @Test
+    fun rejectsShellMetacharactersAndUnbalancedQuotes() {
+        assertNull(WecomCommands.parse("wecom-cli chat groups list &"))
+        assertNull(WecomCommands.parse("wecom-cli chat groups list (x)"))
+        assertNull(WecomCommands.parse("wecom-cli chat groups list --keywords \"unterminated"))
+        assertNull(WecomCommands.parse("wecom-cli chat groups list \\"))
+        assertNull(WecomCommands.parse("wecom-cli chat groups list\nwecom-cli todo list"))
+        assertNull(WecomCommands.parse("wecom-cli chat groups list -- --keywords x"))
     }
 }

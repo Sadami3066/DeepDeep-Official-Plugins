@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.feishu"
         minSdk = 29
         targetSdk = 36
-        versionCode = 15
-        versionName = "2.3.4"
+        versionCode = 16
+        versionName = "2.3.5"
     }
 
     compileOptions {
@@ -38,6 +38,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":cli-common"))
     compileOnly("io.github.sadami3066.deepdeep:plugin-api:1.2.0")
     compileOnly("io.github.sadami3066.deepdeep:design:0.9.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")

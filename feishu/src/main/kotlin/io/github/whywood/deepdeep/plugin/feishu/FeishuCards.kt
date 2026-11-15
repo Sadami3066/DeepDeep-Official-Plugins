@@ -33,16 +33,10 @@ import io.github.whywood.deepdeep.design.DdType
 import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.CustomMessageSlotState
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.cli.card.CliCardCodec
+import io.github.whywood.deepdeep.plugin.cli.card.CliCardItem
+import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 
 internal object FeishuCardTypes {
     const val CHAT_CARD = "feishu.card"
@@ -54,72 +48,14 @@ internal object FeishuCardTypes {
     const val KIND_TASKS = "tasks"
 }
 
-internal data class FeishuCardItem(
-    val title: String,
-    val subtitle: String? = null,
-    val meta: String? = null,
-    val badge: String? = null,
-    val url: String? = null,
-)
+internal typealias FeishuCardItem = CliCardItem
 
-internal data class FeishuCardModel(
-    val kind: String,
-    val context: String? = null,
-    val total: Int = 0,
-    val items: List<FeishuCardItem> = emptyList(),
-    val openUrl: String? = null,
-    val note: String? = null,
-)
+internal typealias FeishuCardModel = CliCardModel
 
-internal fun encodeFeishuCardPayload(model: FeishuCardModel): JsonObject = buildJsonObject {
-    put("kind", model.kind)
-    model.context?.takeIf { it.isNotBlank() }?.let { put("context", it) }
-    put("total", model.total)
-    put(
-        "items",
-        buildJsonArray {
-            model.items.forEach { item ->
-                add(
-                    buildJsonObject {
-                        put("title", item.title)
-                        item.subtitle?.takeIf { it.isNotBlank() }?.let { put("subtitle", it) }
-                        item.meta?.takeIf { it.isNotBlank() }?.let { put("meta", it) }
-                        item.badge?.takeIf { it.isNotBlank() }?.let { put("badge", it) }
-                        item.url?.takeIf { it.isNotBlank() }?.let { put("url", it) }
-                    },
-                )
-            }
-        },
-    )
-    model.openUrl?.takeIf { it.isNotBlank() }?.let { put("open_url", it) }
-    model.note?.takeIf { it.isNotBlank() }?.let { put("note", it) }
-}
+internal fun encodeFeishuCardPayload(model: FeishuCardModel): JsonObject = CliCardCodec.encode(model)
 
-internal fun decodeFeishuCardPayload(payload: JsonObject): FeishuCardModel? = runCatching {
-    val kind = payload.string("kind") ?: return null
-    if (kind !in SUPPORTED_CARD_KINDS) return null
-    val itemsElement = payload["items"]
-    val itemsArray = if (itemsElement == null) null else runCatching { itemsElement.jsonArray }.getOrNull() ?: return null
-    val items = itemsArray.orEmpty().mapNotNull { element ->
-        val row = runCatching { element.jsonObject }.getOrNull() ?: return@mapNotNull null
-        val title = row.string("title") ?: return@mapNotNull null
-        FeishuCardItem(
-            title = title,
-            subtitle = row.string("subtitle"),
-            meta = row.string("meta"),
-            badge = row.string("badge"),
-            url = row.string("url"),
-        )
-    }
-    FeishuCardModel(
-        kind = kind,
-        context = payload.string("context"),
-        total = (payload["total"] as? JsonPrimitive)?.intOrNull ?: items.size,
-        items = items.take(MAX_CARD_ROWS),
-        openUrl = payload.string("open_url"),
-        note = payload.string("note"),
-    )
-}.getOrNull()
+internal fun decodeFeishuCardPayload(payload: JsonObject): FeishuCardModel? =
+    CliCardCodec.decode(payload, SUPPORTED_CARD_KINDS)
 
 internal val SUPPORTED_CARD_KINDS = setOf(
     FeishuCardTypes.KIND_CHAT_LIST,
@@ -130,10 +66,7 @@ internal val SUPPORTED_CARD_KINDS = setOf(
     FeishuCardTypes.KIND_TASKS,
 )
 
-internal const val MAX_CARD_ROWS = 8
-
-private fun JsonObject.string(name: String): String? =
-    (this[name] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+internal const val MAX_CARD_ROWS = CliCardCodec.MAX_ROWS
 
 @Composable
 internal fun FeishuChatCard(host: PluginHost, state: CustomMessageSlotState) {
@@ -156,16 +89,17 @@ internal fun FeishuChatCard(host: PluginHost, state: CustomMessageSlotState) {
         return
     }
     FeishuCardSurface {
+        val context = model.context?.takeIf { it.isNotBlank() }
         FeishuCardHeader(
             host = host,
             icon = cardIcon(model.kind),
             title = cardTitle(host, model.kind),
             trailing = cardCountLabel(host, model),
-            bottomPadding = if (model.context.isNullOrBlank()) DdSpacing.Md else DdSpacing.Xs,
+            bottomPadding = if (context == null) DdSpacing.Md else DdSpacing.Xs,
         )
-        if (!model.context.isNullOrBlank()) {
+        if (context != null) {
             DdText(
-                text = model.context,
+                text = context,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = DdSpacing.Lg, end = DdSpacing.Lg, bottom = DdSpacing.Md),

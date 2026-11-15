@@ -1,5 +1,7 @@
 package io.github.whywood.deepdeep.plugin.wecom
 
+import io.github.whywood.deepdeep.plugin.cli.CliCommandLine
+
 internal enum class WecomCommandKind(
     val customType: String,
     val listLabelZh: String,
@@ -87,6 +89,8 @@ internal data class WecomCommand(
         end != null -> "截至 $end"
         else -> null
     }
+
+    override fun toString(): String = "WecomCommand(kind=$kind)"
 }
 
 internal object WecomCommands {
@@ -94,7 +98,6 @@ internal object WecomCommands {
     const val MAX_COMMAND_LENGTH = 4096
     private const val MAX_TOKENS = 160
 
-    private val ENV_ASSIGNMENT = Regex("^[A-Za-z_][A-Za-z0-9_]*=.*$")
     private val ALIASES = mapOf(
         "chat" to "chat",
         "chats" to "chat",
@@ -166,16 +169,16 @@ internal object WecomCommands {
     fun parse(command: String): WecomCommand? {
         if (command.isBlank() || command.length > MAX_COMMAND_LENGTH) return null
         if (!command.contains(FILE_NAME)) return null
-        val tokens = tokenize(command) ?: return null
+        if (CliCommandLine.hasShellOperators(command)) return null
+        if (command.any { it in EXTRA_METACHARACTERS }) return null
+        if (!quotesBalanced(command)) return null
+        val tokens = CliCommandLine.tokenize(command)
         if (tokens.isEmpty() || tokens.size > MAX_TOKENS) return null
-        val binaryIndex = tokens.indexOfFirst { isBinaryToken(it) }
-        if (binaryIndex < 0) return null
-        for (index in 0 until binaryIndex) {
-            if (!ENV_ASSIGNMENT.matches(tokens[index])) return null
-        }
-        if (tokens.drop(binaryIndex + 1).any(::isBinaryToken)) return null
-
+        val binaryIndex = CliCommandLine.envPrefixLength(tokens)
+        if (binaryIndex >= tokens.size) return null
+        if (!CliCommandLine.isBinary(tokens[binaryIndex], FILE_NAME)) return null
         val arguments = tokens.drop(binaryIndex + 1)
+        if (arguments.any { CliCommandLine.isBinary(it, FILE_NAME) }) return null
         if (arguments.any { UNSUPPORTED_FLAGS.contains(it) || it.startsWith("--page-count=") }) return null
         if (arguments.any { it == "-o" || it.startsWith("--output") && it != "--output" }) return null
 
@@ -260,82 +263,19 @@ internal object WecomCommands {
     private fun isKnownFlag(token: String): Boolean =
         token in VALUE_FLAGS || token in VARIADIC_FLAGS || token in BOOLEAN_FLAGS
 
-    private fun isBinaryToken(token: String): Boolean =
-        token == FILE_NAME || token.endsWith("/$FILE_NAME")
-
-    private fun tokenize(command: String): List<String>? {
-        val tokens = mutableListOf<String>()
-        val current = StringBuilder()
-        var state = TokenState.PLAIN
-        var index = 0
-        var pending = false
-        while (index < command.length) {
-            val character = command[index]
-            when (state) {
-                TokenState.PLAIN -> when {
-                    character == ' ' || character == '\t' -> {
-                        flushToken(tokens, current, pending)?.let { pending = it }
-                    }
-                    character == '\n' || character == '\r' -> return null
-                    character == '\'' -> {
-                        state = TokenState.SINGLE
-                        pending = true
-                    }
-                    character == '"' -> {
-                        state = TokenState.DOUBLE
-                        pending = true
-                    }
-                    character == '\\' -> {
-                        index++
-                        if (index >= command.length) return null
-                        current.append(command[index])
-                        pending = true
-                    }
-                    character in COMMAND_METACHARACTERS -> return null
-                    else -> {
-                        current.append(character)
-                        pending = true
-                    }
-                }
-                TokenState.SINGLE -> when (character) {
-                    '\'' -> state = TokenState.PLAIN
-                    else -> current.append(character)
-                }
-                TokenState.DOUBLE -> when (character) {
-                    '"' -> state = TokenState.PLAIN
-                    '\\' -> {
-                        index++
-                        if (index >= command.length) return null
-                        current.append(command[index])
-                    }
-                    '$' -> {
-                        if (index + 1 < command.length && command[index + 1] == '(') return null
-                        current.append(character)
-                    }
-                    '`' -> return null
-                    else -> current.append(character)
-                }
+    private fun quotesBalanced(command: String): Boolean {
+        var quote: Char? = null
+        var escaped = false
+        command.forEach { character ->
+            when {
+                escaped -> escaped = false
+                character == '\\' && quote != '\'' -> escaped = true
+                quote != null -> if (character == quote) quote = null
+                character == '\'' || character == '"' -> quote = character
             }
-            index++
         }
-        if (state != TokenState.PLAIN) return null
-        flushToken(tokens, current, pending)
-        return tokens
+        return quote == null && !escaped
     }
 
-    private fun flushToken(tokens: MutableList<String>, current: StringBuilder, pending: Boolean): Boolean {
-        if (pending) {
-            tokens += current.toString()
-            current.setLength(0)
-        }
-        return false
-    }
-
-    private const val COMMAND_METACHARACTERS = "|&;<>()`"
-
-    private enum class TokenState {
-        PLAIN,
-        SINGLE,
-        DOUBLE,
-    }
+    private const val EXTRA_METACHARACTERS = "&()"
 }

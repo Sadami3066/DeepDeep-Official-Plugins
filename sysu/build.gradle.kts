@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.sysu"
         minSdk = 29
         targetSdk = 36
-        versionCode = 12
-        versionName = "2.3.0"
+        versionCode = 13
+        versionName = "2.3.1"
     }
 
     compileOptions {
@@ -39,6 +39,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":cli-common"))
     compileOnly("io.github.sadami3066.deepdeep:plugin-api:1.2.0")
     compileOnly("io.github.sadami3066.deepdeep:design:0.9.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")

@@ -1,13 +1,19 @@
 package io.github.whywood.deepdeep.plugin.wecom
 
+import io.github.whywood.deepdeep.plugin.api.NetworkService
 import io.github.whywood.deepdeep.plugin.api.PluginHost
-import java.io.File
-import java.security.MessageDigest
+import io.github.whywood.deepdeep.plugin.cli.longValue
+import io.github.whywood.deepdeep.plugin.cli.stringValue
+import io.github.whywood.deepdeep.plugin.cli.update.CliHttp
+import io.github.whywood.deepdeep.plugin.cli.update.CliRelease
+import io.github.whywood.deepdeep.plugin.cli.update.CliUpdateCheck
+import io.github.whywood.deepdeep.plugin.cli.update.CliUpdateSource
+import io.github.whywood.deepdeep.plugin.cli.update.CliUpdateThrottle
+import io.github.whywood.deepdeep.plugin.cli.update.CliVersions
 import java.util.Base64
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
@@ -26,25 +32,22 @@ internal sealed interface WecomReleaseResult {
 
 internal object WecomReleases {
     const val REGISTRY_URL = "https://registry.npmjs.org/@wecom/cli-linux-arm64/latest"
-    const val MIRROR_BASE = "https://registry.npmmirror.com/@wecom/cli-linux-arm64/-"
-    const val THROTTLE_MS = 24L * 60L * 60L * 1000L
+    const val THROTTLE_MS = CliUpdateThrottle.DEFAULT_INTERVAL_MS
     const val INTEGRITY_PREFIX = "sha512-"
 
     fun parseRegistryRelease(body: String, now: Long): WecomReleaseResult {
         val root = runCatching { Json.parseToJsonElement(body).jsonObject }.getOrNull()
             ?: return WecomReleaseResult.Failure("更新信息格式无法识别")
-        val version = root.stringOrNull("version")
+        val rawVersion = root.stringValue("version")
             ?: return WecomReleaseResult.Failure("更新信息缺少版本号")
-        if (!VERSION_PATTERN.matches(version)) {
-            return WecomReleaseResult.Failure("更新信息版本号格式不合法")
-        }
+        val version = CliVersions.normalize(rawVersion)
+            ?: return WecomReleaseResult.Failure("更新信息版本号格式不合法")
         val dist = root["dist"] as? JsonObject
             ?: return WecomReleaseResult.Failure("更新信息缺少安装包信息")
-        val tarball = dist.stringOrNull("tarball")
+        val tarball = dist.stringValue("tarball")
             ?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
             ?: return WecomReleaseResult.Failure("更新信息缺少安装包地址")
-        val integrity = dist.stringOrNull("integrity")
-        val sha512 = parseSha512(integrity)
+        val sha512 = parseSha512(dist.stringValue("integrity"))
             ?: return WecomReleaseResult.Failure("更新信息缺少 sha512 校验值，已拒绝更新")
         return WecomReleaseResult.Success(
             WecomRelease(
@@ -56,8 +59,6 @@ internal object WecomReleases {
         )
     }
 
-    private val VERSION_PATTERN = Regex("^[0-9][0-9A-Za-z._+-]*$")
-
     fun parseSha512(integrity: String?): String? {
         if (integrity.isNullOrBlank()) return null
         val entries = integrity.split(Regex("\\s+"))
@@ -68,75 +69,64 @@ internal object WecomReleases {
         return Base64.getEncoder().encodeToString(decoded)
     }
 
-    fun sha512Base64(file: File): String? {
-        if (!file.isFile) return null
-        return runCatching {
-            val digest = MessageDigest.getInstance("SHA-512")
-            file.inputStream().use { input ->
-                val buffer = ByteArray(64 * 1024)
-                while (true) {
-                    val read = input.read(buffer)
-                    if (read < 0) break
-                    digest.update(buffer, 0, read)
-                }
-            }
-            Base64.getEncoder().encodeToString(digest.digest())
-        }.getOrNull()
-    }
-
-    fun verifySha512(file: File, expected: String?): Boolean {
-        if (expected.isNullOrBlank()) return false
-        val actual = sha512Base64(file) ?: return false
-        return actual == expected
-    }
-
-    fun downloadUrls(primaryTarball: String, version: String): List<String> {
-        val mirror = "$MIRROR_BASE/cli-linux-arm64-$version.tgz"
-        return listOf(primaryTarball, mirror).distinct()
-    }
-
     fun isNewer(latest: String, installed: String?): Boolean {
         if (installed.isNullOrBlank()) return true
-        return compareVersions(latest, installed) > 0
+        return CliVersions.isNewer(latest, installed)
     }
 
-    fun compareVersions(left: String, right: String): Int {
-        val leftParts = versionParts(left)
-        val rightParts = versionParts(right)
-        val size = maxOf(leftParts.size, rightParts.size)
-        for (index in 0 until size) {
-            val leftPart = leftParts.getOrNull(index)
-            val rightPart = rightParts.getOrNull(index)
-            val compared = comparePart(leftPart, rightPart)
-            if (compared != 0) return compared
+    fun compareVersions(left: String, right: String): Int = CliVersions.compare(left, right)
+
+    fun toCliRelease(release: WecomRelease): CliRelease = CliRelease(
+        version = release.version,
+        archiveName = WecomCli.archiveName(release.version),
+        downloadUrls = WecomCli.releaseDownloadUrls(release.tarballUrl, release.version),
+        sha512Base64 = release.sha512,
+    )
+
+    fun pinnedRelease(): CliRelease = CliRelease(
+        version = WecomCli.VERSION,
+        archiveName = WecomCli.ARCHIVE_NAME,
+        downloadUrls = WecomCli.DOWNLOAD_URLS,
+        sha256 = WecomCli.ARCHIVE_SHA256,
+    )
+
+    fun fromCheck(release: CliRelease, checkedAt: Long): WecomRelease? {
+        val sha512 = release.sha512Base64 ?: return null
+        val tarballUrl = release.downloadUrls.firstOrNull() ?: return null
+        return WecomRelease(
+            version = release.version,
+            tarballUrl = tarballUrl,
+            sha512 = sha512,
+            checkedAt = checkedAt,
+        )
+    }
+}
+
+internal class WecomReleaseSource : CliUpdateSource {
+    var failure: String? = null
+        private set
+
+    override suspend fun discover(network: NetworkService?, installedVersion: String?): CliUpdateCheck {
+        failure = null
+        val service = network ?: return CliUpdateCheck(latestVersion = null, release = null, failed = true)
+        val body = CliHttp.getText(service, WecomReleases.REGISTRY_URL, timeoutMs = UPDATE_CHECK_TIMEOUT_MS)
+            ?: return CliUpdateCheck(latestVersion = null, release = null, failed = true)
+        return when (val parsed = WecomReleases.parseRegistryRelease(body, System.currentTimeMillis())) {
+            is WecomReleaseResult.Success -> CliUpdateCheck(
+                latestVersion = parsed.release.version,
+                release = WecomReleases.toCliRelease(parsed.release),
+                failed = false,
+            )
+            is WecomReleaseResult.Failure -> {
+                failure = parsed.message
+                CliUpdateCheck(latestVersion = null, release = null, failed = true)
+            }
         }
-        return 0
     }
 
-    private fun comparePart(left: String?, right: String?): Int {
-        if (left == null && right == null) return 0
-        if (left == null) return if (right?.toIntOrNull() == 0) 0 else -1
-        if (right == null) return if (left.toIntOrNull() == 0) 0 else 1
-        val leftNumber = left.toIntOrNull()
-        val rightNumber = right.toIntOrNull()
-        return when {
-            leftNumber != null && rightNumber != null -> leftNumber.compareTo(rightNumber)
-            leftNumber != null -> 1
-            rightNumber != null -> -1
-            else -> left.compareTo(right)
-        }
+    private companion object {
+        const val UPDATE_CHECK_TIMEOUT_MS = 10_000L
     }
-
-    private fun versionParts(version: String): List<String> = version
-        .trim()
-        .removePrefix("v")
-        .substringBefore('-')
-        .substringBefore('+')
-        .split('.')
-        .map { part -> part.takeWhile { it.isDigit() }.ifBlank { part } }
-
-    private fun JsonObject.stringOrNull(key: String): String? =
-        (this[key] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 }
 
 internal class WecomReleaseStore(private val host: PluginHost) {
@@ -144,10 +134,10 @@ internal class WecomReleaseStore(private val host: PluginHost) {
         val stored = runCatching { host.settings().getJson(KEY) }.getOrNull() ?: return null
         return runCatching {
             WecomRelease(
-                version = stored.stringOrNull("version") ?: return null,
-                tarballUrl = stored.stringOrNull("tarballUrl") ?: return null,
-                sha512 = stored.stringOrNull("sha512") ?: return null,
-                checkedAt = stored.stringOrNull("checkedAt")?.toLongOrNull() ?: 0L,
+                version = stored.stringValue("version") ?: return null,
+                tarballUrl = stored.stringValue("tarballUrl") ?: return null,
+                sha512 = stored.stringValue("sha512") ?: return null,
+                checkedAt = stored.longValue("checkedAt") ?: 0L,
             )
         }.getOrNull()
     }
@@ -168,11 +158,6 @@ internal class WecomReleaseStore(private val host: PluginHost) {
 
     suspend fun clear() {
         runCatching { host.settings().remove(KEY) }
-    }
-
-    private fun JsonObject.stringOrNull(key: String): String? {
-        val primitive = this[key] as? kotlinx.serialization.json.JsonPrimitive ?: return null
-        return primitive.contentOrNull?.takeIf { it.isNotBlank() }
     }
 
     private companion object {

@@ -104,22 +104,6 @@ internal val SNACKBAR_CANCELLED = literal("已取消", "Cancelled")
 internal val SNACKBAR_LINK_COPIED = literal("授权链接已复制", "Authorization link copied")
 internal val ERROR_COPY = literal("复制失败，请重试。", "Couldn't copy the link. Try again.")
 
-internal const val LARK_CLI_BACKUP_PATH = "/usr/local/bin/.lark-cli.old"
-internal const val LARK_CLI_TEMP_PATH = "/usr/local/bin/.lark-cli.new"
-
-internal fun feishuRestoreCommand(hadBinary: Boolean): String = buildString {
-    appendLine("if [ -f $LARK_CLI_BACKUP_PATH ]; then")
-    appendLine("mv -f $LARK_CLI_BACKUP_PATH ${FeishuCli.INSTALL_PATH}")
-    appendLine("chmod 755 ${FeishuCli.INSTALL_PATH}")
-    if (!hadBinary) {
-        appendLine("else")
-        appendLine("rm -f ${FeishuCli.INSTALL_PATH}")
-    }
-    appendLine("fi")
-    appendLine("rm -f $LARK_CLI_TEMP_PATH")
-    append("true")
-}
-
 internal val SKILL_MARKDOWN = """
     ---
     name: deepdeep-feishu

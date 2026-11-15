@@ -1,5 +1,7 @@
 package io.github.whywood.deepdeep.plugin.wecom
 
+import io.github.whywood.deepdeep.plugin.cli.arrayValue
+import io.github.whywood.deepdeep.plugin.cli.intValue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -13,8 +15,8 @@ class WecomCliOutputTest {
         val output = WecomCliOutputParser.parse(fixture("chat-groups.json"))
         assertTrue(output is WecomCliOutput.Success)
         val payload = (output as WecomCliOutput.Success).payload
-        assertEquals(2, payload.arrayOrNull("chats")?.size)
-        assertEquals(2, payload.intOrNull("chats_count"))
+        assertEquals(2, payload.arrayValue("chats").size)
+        assertEquals(2, payload.intValue("chats_count"))
     }
 
     @Test
@@ -27,7 +29,7 @@ class WecomCliOutputTest {
         """.trimIndent()
         val parsed = WecomCliOutputParser.parse(output)
         assertTrue(parsed is WecomCliOutput.Success)
-        assertEquals(1, (parsed as WecomCliOutput.Success).payload.arrayOrNull("chats")?.size)
+        assertEquals(1, (parsed as WecomCliOutput.Success).payload.arrayValue("chats").size)
     }
 
     @Test
@@ -35,7 +37,7 @@ class WecomCliOutputTest {
         val output = "\u001B[32m{\u001B[0m\"items\":[],\"items_count\":0}\n\n[exit: 0]"
         val parsed = WecomCliOutputParser.parse(output)
         assertTrue(parsed is WecomCliOutput.Success)
-        assertEquals(0, (parsed as WecomCliOutput.Success).payload.intOrNull("items_count"))
+        assertEquals(0, (parsed as WecomCliOutput.Success).payload.intValue("items_count"))
     }
 
     @Test
@@ -70,7 +72,7 @@ class WecomCliOutputTest {
         val output = """{"errcode":0,"errmsg":"ok","result":{"users":[],"users_count":0}}"""
         val parsed = WecomCliOutputParser.parse(output)
         assertTrue(parsed is WecomCliOutput.Success)
-        assertEquals(0, (parsed as WecomCliOutput.Success).payload.intOrNull("users_count"))
+        assertEquals(0, (parsed as WecomCliOutput.Success).payload.intValue("users_count"))
     }
 
     @Test
@@ -107,7 +109,7 @@ class WecomCliOutputTest {
         """.trimIndent()
         val parsed = WecomCliOutputParser.parse(output)
         assertTrue(parsed is WecomCliOutput.Success)
-        assertNotNull((parsed as WecomCliOutput.Success).payload.arrayOrNull("users"))
+        assertTrue((parsed as WecomCliOutput.Success).payload.arrayValue("users").isNotEmpty())
     }
 
     private fun fixture(name: String): String =

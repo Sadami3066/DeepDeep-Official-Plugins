@@ -31,6 +31,10 @@ import io.github.whywood.deepdeep.plugin.api.SlotIds
 import io.github.whywood.deepdeep.plugin.api.composeSlot
 import io.github.whywood.deepdeep.plugin.api.localizedText
 import io.github.whywood.deepdeep.plugin.api.slotBinding
+import io.github.whywood.deepdeep.plugin.cli.card.CliCardCodec
+import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
+import io.github.whywood.deepdeep.plugin.cli.card.CliCardSection
+import io.github.whywood.deepdeep.plugin.cli.card.CliCardState
 
 internal fun sysuCardBinding(host: PluginHost): SlotBinding = slotBinding(
     slotId = SlotIds.chatMessage(SYSU_CARD_TYPE),
@@ -42,14 +46,12 @@ internal fun sysuCardBinding(host: PluginHost): SlotBinding = slotBinding(
 
 @Composable
 private fun SysuChatCard(host: PluginHost, message: CustomMessageSlotState) {
-    val payload = remember(message.payload) {
-        SysuCards.decode(message.payload)?.let(SysuCards::normalized)
-    }
-    if (payload == null) {
+    val model = remember(message.payload) { CliCardCodec.decode(message.payload, SYSU_CARD_KINDS) }
+    if (model == null) {
         SysuBrokenCard(host)
         return
     }
-    SysuCardBody(host, payload)
+    SysuCardBody(host, model)
 }
 
 @Composable
@@ -81,57 +83,61 @@ private fun SysuBrokenCard(host: PluginHost) {
 }
 
 @Composable
-private fun SysuCardBody(host: PluginHost, payload: SysuCardPayload) {
+private fun SysuCardBody(host: PluginHost, model: CliCardModel) {
     val colors = deepDeepColors()
-    val icon = iconFor(payload.kind)
-    val footer: (@Composable () -> Unit)? = payload.footer
-        ?.takeIf { it.isNotBlank() }
-        ?.let { text ->
-            {
-                DdText(
-                    text = text,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = DdSpacing.Card, vertical = DdSpacing.Sm),
-                    style = DdType.chip,
-                    color = colors.inkTertiary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+    val icon = iconFor(model.kind)
+    val footer: (@Composable () -> Unit)? = if (model.state == CliCardState.READY) {
+        model.note
+            ?.takeIf { it.isNotBlank() }
+            ?.let { text ->
+                {
+                    DdText(
+                        text = text,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = DdSpacing.Card, vertical = DdSpacing.Sm),
+                        style = DdType.chip,
+                        color = colors.inkTertiary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-        }
+    } else {
+        null
+    }
     DdGroupCard(
         header = {
             SysuCardHeader(
                 icon = icon,
-                title = payload.title.ifBlank { titleFor(host, payload.kind) },
-                subtitle = payload.subtitle,
-                count = payload.count,
+                title = model.title?.takeIf { it.isNotBlank() } ?: titleFor(host, model.kind),
+                subtitle = model.context,
+                count = model.trailing,
             )
         },
         footer = footer,
     ) {
-        when (payload.state) {
-            SysuCardState.ERROR -> Column(
+        when (model.state) {
+            CliCardState.ERROR -> Column(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = DdSpacing.Card, vertical = DdSpacing.Sm),
             ) {
                 DdNoticeBar(
-                    text = payload.body.orEmpty().ifBlank { titleFor(host, payload.kind) },
+                    text = model.note.orEmpty().ifBlank { titleFor(host, model.kind) },
                     tone = DdNoticeTone.DANGER,
                 )
             }
 
-            SysuCardState.LOADING -> DdLoadingBlock(
+            CliCardState.LOADING -> DdLoadingBlock(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = DdSpacing.Xl),
-                text = payload.body,
+                text = model.note,
             )
 
-            SysuCardState.EMPTY -> DdText(
-                text = payload.body.orEmpty().ifBlank { titleFor(host, payload.kind) },
+            CliCardState.EMPTY -> DdText(
+                text = model.note.orEmpty().ifBlank { emptyLabel(host, model.kind) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = DdSpacing.Card, vertical = DdSpacing.Md),
@@ -139,30 +145,28 @@ private fun SysuCardBody(host: PluginHost, payload: SysuCardPayload) {
                 color = colors.inkSecondary,
             )
 
-            else -> SysuCardRows(payload)
+            else -> SysuCardRows(host, model)
         }
     }
 }
 
 @Composable
-private fun SysuCardRows(payload: SysuCardPayload) {
+private fun SysuCardRows(host: PluginHost, model: CliCardModel) {
     val colors = deepDeepColors()
-    if (payload.groups.isEmpty()) {
-        DdText(
-            text = payload.body.orEmpty(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = DdSpacing.Card, vertical = DdSpacing.Md),
-            style = DdType.bodySmall,
-            color = colors.inkSecondary,
-        )
-        return
+    val sections = if (model.sections.isNotEmpty()) {
+        model.sections
+    } else {
+        listOf(CliCardSection(items = model.items))
     }
-    var remaining = MAX_CARD_ROWS
-    for ((index, group) in payload.groups.withIndex()) {
+    var remaining = CliCardCodec.MAX_ROWS
+    var shown = 0
+    for (section in sections) {
         if (remaining <= 0) break
-        if (index > 0) DdHairline()
-        group.label?.takeIf { it.isNotBlank() }?.let { label ->
+        val rows = section.items.take(remaining)
+        if (rows.isEmpty()) continue
+        remaining -= rows.size
+        if (shown > 0) DdHairline()
+        section.label?.takeIf { it.isNotBlank() }?.let { label ->
             DdText(
                 text = label,
                 modifier = Modifier
@@ -174,15 +178,14 @@ private fun SysuCardRows(payload: SysuCardPayload) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        val rows = group.rows.take(remaining)
-        remaining -= rows.size
         for (row in rows) {
             DdListRow(
                 title = row.title,
                 subtitle = row.subtitle,
-                value = row.value,
-                subtitleMaxLines = row.subtitleMaxLines.coerceIn(1, 3),
+                value = row.meta,
+                subtitleMaxLines = if (SysuCardKind.fromWire(model.kind) == SysuCardKind.Gym) 2 else 1,
             )
+            shown += 1
         }
     }
 }
@@ -262,6 +265,17 @@ private fun titleFor(host: PluginHost, kind: String): String = when (SysuCardKin
     SysuCardKind.Gym -> host.t("体育场馆空位", "Venue availability")
     SysuCardKind.Netpay -> host.t("校园网服务", "Campus network")
     null -> host.t("校园服务", "Campus services")
+}
+
+private fun emptyLabel(host: PluginHost, kind: String): String = when (SysuCardKind.fromWire(kind)) {
+    SysuCardKind.Schedule -> host.t("本周没有课程", "No classes this week")
+    SysuCardKind.Grades -> host.t("还没有成绩记录", "No grades recorded")
+    SysuCardKind.Exams -> host.t("还没有考试安排", "No exams scheduled")
+    SysuCardKind.Lms -> host.t("没有选课记录", "No enrolled courses")
+    SysuCardKind.Todo -> host.t("没有待办事项", "No assignments")
+    SysuCardKind.Gym -> host.t("没有可约时段", "No available slots")
+    SysuCardKind.Netpay -> host.t("名下没有网络服务", "No network services")
+    null -> host.t("没有内容", "Nothing here")
 }
 
 private fun PluginHost.t(zh: String, en: String): String =

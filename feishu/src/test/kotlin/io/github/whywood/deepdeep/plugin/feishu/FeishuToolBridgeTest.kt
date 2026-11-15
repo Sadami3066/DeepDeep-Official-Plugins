@@ -58,7 +58,8 @@ class FeishuToolBridgeTest {
         val text = decision.result?.text.orEmpty()
         assertTrue(text.contains("飞书聊天列表（共 3 个）"))
         assertTrue(text.contains("产品研发群"))
-        assertFalse(text.contains("卡片"))
+        assertTrue(text.contains("以卡片展示"))
+        assertFalse(text.contains("{\"ok\":true}"))
         assertEquals(1, host.posted.size)
         val posted = host.posted.single()
         assertEquals(FeishuCardTypes.CHAT_CARD, posted.customType)
@@ -120,11 +121,16 @@ class FeishuToolBridgeTest {
     }
 
     @Test
-    fun cardPostFailureKeepsOriginalResult() = runTest {
+    fun cardPostFailureStillReplacesModelResult() = runTest {
         val host = FakeFeishuHost(postSucceeds = false)
         val hooks = FeishuToolBridge().hooks(host)
         hooks.beforeToolCall(request("call-7", "lark-cli im +chat-list"))
-        assertEquals(ToolResultAction.KEEP, hooks.afterToolExecution(result("call-7", loadFixture("chats.json"))).action)
+        val decision = hooks.afterToolExecution(result("call-7", loadFixture("chats.json")))
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        val text = decision.result?.text.orEmpty()
+        assertTrue(text.contains("飞书聊天列表（共 3 个）"))
+        assertFalse(text.contains("以卡片展示"))
+        assertFalse(text.contains("\"ok\""))
         assertEquals(1, host.posted.size)
     }
 

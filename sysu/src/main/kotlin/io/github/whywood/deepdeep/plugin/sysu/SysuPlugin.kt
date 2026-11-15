@@ -60,9 +60,9 @@ class SysuPlugin : DeepDeepPlugin {
     }
 
     override fun contributions(host: PluginHost): Contributions {
-        val bridge = SysuBridge(host)
+        val bridge = SysuToolBridge()
         return contributions(
-            hooks = object : PluginHooks by bridge.hooks {
+            hooks = object : PluginHooks by bridge.hooks(host) {
                 override suspend fun notificationAction(event: NotificationActionEvent) {
                     if (event.actionId == ACTION_OPEN_PAGE) host.ui().openPage(PAGE_ID)
                 }

@@ -78,9 +78,8 @@ object WecomCli {
         chmod 755 $INSTALL_TEMP_PATH
         mv -f $INSTALL_TEMP_PATH $INSTALL_PATH
         $INSTALL_PATH --version
+        rm -f $INSTALL_BACKUP_PATH
     """.trimIndent()
-
-    fun commitInstallCommand(): String = "rm -f $INSTALL_BACKUP_PATH; true"
 
     fun restoreCommand(hadBinary: Boolean): String = buildString {
         appendLine("if [ -f $INSTALL_BACKUP_PATH ]; then")

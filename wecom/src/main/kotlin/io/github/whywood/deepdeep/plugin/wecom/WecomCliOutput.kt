@@ -1,7 +1,8 @@
 package io.github.whywood.deepdeep.plugin.wecom
 
+import io.github.whywood.deepdeep.plugin.cli.CliJsonEnvelope
+import io.github.whywood.deepdeep.plugin.cli.CliText
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -19,7 +20,7 @@ internal sealed interface WecomCliOutput {
 internal object WecomCliOutputParser {
     const val MAX_OUTPUT_LENGTH = 256 * 1024
 
-    private val ANSI = Regex("\u001B\\[[0-9;?]*[A-Za-z]")
+    private val ENVELOPE = CliJsonEnvelope.LENIENT
     private val EXIT_MARKER = Regex("\\[exit:\\s*(-?\\d+)]")
     private val NOTICE_PREFIX = Regex("(?m)^\\s*\\[wecom][^\\n]*$")
     private val KNOWN_NOISE = listOf(
@@ -41,11 +42,43 @@ internal object WecomCliOutputParser {
     )
 
     fun parse(output: String): WecomCliOutput? {
-        if (output.isBlank() || output.length > MAX_OUTPUT_LENGTH) return null
         val cleaned = clean(output) ?: return null
-        val extracted = extractJson(cleaned.text) ?: return null
-        val root = runCatching { Json.parseToJsonElement(extracted) }.getOrNull()
-        val envelope = root as? JsonObject ?: return null
+        val envelope = ENVELOPE.find(cleaned.text) ?: return null
+        failureOf(envelope)?.let { return it }
+        if (cleaned.exitCode != null && cleaned.exitCode != 0) return null
+        return payload(envelope)?.let { WecomCliOutput.Success(it) }
+    }
+
+    fun payload(envelope: JsonObject): JsonObject? = unwrap(envelope)
+
+    fun payloadElement(output: String): kotlinx.serialization.json.JsonElement? {
+        val cleaned = clean(output) ?: return null
+        return ENVELOPE.element(cleaned.text)
+    }
+
+    private data class Cleaned(val text: String, val exitCode: Int?)
+
+    private fun clean(output: String): Cleaned? {
+        if (output.isBlank() || output.length > MAX_OUTPUT_LENGTH) return null
+        var text = CliText.stripAnsi(output)
+            .replace("\uFEFF", "")
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+            .replace("\u0000", "")
+        var exitCode: Int? = null
+        val markers = EXIT_MARKER.findAll(text).toList()
+        if (markers.isNotEmpty()) {
+            val last = markers.last()
+            exitCode = last.groupValues.getOrNull(1)?.toIntOrNull()
+            text = text.removeRange(last.range)
+        }
+        text = NOTICE_PREFIX.replace(text, "")
+        KNOWN_NOISE.forEach { noise -> text = text.replace(noise, "") }
+        if (text.isBlank()) return null
+        return Cleaned(text, exitCode)
+    }
+
+    private fun failureOf(envelope: JsonObject): WecomCliOutput.Failure? {
         val errorElement = envelope["error"]
         if (errorElement is JsonObject) {
             val type = errorElement.string("type").orEmpty()
@@ -69,66 +102,6 @@ internal object WecomCliOutputParser {
                 message = errmsg.ifBlank { "企业微信接口返回错误码 $errcode" },
                 authRequired = authRequired,
             )
-        }
-        if (cleaned.exitCode != null && cleaned.exitCode != 0) return null
-        val payload = unwrap(envelope) ?: return null
-        return WecomCliOutput.Success(payload)
-    }
-
-    private data class Cleaned(val text: String, val exitCode: Int?)
-
-    private fun clean(output: String): Cleaned? {
-        var text = output
-            .replace("\uFEFF", "")
-            .replace(ANSI, "")
-            .replace("\r\n", "\n")
-            .replace('\r', '\n')
-            .replace("\u0000", "")
-        var exitCode: Int? = null
-        val markers = EXIT_MARKER.findAll(text).toList()
-        if (markers.isNotEmpty()) {
-            val last = markers.last()
-            exitCode = last.groupValues.getOrNull(1)?.toIntOrNull()
-            text = text.removeRange(last.range)
-        }
-        text = NOTICE_PREFIX.replace(text, "")
-        KNOWN_NOISE.forEach { noise -> text = text.replace(noise, "") }
-        if (text.isBlank()) return null
-        return Cleaned(text, exitCode)
-    }
-
-    private fun extractJson(text: String): String? {
-        val start = text.indexOf('{')
-        if (start < 0) return null
-        val end = findObjectEnd(text, start) ?: return null
-        return text.substring(start, end + 1)
-    }
-
-    private fun findObjectEnd(text: String, start: Int): Int? {
-        var depth = 0
-        var inString = false
-        var escaped = false
-        var index = start
-        while (index < text.length) {
-            val character = text[index]
-            if (inString) {
-                when {
-                    escaped -> escaped = false
-                    character == '\\' -> escaped = true
-                    character == '"' -> inString = false
-                }
-            } else {
-                when (character) {
-                    '"' -> inString = true
-                    '{', '[' -> depth++
-                    '}', ']' -> {
-                        depth--
-                        if (depth == 0) return index
-                        if (depth < 0) return null
-                    }
-                }
-            }
-            index++
         }
         return null
     }
@@ -169,19 +142,3 @@ internal object WecomCliOutputParser {
         "security_notice",
     )
 }
-
-internal fun JsonObject.stringOrNull(key: String): String? =
-    (this[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
-
-internal fun JsonObject.intOrNull(key: String): Int? =
-    (this[key] as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
-
-internal fun JsonObject.booleanOrNull(key: String): Boolean? = when (val value = (this[key] as? JsonPrimitive)?.contentOrNull) {
-    "true" -> true
-    "false" -> false
-    else -> null
-}
-
-internal fun JsonObject.objectOrNull(key: String): JsonObject? = this[key] as? JsonObject
-
-internal fun JsonObject.arrayOrNull(key: String): JsonArray? = this[key] as? JsonArray

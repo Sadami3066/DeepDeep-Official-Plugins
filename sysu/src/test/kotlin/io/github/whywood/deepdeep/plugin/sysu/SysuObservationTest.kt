@@ -1,6 +1,9 @@
 package io.github.whywood.deepdeep.plugin.sysu
 
+import io.github.whywood.deepdeep.plugin.cli.CliJsonEnvelope
+import io.github.whywood.deepdeep.plugin.cli.card.CliCardState
 import java.time.ZoneId
+import kotlinx.serialization.json.JsonElement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -9,14 +12,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SysuObservationTest {
+    private fun payload(fixture: String): JsonElement =
+        CliJsonEnvelope.LENIENT.element(SysuFixtures.text(fixture)) ?: error("no payload in $fixture")
+
     private fun render(kind: SysuCommandKind, fixture: String): SysuRendered =
-        SysuObservation.render(kind, SysuFixtures.bashOutput(fixture), ChineseStrings)
+        SysuObservation.render(kind, payload(fixture), ChineseStrings)
             ?: error("render returned null for $fixture")
 
     @Test
     fun scheduleObservationKeepsFullDatesAndDedupesDepartmentPrefix() {
         val rendered = render(SysuCommandKind.Schedule, "schedule.json")
-        val text = rendered.observation
+        val text = rendered.text
         assertTrue(text.contains("2026-1"))
         assertTrue(text.contains("第 10 周"))
         assertTrue(text.contains("2026-11-09"))
@@ -26,52 +32,65 @@ class SysuObservationTest {
         assertFalse(text.contains("岭院MBA"))
         assertFalse(text.contains("卡片"))
         assertFalse(text.contains("TGC"))
-        assertNotNull(rendered.card)
-        val card = rendered.card!!
-        assertEquals(SysuCardKind.Schedule.wire, card.kind)
-        assertTrue(card.groups.isNotEmpty())
-        assertEquals("周一 2026-11-09", card.groups.first().label)
-        assertTrue(card.groups.sumOf { it.rows.size } <= MAX_CARD_ROWS)
+        val card = rendered.card
+        assertNotNull(card)
+        assertEquals(SysuCardKind.Schedule.wire, card!!.kind)
+        assertEquals("课表", card.title)
+        assertEquals("6 门", card.trailing)
+        assertEquals("2026-1 · 第 10 周", card.context)
+        assertEquals(listOf("周一 2026-11-09", "周二 2026-11-10", "周三 2026-11-11"), card.sections.map { it.label })
+        assertTrue(card.sections.sumOf { it.items.size } <= 8)
+        assertTrue(card.note.orEmpty().contains("2026-11-09 ~ 2026-11-15"))
+        assertTrue(rendered.summary.contains("课表"))
+        assertTrue(rendered.summary.contains("6 门"))
     }
 
     @Test
     fun emptyScheduleRendersEmptyState() {
         val output = """{"term":"2026-2","week":1,"startTime":"2027-02-22","endTime":"2027-02-28","days":[]}"""
-        val rendered = SysuObservation.render(SysuCommandKind.Schedule, output, ChineseStrings)
+        val element = CliJsonEnvelope.LENIENT.element(output)!!
+        val rendered = SysuObservation.render(SysuCommandKind.Schedule, element, ChineseStrings)
         assertNotNull(rendered)
-        assertTrue(rendered!!.observation.contains("没有课程"))
-        assertEquals(SysuCardState.EMPTY, rendered.card?.state)
+        assertTrue(rendered!!.text.contains("没有课程"))
+        assertEquals(CliCardState.EMPTY, rendered.card?.state)
+        assertTrue(rendered.card?.note.orEmpty().contains("没有课程"))
     }
 
     @Test
     fun scoresObservationIncludesCodesAndSelfCalculatedGpa() {
         val rendered = render(SysuCommandKind.Scores, "scores.json")
-        val text = rendered.observation
+        val text = rendered.text
         assertTrue(text.contains("2025-2"))
         assertTrue(text.contains("加权绩点 2.433"))
         assertTrue(text.contains("课程甲（LN101）"))
         assertTrue(text.contains("绩点 3.3"))
         assertTrue(text.contains("绩点 —"))
         assertFalse(text.contains("卡片"))
-        assertEquals("3 门", rendered.card?.count)
+        val card = rendered.card!!
+        assertEquals("3 门", card.trailing)
+        assertEquals(1, card.sections.size)
+        assertTrue(card.sections.first().label.orEmpty().contains("加权绩点 2.433"))
+        assertEquals("B · 绩点 3.3", card.sections.first().items.first().meta)
     }
 
     @Test
     fun examsObservationAndGroupsUseFullDates() {
         val rendered = render(SysuCommandKind.Exams, "exams.json")
-        val text = rendered.observation
+        val text = rendered.text
         assertTrue(text.contains("2026-11-26"))
         assertTrue(text.contains("2026-12-08"))
         assertTrue(text.contains("19:00~21:00"))
         assertTrue(text.contains("第 9-11 节"))
         assertTrue(text.contains("周四"))
-        assertEquals(listOf("2026-11-26 周四", "2026-12-08 周二"), rendered.card?.groups?.map { it.label })
+        val card = rendered.card!!
+        assertEquals("2 场", card.trailing)
+        assertEquals(listOf("2026-11-26 周四", "2026-12-08 周二"), card.sections.map { it.label })
     }
 
     @Test
     fun creditsObservationLabelsBothPlansWithoutInventingRelations() {
         val rendered = render(SysuCommandKind.Credits, "credits.json")
-        val text = rendered.observation
+        val text = rendered.text
         assertTrue(text.contains("培养方案 1"))
         assertTrue(text.contains("培养方案 2"))
         assertTrue(text.contains("专业代码 n020109T00"))
@@ -88,24 +107,28 @@ class SysuObservationTest {
     @Test
     fun lmsCourseObservationIncludesIdProgressAndEndDate() {
         val rendered = render(SysuCommandKind.LmsCourses, "lms_courses.json")
-        val text = rendered.observation
+        val text = rendered.text
         assertTrue(text.contains("1005339"))
         assertTrue(text.contains("课程甲-2026-2027-1"))
         assertTrue(text.contains("80%"))
         assertTrue(text.contains("2027-01-31"))
         assertTrue(text.contains("进度 —"))
-        assertEquals("3 门", rendered.card?.count)
+        val card = rendered.card!!
+        assertEquals("3 门", card.trailing)
+        assertEquals(3, card.items.size)
+        assertTrue(card.sections.isEmpty())
+        assertEquals("80% · 结课 2027-01-31", card.items.first().meta)
     }
 
     @Test
     fun lmsTodoObservationConvertsIsoToLocalDateTimeWithYear() {
         assertEquals("2026-12-11 23:00", SysuFormat.dateTime("2026-12-11T15:00:00.000Z", ZoneId.of("Asia/Shanghai")))
         val rendered = render(SysuCommandKind.LmsTodo, "lms_todo.json")
-        val text = rendered.observation
+        val text = rendered.text
         assertTrue(text.contains("2026-12-11"))
         assertTrue(text.contains("Assignment II - Homework"))
         assertTrue(text.contains("lms.example.edu.cn"))
-        val value = rendered.card?.groups?.first()?.rows?.first()?.value
+        val value = rendered.card?.items?.first()?.meta
         assertNotNull(value)
         assertTrue(value!!.startsWith("2026-12-11 "))
     }
@@ -113,55 +136,57 @@ class SysuObservationTest {
     @Test
     fun gymObservationSeparatesLongWindowsFromSlicedSlots() {
         val rendered = render(SysuCommandKind.GymSlots, "gym_slots.json")
-        val text = rendered.observation
+        val text = rendered.text
         assertTrue(text.contains("2026-11-15"))
         assertTrue(text.contains("08:00-09:00 余59"))
         assertTrue(text.contains("长时段 08:00-22:00 余60"))
         assertTrue(text.contains("5 积分/时（5/10-学生）"))
         assertEquals(2, Regex("08:00-22:00 余60").findAll(text).count())
         assertFalse(text.contains("卡片"))
-        assertNotNull(rendered.card)
-        val venueRow = rendered.card!!.groups.flatMap { it.rows }.first { it.title == "场地1" }
+        val card = rendered.card!!
+        assertEquals("3 个场地", card.trailing)
+        assertEquals(3, card.sections.sumOf { it.items.size })
+        val venueRow = card.sections.flatMap { it.items }.first { it.title == "场地1" }
         assertTrue(venueRow.subtitle!!.contains("08:00-09:00"))
-        assertEquals(2, venueRow.subtitleMaxLines)
+        assertTrue(venueRow.meta!!.startsWith("共 5 个"))
+        assertTrue(card.note.orEmpty().contains("预约窗口 2026-11-15 ~ 2026-11-17"))
     }
 
     @Test
     fun gymEmptyAndFailureStates() {
-        val empty = SysuObservation.render(
-            SysuCommandKind.GymSlots,
+        val emptyPayload = CliJsonEnvelope.LENIENT.element(
             """{"ok":true,"types":[{"id":"t","name":"乒乓球","window":{"start":"2026-11-16","end":"2026-11-17"},"venues":[],"notice":"维护中"}]}""",
-            ChineseStrings,
-        )
+        )!!
+        val empty = SysuObservation.render(SysuCommandKind.GymSlots, emptyPayload, ChineseStrings)
         assertNotNull(empty)
-        assertTrue(empty!!.observation.contains("没有可约时段"))
-        assertTrue(empty.observation.contains("维护中"))
-        val failure = SysuObservation.render(
-            SysuCommandKind.GymSlots,
+        assertTrue(empty!!.text.contains("没有可约时段"))
+        assertTrue(empty.text.contains("维护中"))
+        val failurePayload = CliJsonEnvelope.LENIENT.element(
             """{"ok":false,"error":{"message":"gym token 失效","code":401}}""",
-            ChineseStrings,
-        )
+        )!!
+        val failure = SysuObservation.render(SysuCommandKind.GymSlots, failurePayload, ChineseStrings)
         assertNotNull(failure)
         assertTrue(failure!!.isError)
-        assertTrue(failure.observation.contains("插件页重新登录"))
-        assertEquals(SysuCardState.ERROR, failure.card?.state)
+        assertTrue(failure.text.contains("插件页重新登录"))
+        assertEquals(CliCardState.ERROR, failure.card?.state)
     }
 
     @Test
     fun netpayExpiredSessionIsActionableAndNeverPrintsUndefined() {
         val rendered = render(SysuCommandKind.Netpay, "netpay_expired.json")
-        val text = rendered.observation
+        val text = rendered.text
         assertFalse(text.contains("undefined"))
         assertFalse(text.contains("· ·"))
         assertTrue(text.contains("插件页重新登录"))
         assertTrue(rendered.isError)
-        assertEquals(SysuCardState.ERROR, rendered.card?.state)
+        assertEquals(CliCardState.ERROR, rendered.card?.state)
+        assertTrue(rendered.card?.note.orEmpty().contains("插件页重新登录"))
     }
 
     @Test
     fun netpayServicesShowServiceStatusAndExpiryWithoutMac() {
         val rendered = render(SysuCommandKind.Netpay, "netpay_services.json")
-        val text = rendered.observation
+        val text = rendered.text
         assertTrue(text.contains("张三"))
         assertTrue(text.contains("学号 00000000"))
         assertTrue(text.contains("校园网-学生宿舍"))
@@ -170,15 +195,19 @@ class SysuObservationTest {
         assertTrue(text.contains("剩余 227 天"))
         assertFalse(text.contains("AA:BB"))
         assertFalse(rendered.isError)
-        assertEquals("1 个服务", rendered.card?.count)
+        val card = rendered.card!!
+        assertEquals("1 个服务", card.trailing)
+        assertTrue(card.context.orEmpty().contains("张三"))
+        assertEquals("校园网-学生宿舍", card.items.single().title)
     }
 
     @Test
     fun netpayWithoutServicesIsReadable() {
         val rendered = render(SysuCommandKind.Netpay, "netpay_no_services.json")
-        assertTrue(rendered.observation.contains("名下没有网络服务"))
-        assertFalse(rendered.observation.contains("undefined"))
-        assertEquals(SysuCardState.EMPTY, rendered.card?.state)
+        assertTrue(rendered.text.contains("名下没有网络服务"))
+        assertFalse(rendered.text.contains("undefined"))
+        assertEquals(CliCardState.EMPTY, rendered.card?.state)
+        assertTrue(rendered.card?.note.orEmpty().contains("名下没有网络服务"))
     }
 
     @Test
@@ -195,11 +224,13 @@ class SysuObservationTest {
             render(SysuCommandKind.Netpay, "netpay_services.json"),
         )
         for (item in rendered) {
-            assertFalse(item.observation.contains("TGC"))
-            assertFalse(item.observation.contains("tgc"))
-            assertFalse(item.observation.contains("undefined"))
-            assertFalse(item.observation.contains("卡片"))
-            assertFalse(item.observation.contains("session.json"))
+            for (text in listOf(item.text, item.summary)) {
+                assertFalse(text.contains("TGC"))
+                assertFalse(text.contains("tgc"))
+                assertFalse(text.contains("undefined"))
+                assertFalse(text.contains("卡片"))
+                assertFalse(text.contains("session.json"))
+            }
         }
     }
 

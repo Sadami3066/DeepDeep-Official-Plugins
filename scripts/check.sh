@@ -11,6 +11,7 @@ if [[ -z "${ANDROID_HOME:-}" && -f local.properties ]]; then
 fi
 
 ./scripts/gradlew-locked \
+  :cli-common:testDebugUnitTest \
   :feishu:verifyPlugin \
   :wecom:verifyPlugin \
   :sysu:verifyPlugin \
