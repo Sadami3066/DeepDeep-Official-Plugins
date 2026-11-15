@@ -1,12 +1,13 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.sysu",
-  "version": "2.2.2",
+  "version": "2.3.0",
   "publisher": {
     "name": "milous"
   },
   "apiLevel": 6,
   "minHostVersion": "1.0.8",
   "capabilities": [
+    "chat",
     "device",
     "linux",
     "notifications",
@@ -42,7 +43,9 @@
     "skills": [
       "deepdeep-sysu"
     ],
-    "uiSlots": [],
+    "uiSlots": [
+      "chat.message:sysu.card"
+    ],
     "pages": [
       "main"
     ]

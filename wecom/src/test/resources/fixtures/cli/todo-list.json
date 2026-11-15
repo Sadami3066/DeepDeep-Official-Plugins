@@ -1,0 +1,31 @@
+{
+  "items": [
+    {
+      "todo_id": "TODO_MOCK_001",
+      "title": "整理接口文档",
+      "description": "补充企业微信接口返回示例",
+      "status": "proceed",
+      "user_status": "accept",
+      "create_time": "2026-11-13 09:00:00",
+      "update_time": "2026-11-15 08:30:00",
+      "deadline": {
+        "type": "datetime",
+        "value": "2026-11-16 18:00:00"
+      },
+      "creator": {
+        "userid": "zhangsan",
+        "user_name": "张三"
+      },
+      "followers": [
+        {
+          "userid": "lisi",
+          "user_name": "李四",
+          "user_status": "accept"
+        }
+      ]
+    }
+  ],
+  "items_count": 1,
+  "has_more": false,
+  "next_cursor": ""
+}

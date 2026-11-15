@@ -1,0 +1,120 @@
+{
+  "ok": true,
+  "types": [
+    {
+      "id": "type-running",
+      "name": "南校园健身房跑步机",
+      "window": {
+        "start": "2026-11-15",
+        "end": "2026-11-17"
+      },
+      "fee": {
+        "Identity": "fee-1",
+        "Name": "5/10-学生",
+        "UserRole": "学生",
+        "Timeslot": {
+          "DayType": "全周",
+          "StartTime": "08:00",
+          "EndTime": "22:30"
+        },
+        "CreditFee": 5,
+        "CashFee": 10
+      },
+      "notice": "",
+      "venues": [
+        {
+          "id": "venue-1",
+          "name": "南校园健身房跑步机-机器1",
+          "shortName": "机器1",
+          "slots": [
+            {
+              "date": "2026-11-15",
+              "start": "10:30",
+              "end": "11:00",
+              "available": 1
+            },
+            {
+              "date": "2026-11-15",
+              "start": "11:30",
+              "end": "12:00",
+              "available": 1
+            }
+          ]
+        },
+        {
+          "id": "venue-2",
+          "name": "南校园健身房跑步机-机器2",
+          "shortName": "机器2",
+          "slots": [
+            {
+              "date": "2026-11-16",
+              "start": "14:30",
+              "end": "15:00",
+              "available": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "type-gym-east",
+      "name": "东校园健身房",
+      "window": {
+        "start": "2026-11-15",
+        "end": "2026-11-17"
+      },
+      "fee": {
+        "Identity": "fee-1",
+        "Name": "5/10-学生",
+        "UserRole": "学生",
+        "Timeslot": {
+          "DayType": "全周",
+          "StartTime": "08:00",
+          "EndTime": "22:30"
+        },
+        "CreditFee": 5,
+        "CashFee": 10
+      },
+      "notice": "",
+      "venues": [
+        {
+          "id": "venue-3",
+          "name": "东校园健身房-场地1",
+          "shortName": "东校园健身房-场地1",
+          "slots": [
+            {
+              "date": "2026-11-15",
+              "start": "08:00",
+              "end": "09:00",
+              "available": 59
+            },
+            {
+              "date": "2026-11-15",
+              "start": "08:00",
+              "end": "22:00",
+              "available": 60
+            },
+            {
+              "date": "2026-11-15",
+              "start": "09:00",
+              "end": "10:00",
+              "available": 58
+            },
+            {
+              "date": "2026-11-17",
+              "start": "08:00",
+              "end": "22:00",
+              "available": 60
+            },
+            {
+              "date": "2026-11-17",
+              "start": "18:00",
+              "end": "19:00",
+              "available": 60
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

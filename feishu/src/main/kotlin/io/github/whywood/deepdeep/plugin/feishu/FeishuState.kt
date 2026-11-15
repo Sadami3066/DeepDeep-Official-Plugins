@@ -25,6 +25,9 @@ internal data class FeishuSnapshot(
     val missingScopes: List<String> = emptyList(),
     val checkedAt: Long = 0,
     val message: String? = null,
+    val latestVersion: String? = null,
+    val latestSha256: String? = null,
+    val lastUpdateCheckAt: Long = 0,
 )
 
 internal object FeishuStateStore {
@@ -64,6 +67,9 @@ internal object FeishuStateStore {
             buildJsonArray { snapshot.missingScopes.forEach { add(JsonPrimitive(it)) } },
         )
         put("checkedAt", snapshot.checkedAt)
+        snapshot.latestVersion?.let { put("latestVersion", it) }
+        snapshot.latestSha256?.let { put("latestSha256", it) }
+        put("lastUpdateCheckAt", snapshot.lastUpdateCheckAt)
     }
 
     private fun decode(root: JsonObject): FeishuSnapshot = FeishuSnapshot(
@@ -75,6 +81,9 @@ internal object FeishuStateStore {
         scopeCount = root.integer("scopeCount") ?: 0,
         missingScopes = root.strings("missingScopes"),
         checkedAt = root.number("checkedAt") ?: 0,
+        latestVersion = root.string("latestVersion"),
+        latestSha256 = root.string("latestSha256"),
+        lastUpdateCheckAt = root.number("lastUpdateCheckAt") ?: 0,
     )
 
     private fun JsonObject.string(name: String): String? =

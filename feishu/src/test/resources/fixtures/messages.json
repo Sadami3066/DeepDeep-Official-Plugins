@@ -1,0 +1,70 @@
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "has_more": false,
+    "messages": [
+      {
+        "chat_id": "oc_5ce6d572455d361153b7cb51da133945",
+        "content": "明天上午10点评审，麻烦准备一下设计稿",
+        "create_time": "2025-11-15 09:40",
+        "deleted": false,
+        "message_app_link": "https://applink.feishu.cn/client/chat/open?openChatId=oc_5ce6d572455d361153b7cb51da133945\u0026position=725",
+        "message_id": "om_aa11bb22cc33dd44ee55ff6677889900",
+        "message_position": "725",
+        "msg_type": "text",
+        "sender": {
+          "id": "ou_7d8a6e6df7621556ce0d21922b676706",
+          "id_type": "open_id",
+          "name": "李雷",
+          "sender_type": "user"
+        },
+        "updated": false
+      },
+      {
+        "chat_id": "oc_5ce6d572455d361153b7cb51da133945",
+        "content": "评审安排\n评审时间改到周四下午三点",
+        "create_time": "2025-11-15 08:40",
+        "deleted": false,
+        "message_app_link": "https://applink.feishu.cn/client/chat/open?openChatId=oc_5ce6d572455d361153b7cb51da133945\u0026position=724",
+        "message_id": "om_bb22cc33dd44ee55ff6677889900aa11",
+        "message_position": "724",
+        "msg_type": "post",
+        "sender": {
+          "id": "ou_1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+          "id_type": "open_id",
+          "name": "韩梅梅",
+          "sender_type": "user"
+        },
+        "update_time": "2025-11-15 08:45",
+        "updated": true
+      },
+      {
+        "chat_id": "oc_5ce6d572455d361153b7cb51da133945",
+        "content": "\u003cfile key=\"file_v3_001\" name=\"Q3方案.pdf\"/\u003e",
+        "create_time": "2025-11-15 07:40",
+        "deleted": false,
+        "message_app_link": "https://applink.feishu.cn/client/chat/open?openChatId=oc_5ce6d572455d361153b7cb51da133945\u0026position=723",
+        "message_id": "om_cc33dd44ee55ff6677889900aa11bb22",
+        "message_position": "723",
+        "msg_type": "file",
+        "sender": {
+          "id": "ou_7d8a6e6df7621556ce0d21922b676706",
+          "id_type": "open_id",
+          "name": "李雷",
+          "sender_type": "user"
+        },
+        "updated": false
+      }
+    ],
+    "page_token": "",
+    "total": 3
+  },
+  "meta": {
+    "pagination": {
+      "complete": true,
+      "pages": 1,
+      "items": 3
+    }
+  }
+}

@@ -1,6 +1,6 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.hotel",
-  "version": "1.0.8",
+  "version": "1.0.10",
   "apiLevel": 6,
   "minHostVersion": "1.1.0",
   "capabilities": [

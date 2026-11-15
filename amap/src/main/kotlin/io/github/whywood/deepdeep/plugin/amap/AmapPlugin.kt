@@ -101,12 +101,11 @@ private val SKILL_MARKDOWN = """
 
     DeepDeep 高德地图插件提供八个只读工具，导航和打车在高德地图 App 内由用户完成。
 
-    - 找地点：`amap_place_search`（keywords + city），返回名称、地址、类型和经纬度。
-    - 找附近：`amap_around_search`（中心点经纬度 + keywords + radius）。
-    - 坐标转地址：`amap_regeo`（经纬度）。
-    - 路线：`amap_route_driving` / `amap_route_transit` / `amap_route_walking` / `amap_route_bicycling`；公交路线需要 city 和 cityd。
-    - 天气：`amap_weather`（城市名称或城市编码）。
-    - 结果已经显示为卡片，不要逐条复述列表或步骤；卡片底部可以在高德地图里打开。
+    - 找地点：`amap_place_search`（keywords + city），返回名称、地址、类型、坐标和距离。
+    - 找附近：`amap_around_search`（中心点经纬度 + keywords + radius），返回附近地点的名称、地址、类型、坐标和距离。
+    - 坐标转地址：`amap_regeo`（经纬度），返回完整地址和行政区划。
+    - 路线：`amap_route_driving` / `amap_route_transit` / `amap_route_walking` / `amap_route_bicycling`；结果包含起终点名称和坐标、全程距离、预计耗时，驾车、步行和骑行还包含分步指引，公交包含换乘线路和步行距离。公交路线需要 city 和 cityd。
+    - 天气：`amap_weather`（城市名称或城市编码），返回每天白天与夜间的天气、温度、风向和风力。
     - 不要编造坐标、路线、距离、时间或天气；所有数据以工具返回为准。
     - Key 由用户在插件页配置；工具提示 Key 无效或未配置时，引导用户到插件页填写并验证。
 """.trimIndent()

@@ -1,6 +1,6 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.rail",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "apiLevel": 6,
   "minHostVersion": "1.1.0",
   "capabilities": [
@@ -33,7 +33,8 @@
   },
   "provides": {
     "tools": [
-      "train_search"
+      "train_search",
+      "train_price"
     ],
     "skills": [],
     "uiSlots": [

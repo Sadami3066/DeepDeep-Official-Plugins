@@ -219,4 +219,223 @@ class TrainServiceTest {
         assertFalse(empty?.rows?.isNotEmpty() == true)
         assertNull(empty?.cUrl)
     }
+
+    @Test
+    fun dedupesSameTrainAlightingVariantsForCityRoute() {
+        val rows = listOf(
+            trainRow(code = "D7167", fromCode = "MXA", toCode = "XWQ", depart = "07:08", arrive = "09:00", duration = "01:52"),
+            trainRow(code = "D7167", fromCode = "MXA", toCode = "GGQ", depart = "07:08", arrive = "09:25", duration = "02:17"),
+            trainRow(code = "D7167", fromCode = "MXA", toCode = "ZCA", depart = "07:08", arrive = "08:47", duration = "01:39"),
+            trainRow(code = "G6351", fromCode = "MXA", toCode = "IZQ", depart = "06:58", arrive = "10:22", duration = "03:24"),
+        ).mapNotNull { row ->
+            parseTrainOption(row.split('|')) { code ->
+                when (code) {
+                    "MXA" -> "梅州西"
+                    "XWQ" -> "广州新塘"
+                    "GGQ" -> "广州东"
+                    "ZCA" -> "增城"
+                    "IZQ" -> "广州南"
+                    else -> code
+                }
+            }
+        }
+
+        val deduped = dedupeTrainOptions(rows, requestedToCode = "GGQ")
+
+        assertEquals(2, deduped.size)
+        val d7167 = deduped.single { it.code == "D7167" }
+        assertEquals("广州东", d7167.toStation)
+        assertEquals("09:25", d7167.arrive)
+        assertEquals("02:17", d7167.duration)
+    }
+
+    @Test
+    fun dedupeKeepsDifferentBoardingStations() {
+        val rows = listOf(
+            trainRow(code = "G756", fromCode = "XHH", toCode = "VNP", depart = "08:42", arrive = "14:53", duration = "06:11"),
+            trainRow(code = "G756", fromCode = "HGH", toCode = "VNP", depart = "08:57", arrive = "14:53", duration = "05:56"),
+        ).mapNotNull { row ->
+            parseTrainOption(row.split('|')) { code ->
+                when (code) {
+                    "XHH" -> "杭州南"
+                    "HGH" -> "杭州东"
+                    "VNP" -> "北京南"
+                    else -> code
+                }
+            }
+        }
+
+        val deduped = dedupeTrainOptions(rows, requestedToCode = "VNP")
+
+        assertEquals(2, deduped.size)
+        assertEquals(listOf("08:42", "08:57"), deduped.map { it.depart })
+    }
+
+    @Test
+    fun dedupeFallsBackToLatestArrivalWithoutExactStation() {
+        val rows = listOf(
+            trainRow(code = "D7167", fromCode = "MXA", toCode = "ZCA", depart = "07:08", arrive = "08:47", duration = "01:39"),
+            trainRow(code = "D7167", fromCode = "MXA", toCode = "XWQ", depart = "07:08", arrive = "09:00", duration = "01:52"),
+        ).mapNotNull { row ->
+            parseTrainOption(row.split('|')) { code ->
+                when (code) {
+                    "MXA" -> "梅州西"
+                    "ZCA" -> "增城"
+                    "XWQ" -> "广州新塘"
+                    else -> code
+                }
+            }
+        }
+
+        val deduped = dedupeTrainOptions(rows, requestedToCode = "GZQ")
+
+        assertEquals(1, deduped.size)
+        assertEquals("广州新塘", deduped.single().toStation)
+    }
+
+    @Test
+    fun marksOvernightArrivals() {
+        assertEquals("13:07", arrivalLabel("06:50", "13:07", "06:17"))
+        assertEquals("次日08:10", arrivalLabel("08:22", "08:10", "23:48"))
+        assertEquals("次日07:09", arrivalLabel("17:10", "07:09", "13:59"))
+        assertEquals("次日09:52", arrivalLabel("17:40", "09:52", "16:12"))
+    }
+
+    @Test
+    fun priceEndpointUrlCarriesFareQuery() {
+        assertEquals(
+            "https://kyfw.12306.cn/otn/leftTicket/queryTicketPrice" +
+                "?train_no=560000G81400" +
+                "&from_station_no=01" +
+                "&to_station_no=14" +
+                "&seat_types=9MOO" +
+                "&train_date=2026-11-16",
+            RailEndpoints.priceUrl("560000G81400", "01", "14", "9MOO", "2026-11-16"),
+        )
+    }
+
+    @Test
+    fun parsesFarePayloadAndDropsDuplicateBusinessKey() {
+        val prices = requireNotNull(
+            TicketPricePayload.parse(
+                """{"httpstatus":200,"data":{"WZ":"¥601.0","A9":"¥2023.0","9":"20230","M":"¥999.0","O":"¥601.0"},"status":true}""",
+            ),
+        )
+        val bySeat = prices.associate { it.name to it.priceText }
+
+        assertEquals("¥601.0", bySeat["second"])
+        assertEquals("¥999.0", bySeat["first"])
+        assertEquals("¥2023.0", bySeat["business"])
+        assertEquals("¥601.0", bySeat["standing"])
+        assertEquals(4, prices.size)
+    }
+
+    @Test
+    fun parsesNumericFareFallbacks() {
+        val prices = requireNotNull(TicketPricePayload.parse("""{"status":true,"data":{"O":601,"9":"20230"}}"""))
+        val bySeat = prices.associate { it.name to it.priceText }
+
+        assertEquals("¥601", bySeat["second"])
+        assertEquals("¥2023", bySeat["business"])
+    }
+
+    @Test
+    fun farePayloadWithoutDataIsUnavailable() {
+        assertNull(TicketPricePayload.parse("""{"status":false}"""))
+        assertNull(TicketPricePayload.parse("<html>blocked</html>"))
+        assertNull(TicketPricePayload.parse("""{"status":true,"data":{}}"""))
+    }
+
+    @Test
+    fun trainSummaryListsTenTrainsWithTimesSeatsAndDataTime() {
+        val trains = (1..12).map { index ->
+            TrainOption(
+                code = "G${100 + index}",
+                fromStation = "北京南",
+                toStation = "上海虹桥",
+                depart = "0${index % 10}:00",
+                arrive = "1${index % 10}:00",
+                duration = "0${index % 5}:00",
+                seats = listOf(SeatAvailability("second", "有")),
+                fromCode = "VNP",
+                toCode = "AOH",
+            )
+        }
+        val details = TrainSearchDetails(
+            from = "北京",
+            to = "上海",
+            fromCode = "BJP",
+            toCode = "SHH",
+            date = "2026-11-16",
+            trains = trains,
+            fetchedAt = 1_700_000_000_000L,
+            bookingUrl = "https://kyfw.12306.cn/otn/leftTicket/init",
+        )
+        val zh: RailTranslate = { text, _ -> text }
+
+        val text = trainSummary(details, zh)
+
+        assertTrue(text.contains("北京（BJP） → 上海（SHH）"))
+        assertTrue(text.contains("G101"))
+        assertTrue(text.contains("G110"))
+        assertTrue(!text.contains("G111"))
+        assertTrue(text.contains("共 12 趟"))
+        assertTrue(text.contains("二等座 有"))
+        assertTrue(text.contains("数据时间"))
+        assertTrue(text.contains("https://kyfw.12306.cn/otn/leftTicket/init"))
+        assertTrue(!text.contains("卡片"))
+    }
+
+    @Test
+    fun trainPriceTextListsSeatsAndSource() {
+        val details = TrainPriceDetails(
+            code = "G814",
+            from = "北京",
+            to = "上海",
+            fromCode = "BJP",
+            toCode = "SHH",
+            date = "2026-11-16",
+            prices = listOf(
+                SeatPrice("second", "¥601"),
+                SeatPrice("first", "¥999"),
+                SeatPrice("business", "¥2023"),
+            ),
+            fetchedAt = 1_700_000_000_000L,
+            bookingUrl = "https://kyfw.12306.cn/otn/leftTicket/init",
+        )
+        val zh: RailTranslate = { text, _ -> text }
+
+        val text = trainPriceText(details, zh)
+
+        assertTrue(text.contains("G814"))
+        assertTrue(text.contains("北京（BJP） → 上海（SHH）"))
+        assertTrue(text.contains("二等座 ¥601"))
+        assertTrue(text.contains("一等座 ¥999"))
+        assertTrue(text.contains("商务座 ¥2023"))
+        assertTrue(text.contains("票价来自 12306"))
+        assertTrue(text.contains("https://kyfw.12306.cn/otn/leftTicket/init"))
+    }
+
+    @Test
+    fun trainErrorMessageExplainsAmbiguousStationAndUnavailableFare() {
+        val zh: RailTranslate = { text, _ -> text }
+
+        val ambiguous = trainErrorMessage(
+            TrainQueryException(TrainErrorKind.AMBIGUOUS_STATION, "香港", listOf("香港西九龙", "香港红磡")),
+            zh,
+        )
+        assertTrue(ambiguous.contains("香港西九龙"))
+        assertTrue(ambiguous.contains("香港红磡"))
+        assertTrue(ambiguous.contains("请写明要去的车站"))
+
+        val unknown = trainErrorMessage(TrainQueryException(TrainErrorKind.UNKNOWN_STATION, "不存在"), zh)
+        assertTrue(unknown.contains("找不到车站"))
+
+        val noTrain = trainErrorMessage(TrainQueryException(TrainErrorKind.TRAIN_NOT_FOUND, "D9999"), zh)
+        assertTrue(noTrain.contains("D9999"))
+
+        val noFare = trainErrorMessage(TrainPriceUnavailableException(""), zh)
+        assertTrue(noFare.contains("票价暂不可查"))
+        assertTrue(!noFare.contains("¥"))
+    }
 }

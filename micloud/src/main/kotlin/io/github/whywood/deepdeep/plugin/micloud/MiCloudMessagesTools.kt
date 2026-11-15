@@ -2,12 +2,11 @@ package io.github.whywood.deepdeep.plugin.micloud
 
 import io.github.whywood.deepdeep.plugin.api.PluginTool
 import io.github.whywood.deepdeep.plugin.api.pluginTool
+import io.github.whywood.deepdeep.plugin.api.textResult
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 
-internal fun smsTool(client: MiCloudReadApi): PluginTool = pluginTool(
+internal fun smsTool(client: MiCloudReadApi, text: MiCloudText): PluginTool = pluginTool(
     name = "mi_cloud_sms",
     label = "mi_cloud_sms",
     description = "List recent SMS threads (optionally with call records) from Xiaomi Cloud. Read-only.",
@@ -33,10 +32,8 @@ internal fun smsTool(client: MiCloudReadApi): PluginTool = pluginTool(
             .mapNotNull { it as? JsonObject }
             .map(::compactObject)
         val watermark = payload?.get("watermark")
-        val extra = buildJsonObject {
-            if (watermark != null && watermark !is JsonNull) put("next", watermark)
-        }
-        itemsResult(entries, extra)
+        val cursor = if (watermark == null || watermark is JsonNull) "" else watermark.toString().trim('"')
+        textResult(smsObservation(entries.take(MAX_OBSERVATION_ITEMS), cursor, text))
     }
 }
 

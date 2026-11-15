@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.wecom"
         minSdk = 29
         targetSdk = 36
-        versionCode = 8
-        versionName = "2.2.3"
+        versionCode = 9
+        versionName = "2.3.0"
     }
 
     compileOptions {
@@ -46,6 +46,10 @@ dependencies {
     compileOnly("androidx.compose.ui:ui")
     compileOnly("androidx.compose.foundation:foundation")
     compileOnly("androidx.compose.material3:material3")
+    testImplementation("io.github.sadami3066.deepdeep:plugin-api:1.2.0")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
 }
 
 apply(from = rootProject.file("gradle/plugin-bundle.gradle.kts"))

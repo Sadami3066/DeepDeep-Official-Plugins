@@ -997,6 +997,71 @@ class MailRuntimeIntegrationTest {
     }
 
     @Test
+    fun mailSearchToolTextListsIdSubjectFromDateAndAttachmentFlag() = runBlocking {
+        val inbox = FakeFolder(
+            "INBOX",
+            messages = mutableListOf(fixtureMessage(1, "quarterly report", "hello", withAttachment = true)),
+        )
+        val rig = createRig(listOf(inbox))
+        try {
+            rig.connectAccount(expectedMessages = 1)
+            val summary = rig.runtime.state.value.messages.single()
+            val tools = mailTools(rig.host, rig.runtime).tools.associateBy { it.name }
+            val result = tools.getValue("mail_search").execute(
+                FakeToolCall(
+                    callId = "call-search",
+                    args = buildJsonObject { put("query", "hello") },
+                    sessionId = "session-1",
+                ),
+            )
+            assertFalse(result.text.orEmpty(), result.isError)
+            val text = result.text.orEmpty()
+            assertTrue(text, text.contains("id=${summary.id}"))
+            assertTrue(text, text.contains("quarterly report"))
+            assertTrue(text, text.contains(summary.fromName))
+            assertTrue(text, Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}").containsMatchIn(text))
+            assertTrue(text, text.contains("含附件"))
+            assertFalse(text, text.contains("卡片"))
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    @Test
+    fun mailReadToolTextListsIdSubjectFromDateAndAttachmentCount() = runBlocking {
+        val inbox = FakeFolder(
+            "INBOX",
+            messages = mutableListOf(fixtureMessage(1, "quarterly report", "hello body", withAttachment = true)),
+        )
+        val rig = createRig(listOf(inbox))
+        try {
+            val accountId = rig.connectAccount(expectedMessages = 1)
+            val summary = rig.runtime.state.value.messages.single()
+            val detail = rig.runtime.message(accountId, summary.id)
+            assertNotNull(detail)
+            val tools = mailTools(rig.host, rig.runtime).tools.associateBy { it.name }
+            val result = tools.getValue("mail_read").execute(
+                FakeToolCall(
+                    callId = "call-read",
+                    args = buildJsonObject { put("message_id", summary.id) },
+                    sessionId = "session-read-text",
+                ),
+            )
+            assertFalse(result.text.orEmpty(), result.isError)
+            val text = result.text.orEmpty()
+            assertTrue(text, text.contains("id：${summary.id}"))
+            assertTrue(text, text.contains("主题：quarterly report"))
+            assertTrue(text, text.contains("发件人：Sender"))
+            assertTrue(text, text.contains("时间："))
+            assertTrue(text, Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}").containsMatchIn(text))
+            assertTrue(text, text.contains("附件：1 个"))
+            assertFalse(text, text.contains("卡片"))
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    @Test
     fun loadInlineImageResolvesContentIdCaseInsensitively() = runBlocking {
         val image = byteArrayOf(1, 2, 3, 4, 5, 6, 7)
         val inbox = FakeFolder("INBOX", messages = mutableListOf(inlineFixture(1, "Image001@Example.COM", image)))

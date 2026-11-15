@@ -59,13 +59,16 @@ class SysuPlugin : DeepDeepPlugin {
         runCatching { host.settings().clear() }
     }
 
-    override fun contributions(host: PluginHost): Contributions = contributions(
-        hooks = object : PluginHooks {
-            override suspend fun notificationAction(event: NotificationActionEvent) {
-                if (event.actionId == ACTION_OPEN_PAGE) host.ui().openPage(PAGE_ID)
-            }
-        },
-    )
+    override fun contributions(host: PluginHost): Contributions {
+        val bridge = SysuBridge(host)
+        return contributions(
+            hooks = object : PluginHooks by bridge.hooks {
+                override suspend fun notificationAction(event: NotificationActionEvent) {
+                    if (event.actionId == ACTION_OPEN_PAGE) host.ui().openPage(PAGE_ID)
+                }
+            },
+        )
+    }
 
     override fun skills(host: PluginHost): List<PluginSkill> =
         listOf(pluginSkill(SysuCli.SKILL_ID, SysuContent.skillMarkdown()))
@@ -83,7 +86,7 @@ class SysuPlugin : DeepDeepPlugin {
     }
 
     override fun ui(host: PluginHost): PluginUiContributions = object : PluginUiContributions {
-        override val bindings: List<SlotBinding> = emptyList()
+        override val bindings: List<SlotBinding> = listOf(sysuCardBinding(host))
 
         override val pages: List<PluginPage> = listOf(
             pluginPage(

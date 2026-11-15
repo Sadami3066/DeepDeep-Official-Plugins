@@ -1,0 +1,18 @@
+{
+  "users": [
+    {
+      "userid": "zhangsan",
+      "name": "张三",
+      "alias": "Zhang San",
+      "departments": [
+        "产品部"
+      ],
+      "position": "产品经理",
+      "email": "zhangsan@example.com",
+      "matched_keywords": [
+        "张三"
+      ]
+    }
+  ],
+  "users_count": 1
+}

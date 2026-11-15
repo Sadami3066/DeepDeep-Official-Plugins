@@ -8,3 +8,8 @@ internal fun PluginHost.t(zh: String, en: String): String =
 
 internal fun PluginHost.tf(zh: String, en: String, vararg args: Any): String =
     text(localizedText(default = zh, zh = zh, en = en), *args)
+
+internal fun PluginHost.featureName(feature: MiCloudFeature): String =
+    t(featureNameZh(feature), featureNameEn(feature))
+
+internal fun PluginHost.miCloudText(): MiCloudText = { zh, en -> t(zh, en) }

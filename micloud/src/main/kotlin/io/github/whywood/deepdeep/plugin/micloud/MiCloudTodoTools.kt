@@ -2,8 +2,8 @@ package io.github.whywood.deepdeep.plugin.micloud
 
 import io.github.whywood.deepdeep.plugin.api.PluginTool
 import io.github.whywood.deepdeep.plugin.api.pluginTool
+import io.github.whywood.deepdeep.plugin.api.textResult
 import java.io.IOException
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -19,6 +19,7 @@ internal fun todoTool(
     client: MiCloudReadApi,
     settings: MiCloudSettings,
     writer: MiCloudWriteApi,
+    text: MiCloudText,
 ): PluginTool = pluginTool(
     name = "mi_cloud_todo",
     label = "mi_cloud_todo",
@@ -35,26 +36,49 @@ internal fun todoTool(
                     todoRecordsPath(now(), limit, args.argString("cursor")),
                 )
                 val payload = response.payloadObject()
-                val records = payload.arrayOrNull("records").orEmpty()
+                val items = payload.arrayOrNull("records").orEmpty()
                     .mapNotNull { it as? JsonObject }
-                    .map(::todoEntry)
-                val syncToken = payload?.get("syncToken")
-                val extra = buildJsonObject {
-                    payload.boolOrNull("hasMore")?.let { put("hasMore", it) }
-                    if (syncToken != null && syncToken !is JsonNull) put("next", syncToken)
-                }
-                itemsResult(records, extra)
+                    .map(::todoItem)
+                val cursor = payload.stringOrNull("syncToken").orEmpty()
+                val hasMore = payload.boolOrNull("hasMore") ?: false
+                val card = MiCloudTodoCardData(
+                    action = TODO_ACTION_LIST,
+                    total = items.size,
+                    doneCount = items.count { it.done },
+                    cursor = cursor,
+                    hasMore = hasMore,
+                    rows = items.take(MAX_CARD_ROWS),
+                )
+                textResult(
+                    todoListObservation(items.take(MAX_OBSERVATION_ITEMS), cursor, hasMore, text),
+                    details = card.toJson(),
+                )
             }
 
             "create" -> {
                 requireWrite(settings, MiCloudFeature.TODOS, TOOL_TODO_WRITE_OFF)
                 val content = args.requiredArgString("content")
+                val remindAt = args.argLong("remindAt")
+                val timestamp = now()
                 val record = buildTodoRecord(
                     content = content,
-                    now = now(),
-                    remindAt = args.argLong("remindAt"),
+                    now = timestamp,
+                    remindAt = remindAt,
                 )
-                writeResult(writer.post(todoCreatePath(), todoCreateForm(record)))
+                val response = parseResponseObject(writer.post(todoCreatePath(), todoCreateForm(record)))
+                val todoId = responseId(response)
+                val card = MiCloudTodoCardData(
+                    action = TODO_ACTION_CREATE,
+                    total = 1,
+                    todoId = todoId,
+                    content = content,
+                    remindTime = remindAt ?: 0L,
+                    modifyTime = timestamp,
+                )
+                textResult(
+                    todoWriteObservation(TODO_ACTION_CREATE, todoId, content, false, remindAt ?: 0L, timestamp, text),
+                    details = card.toJson(),
+                )
             }
 
             "update" -> {
@@ -67,19 +91,65 @@ internal fun todoTool(
                     throw IllegalArgumentException("update requires content, done or remindAt")
                 }
                 val existing = todoRecord(client, id)
+                val existingItem = todoItem(existing)
                 val eTag = etagOf(existing)
                     ?: throw IllegalArgumentException("To-do has no eTag; cannot update")
-                val updated = updatedTodoRecord(existing, content, done, remindAt, now())
-                writeResult(writer.post(todoUpdatePath(id), todoUpdateForm(eTag, updated)))
+                val timestamp = now()
+                val updated = updatedTodoRecord(existing, content, done, remindAt, timestamp)
+                parseResponseObject(writer.post(todoUpdatePath(id), todoUpdateForm(eTag, updated)))
+                val updatedContent = content ?: existingItem.content
+                val updatedDone = done ?: existingItem.done
+                val updatedRemind = remindAt ?: existingItem.remindTime
+                val card = MiCloudTodoCardData(
+                    action = TODO_ACTION_UPDATE,
+                    total = 1,
+                    todoId = id,
+                    content = updatedContent,
+                    done = updatedDone,
+                    remindTime = updatedRemind,
+                    modifyTime = timestamp,
+                )
+                textResult(
+                    todoWriteObservation(
+                        TODO_ACTION_UPDATE,
+                        id,
+                        updatedContent,
+                        updatedDone,
+                        updatedRemind,
+                        timestamp,
+                        text,
+                    ),
+                    details = card.toJson(),
+                )
             }
 
             "delete" -> {
                 requireWrite(settings, MiCloudFeature.TODOS, TOOL_TODO_WRITE_OFF)
                 val id = args.requiredArgString("id")
                 val existing = todoRecord(client, id)
+                val existingItem = todoItem(existing)
                 val eTag = etagOf(existing)
                     ?: throw IllegalArgumentException("To-do has no eTag; cannot delete")
-                writeResult(writer.post(todoDeletePath(id), todoDeleteForm(eTag)))
+                parseResponseObject(writer.post(todoDeletePath(id), todoDeleteForm(eTag)))
+                val card = MiCloudTodoCardData(
+                    action = TODO_ACTION_DELETE,
+                    total = 1,
+                    todoId = id,
+                    content = existingItem.content,
+                    done = existingItem.done,
+                )
+                textResult(
+                    todoWriteObservation(
+                        TODO_ACTION_DELETE,
+                        id,
+                        existingItem.content,
+                        existingItem.done,
+                        0L,
+                        0L,
+                        text,
+                    ),
+                    details = card.toJson(),
+                )
             }
 
             else -> throw IllegalArgumentException("action must be list, create, update or delete")
@@ -90,20 +160,6 @@ internal fun todoTool(
 private suspend fun todoRecord(client: MiCloudReadApi, id: String): JsonObject {
     val payload = client.getJson(todoRecordPath(id)).payloadObject()
     return payload.objectOrNull("record") ?: payload ?: throw IOException("To-do data format is invalid")
-}
-
-private fun todoEntry(item: JsonObject): JsonObject {
-    val content = item.objectOrNull("contentJson")
-    val id = item.stringOrNull("id") ?: content.stringOrNull("id") ?: ""
-    val done = content.boolOrNull("is_finish") ?: ((content.intOrNull("isFinish") ?: 0) != 0)
-    return buildJsonObject {
-        put("id", id)
-        put("content", content.stringOrNull("content") ?: content.stringOrNull("plainText") ?: "")
-        put("done", done)
-        content.longOrNull("remindTime")?.let { put("remindTime", it) }
-        content.longOrNull("lastModifiedTime")?.let { put("modifyTime", it) }
-        item.stringOrNull("eTag")?.let { put("eTag", it) }
-    }
 }
 
 private fun etagOf(record: JsonObject): String? =

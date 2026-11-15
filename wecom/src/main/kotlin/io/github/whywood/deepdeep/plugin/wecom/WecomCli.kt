@@ -18,10 +18,21 @@ object WecomCli {
     const val ARCHIVE_NAME = "wecom-cli-linux-arm64-$VERSION.tgz"
     const val ARCHIVE_SHA256 = "833ab8efe327d7194a0107696104c63e56af9221db624dc181bf4f6bf8d91eba"
 
-    val DOWNLOAD_URLS: List<String> = listOf(
-        "https://registry.npmjs.org/@wecom/cli-linux-arm64/-/cli-linux-arm64-$VERSION.tgz",
-        "https://registry.npmmirror.com/@wecom/cli-linux-arm64/-/cli-linux-arm64-$VERSION.tgz",
+    private const val ARCHIVE_PREFIX = "wecom-cli-linux-arm64-"
+    private const val REGISTRY_BASE = "https://registry.npmjs.org/@wecom/cli-linux-arm64/-"
+    private const val MIRROR_BASE = "https://registry.npmmirror.com/@wecom/cli-linux-arm64/-"
+
+    val DOWNLOAD_URLS: List<String> = downloadUrls(VERSION)
+
+    fun archiveName(version: String): String = "$ARCHIVE_PREFIX$version.tgz"
+
+    fun downloadUrls(version: String): List<String> = listOf(
+        "$REGISTRY_BASE/$ARCHIVE_PREFIX$version.tgz",
+        "$MIRROR_BASE/$ARCHIVE_PREFIX$version.tgz",
     )
+
+    fun releaseDownloadUrls(tarballUrl: String, version: String): List<String> =
+        listOf(tarballUrl, "$MIRROR_BASE/$ARCHIVE_PREFIX$version.tgz").distinct()
 
     private const val ENV = "HOME=/root"
 
@@ -49,11 +60,11 @@ object WecomCli {
         append("rm -rf ").append(CONFIG_DIR).append("; true")
     }
 
-    fun extractCommand(): String = """
+    fun extractCommand(archiveName: String): String = """
         set -e
         rm -rf extract
         mkdir -p extract
-        tar -xzf $ARCHIVE_NAME -C extract
+        tar -xzf '$archiveName' -C extract
         chmod 755 extract/$PACKAGE_BINARY
         ./extract/$PACKAGE_BINARY --version
     """.trimIndent()
@@ -61,13 +72,15 @@ object WecomCli {
     fun installCommand(): String = """
         set -e
         mkdir -p /usr/local/bin
+        rm -f $INSTALL_BACKUP_PATH
         if [ -f $INSTALL_PATH ]; then cp -f $INSTALL_PATH $INSTALL_BACKUP_PATH; fi
         cp -f extract/$PACKAGE_BINARY $INSTALL_TEMP_PATH
         chmod 755 $INSTALL_TEMP_PATH
         mv -f $INSTALL_TEMP_PATH $INSTALL_PATH
         $INSTALL_PATH --version
-        rm -f $INSTALL_BACKUP_PATH
     """.trimIndent()
+
+    fun commitInstallCommand(): String = "rm -f $INSTALL_BACKUP_PATH; true"
 
     fun restoreCommand(hadBinary: Boolean): String = buildString {
         appendLine("if [ -f $INSTALL_BACKUP_PATH ]; then")

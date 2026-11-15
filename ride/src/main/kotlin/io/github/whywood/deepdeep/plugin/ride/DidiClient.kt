@@ -12,7 +12,7 @@ import kotlinx.serialization.json.put
 import java.net.URLEncoder
 import java.util.concurrent.atomic.AtomicInteger
 
-internal class DidiException(message: String) : Exception(message)
+internal class DidiException(message: String, val code: Int? = null) : Exception(message)
 
 internal enum class RideEnvironment(val wire: String) {
     PRODUCTION("production"),
@@ -78,10 +78,12 @@ internal class DidiClient(private val host: PluginHost) {
         val error = envelope["error"] as? JsonObject
         if (error != null) {
             val message = (error["message"] as? JsonPrimitive)?.contentOrNull
+            val code = (error["code"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
             throw DidiException(
                 summarizeDidiError(message, secret = key).ifBlank {
                     host.t("滴滴调用失败", "Didi call failed")
                 },
+                code ?: parseDidiErrorCode(message),
             )
         }
         val result = envelope["result"] as? JsonObject
@@ -92,6 +94,7 @@ internal class DidiClient(private val host: PluginHost) {
                 summarizeDidiError(text, secret = key).ifBlank {
                     host.t("滴滴调用失败", "Didi call failed")
                 },
+                parseDidiErrorCode(text),
             )
         }
         result["structuredContent"]?.let { return it }

@@ -25,6 +25,10 @@ import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeLimits
 import io.github.whywood.deepdeep.plugin.mail.ui.displayPreview
 import io.github.whywood.deepdeep.plugin.mail.ui.readableError
 import java.io.File
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
@@ -188,15 +192,56 @@ private suspend fun search(
         accounts = repository.accounts().associateBy { it.id },
     )
     if (items.isEmpty()) return textResult("没有找到匹配的邮件。")
-    return textResult(
-        buildString {
-            append("找到 ${items.size} 封邮件：\n")
-            items.forEach { message ->
-                val unread = if (message.unread) "未读" else "已读"
-                append("- [${message.id}] ${message.subject.ifBlank { "（无主题）" }} · ${message.fromName.ifBlank { message.fromAddress }} · $unread\n")
-            }
-        },
-    )
+    return textResult(mailSearchResultText(items))
+}
+
+internal const val MAIL_TOOL_TIME_PATTERN = "yyyy-MM-dd HH:mm"
+
+internal fun mailToolDate(millis: Long, zone: ZoneId = ZoneId.systemDefault()): String {
+    if (millis <= 0L) return ""
+    return DateTimeFormatter.ofPattern(MAIL_TOOL_TIME_PATTERN, Locale.ROOT)
+        .withZone(zone)
+        .format(Instant.ofEpochMilli(millis))
+}
+
+internal fun mailSenderText(name: String, address: String): String = when {
+    name.isBlank() -> address.ifBlank { "未知发件人" }
+    address.isBlank() || name.equals(address, ignoreCase = true) -> name
+    else -> "$name <$address>"
+}
+
+internal fun mailSubjectText(subject: String): String = subject.trim().ifEmpty { "（无主题）" }
+
+internal fun mailSearchResultText(items: List<MailMessageSummary>): String = buildString {
+    append("找到 ${items.size} 封邮件：\n")
+    items.forEach { message ->
+        append("- id=${message.id}：主题「${mailSubjectText(message.subject)}」")
+        append("，发件人 ${mailSenderText(message.fromName, message.fromAddress)}")
+        val date = mailToolDate(message.dateMillis)
+        if (date.isNotBlank()) append("，时间 $date")
+        append("，${if (message.unread) "未读" else "已读"}")
+        if (message.hasAttachments) append("，含附件")
+        append("\n")
+    }
+}
+
+internal fun mailReadResultText(detail: MailMessageDetail): String {
+    val summary = detail.summary
+    return buildString {
+        append("id：${summary.id}\n")
+        append("主题：${mailSubjectText(summary.subject)}\n")
+        append("发件人：${mailSenderText(summary.fromName, summary.fromAddress)}\n")
+        append("收件人：${summary.to.joinToString(", ")}\n")
+        if (detail.cc.isNotEmpty()) append("抄送：${detail.cc.joinToString(", ")}\n")
+        val date = mailToolDate(summary.dateMillis)
+        if (date.isNotBlank()) append("时间：$date\n")
+        append("附件：${detail.attachments.size} 个\n")
+        detail.attachments.forEach { attachment ->
+            append("- ${attachment.name}（${attachment.mimeType}，${attachment.sizeBytes} 字节，id=${attachment.id}）\n")
+        }
+        append("\n")
+        append(detail.textBody.ifBlank { "（正文为空）" })
+    }
 }
 
 private suspend fun postSearchCard(
@@ -253,26 +298,7 @@ private suspend fun read(
         ?: return textResult("读取邮件失败，可能已被删除或移动。", isError = true)
     postReadCard(host, call, detail)
     shareAttachmentsToChat(host, repository, call, detail)
-    val summary = detail.summary
-    val attachments = if (detail.attachments.isEmpty()) {
-        ""
-    } else {
-        detail.attachments.joinToString("\n") { attachment ->
-            "附件：${attachment.name}（${attachment.mimeType}，${attachment.sizeBytes} 字节，id=${attachment.id}）"
-        }
-    }
-    return textResult(
-        buildString {
-            append("主题：${summary.subject.ifBlank { "（无主题）" }}\n")
-            append("发件人：${summary.fromName.ifBlank { summary.fromAddress }}\n")
-            append("收件人：${summary.to.joinToString(", ")}\n")
-            if (detail.cc.isNotEmpty()) append("抄送：${detail.cc.joinToString(", ")}\n")
-            append("时间：${summary.dateMillis}\n")
-            if (attachments.isNotEmpty()) append(attachments).append("\n")
-            append("\n")
-            append(detail.textBody.ifBlank { "（正文为空）" })
-        },
-    )
+    return textResult(mailReadResultText(detail))
 }
 
 private suspend fun shareAttachmentsToChat(

@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "identity": "user",
+  "data": [
+    {
+      "end_time": {
+        "date": "2026-11-15"
+      },
+      "event_id": "e2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e",
+      "free_busy_status": "free",
+      "self_rsvp_status": "accept",
+      "start_time": {
+        "date": "2026-11-16"
+      },
+      "summary": "团队建设"
+    },
+    {
+      "description": "讨论 1.1.2 版本节奏",
+      "end_time": {
+        "datetime": "2025-11-15T10:40:00+08:00",
+        "timezone": "Asia/Shanghai"
+      },
+      "event_id": "e1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+      "free_busy_status": "busy",
+      "location": {
+        "name": "3F 会议室 A"
+      },
+      "self_rsvp_status": "accept",
+      "start_time": {
+        "datetime": "2025-11-15T09:40:00+08:00",
+        "timezone": "Asia/Shanghai"
+      },
+      "summary": "产品周会"
+    }
+  ],
+  "meta": {
+    "count": 2
+  }
+}

@@ -23,12 +23,37 @@ internal data class TrainOption(
     val arrive: String,
     val duration: String,
     val seats: List<SeatAvailability>,
+    val fromCode: String = "",
+    val toCode: String = "",
+    val fromStationNo: String = "",
+    val toStationNo: String = "",
+    val trainNo: String = "",
+    val seatTypes: String = "",
 )
 
 @Serializable
 internal data class SeatAvailability(
     val name: String,
     val count: String,
+)
+
+@Serializable
+internal data class SeatPrice(
+    val name: String,
+    val priceText: String,
+)
+
+@Serializable
+internal data class TrainPriceDetails(
+    val code: String,
+    val from: String,
+    val to: String,
+    val fromCode: String = "",
+    val toCode: String = "",
+    val date: String,
+    val prices: List<SeatPrice>,
+    val fetchedAt: Long,
+    val bookingUrl: String = "",
 )
 
 @Serializable

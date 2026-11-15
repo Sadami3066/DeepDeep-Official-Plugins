@@ -48,6 +48,19 @@ internal fun formatCoordinate(value: Double): String {
     return text.trimEnd('0').trimEnd('.')
 }
 
+internal fun readablePlaceType(value: String?): String? {
+    val raw = value?.trim().orEmpty()
+    if (raw.isEmpty()) return null
+    if (raw.all { it.isDigit() }) return null
+    return raw
+}
+
+internal fun parsePolyline(value: String?): List<LatLng> {
+    val raw = value?.trim().orEmpty()
+    if (raw.isEmpty()) return emptyList()
+    return raw.split(';').mapNotNull { LatLng.parse(it) }
+}
+
 internal fun shortDateLabel(value: String?): String? {
     val raw = value?.trim().orEmpty()
     if (raw.length >= 10 && raw[4] == '-' && raw[7] == '-') {
@@ -163,6 +176,7 @@ internal data class AmapRouteStep(
     val instruction: String,
     val road: String?,
     val distanceMeters: Int?,
+    val polyline: List<LatLng> = emptyList(),
 )
 
 internal data class AmapTransitLine(
@@ -222,7 +236,7 @@ private fun JsonObject.toPlace(): AmapPlace? {
     return AmapPlace(
         name = name,
         address = textValue("address", "formatted_address", "formattedAddress"),
-        typeName = textValue("type", "typecode", "level"),
+        typeName = readablePlaceType(textValue("type", "typecode", "level")),
         distanceMeters = intValue("distance", "distanceMeters", "distance_meters"),
         location = LatLng.parse(textValue("location")),
         cityName = textValue("cityname", "city"),
@@ -311,7 +325,12 @@ internal fun parseRoute(payload: JsonElement?, mode: AmapRouteMode): AmapRoute? 
     val steps = firstPath?.arrayValue("steps")?.mapNotNull { step ->
         val obj = step.asObjectOrNull() ?: return@mapNotNull null
         val instruction = obj.textValue("instruction", "road") ?: return@mapNotNull null
-        AmapRouteStep(instruction, obj.textValue("road"), obj.intValue("distance", "distanceMeters"))
+        AmapRouteStep(
+            instruction = instruction,
+            road = obj.textValue("road"),
+            distanceMeters = obj.intValue("distance", "distanceMeters"),
+            polyline = parsePolyline(obj.textValue("polyline")),
+        )
     }.orEmpty()
     if (distance == null && duration == null && steps.isEmpty()) return null
     return AmapRoute(mode, origin, destination, distance, duration, steps, emptyList())
@@ -483,7 +502,7 @@ internal fun decodePlacesDetails(details: JsonObject?): AmapPlacesDetails {
         AmapPlaceItem(
             name = name,
             address = item.textValue("address"),
-            typeName = item.textValue("typeName"),
+            typeName = readablePlaceType(item.textValue("typeName")),
             distanceMeters = item.intValue("distanceMeters"),
             location = latLngFrom(item),
         )
@@ -548,7 +567,7 @@ internal fun decodeWeatherDetails(details: JsonObject?): AmapWeatherDetails? {
     return AmapWeatherDetails(root.textValue("city"), days)
 }
 
-private fun latLngFrom(obj: JsonObject): LatLng? {
+internal fun latLngFrom(obj: JsonObject): LatLng? {
     val longitude = obj.numberValue("longitude") ?: return null
     val latitude = obj.numberValue("latitude") ?: return null
     return LatLng(longitude, latitude)

@@ -107,7 +107,7 @@ class RidePayloadsTest {
         assertEquals("39.9", location.latitude)
         assertEquals("116.4", location.longitude)
         assertEquals("国贸桥", location.summary)
-        assertEquals("39.9, 116.4", location.coordinates)
+        assertEquals("116.4, 39.9", location.coordinates)
         assertFalse(location.isEmpty)
 
         assertTrue(parseRideDriverLocation(JsonObject(emptyMap())).isEmpty)
@@ -142,7 +142,7 @@ class RidePayloadsTest {
         assertEquals(2, places.size)
         assertEquals("北京南站", places[0].displayName)
         assertEquals("丰台区永外大街车站路12号", places[0].address)
-        assertEquals("39.865, 116.378", places[0].coordinates)
+        assertEquals("116.378, 39.865", places[0].coordinates)
         assertEquals("北京站", places[1].displayName)
         assertNull(places[1].coordinates)
     }
@@ -168,5 +168,196 @@ class RidePayloadsTest {
         assertFalse(parseDidiToolsList("""{"error":{"message":"invalid key"}}"""))
         assertFalse(parseDidiToolsList("""{"result":{"tools":[]}}"""))
         assertFalse(parseDidiToolsList("not json"))
+    }
+
+    @Test
+    fun parsesEstimateRouteFactsAndCategories() {
+        val root = objectOf(
+            """
+            {
+              "traceId": "trace-1",
+              "distance": "5.2 公里",
+              "duration": "18 分钟",
+              "eta": "3 分钟",
+              "items": [
+                {
+                  "productName": "特惠快车",
+                  "productCategory": "201",
+                  "priceText": "12",
+                  "priceDiscounted": "9",
+                  "eta": "4 分钟",
+                  "distance": "5.2 公里",
+                  "duration": "20 分钟"
+                },
+                {
+                  "productName": "快车",
+                  "productCategory": "1",
+                  "priceText": "14"
+                }
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        val estimate = parseRideEstimate(root, "望京SOHO", "国贸")
+
+        assertEquals("trace-1", estimate.traceId)
+        assertEquals("5.2 公里", estimate.distance)
+        assertEquals("18 分钟", estimate.duration)
+        assertEquals("3 分钟", estimate.eta)
+        assertEquals("201", estimate.items[0].productCategory)
+        assertEquals("4 分钟", estimate.items[0].eta)
+        assertEquals("5.2 公里", estimate.items[0].distance)
+        assertEquals("20 分钟", estimate.items[0].duration)
+        assertEquals("1", estimate.items[1].productCategory)
+        assertEquals("望京SOHO → 国贸", estimate.route)
+    }
+
+    @Test
+    fun estimateTextCarriesEveryFactAndNeverSaysCard() {
+        val estimate = parseRideEstimate(
+            objectOf(
+                """
+                {"traceId":"trace-1","distance":"5.2 公里","duration":"18 分钟","eta":"3 分钟",
+                 "items":[{"productName":"特惠快车","productCategory":"201","priceText":"12","priceDiscounted":"9","eta":"4 分钟"}]}
+                """.trimIndent(),
+            ),
+            "望京SOHO",
+            "国贸",
+        )
+        val zh: RideTranslate = { text, _ -> text }
+
+        val text = rideEstimateText(estimate, zh, 6)
+
+        assertTrue(text.contains("望京SOHO → 国贸"))
+        assertTrue(text.contains("全程 5.2 公里"))
+        assertTrue(text.contains("约 18 分钟"))
+        assertTrue(text.contains("接驾约 3 分钟"))
+        assertTrue(text.contains("traceId：trace-1"))
+        assertTrue(text.contains("特惠快车"))
+        assertTrue(text.contains("参考 12"))
+        assertTrue(text.contains("券后 9"))
+        assertTrue(text.contains("车型品类 201"))
+        assertTrue(text.contains("接驾约 4 分钟"))
+        assertTrue(!text.contains("卡片"))
+    }
+
+    @Test
+    fun placeTextCarriesAddressAndCoordinates() {
+        val places = parseRidePlaces(
+            objectOf(
+                """{"items":[{"display_name":"北京南站","address_all":"丰台区永外大街车站路12号","location":{"lng":"116.378","lat":"39.865"}}]}""",
+            ),
+        )
+        val zh: RideTranslate = { text, _ -> text }
+
+        val text = ridePlacesText(places, zh, 5)
+
+        assertTrue(text.contains("北京南站"))
+        assertTrue(text.contains("地址：丰台区永外大街车站路12号"))
+        assertTrue(text.contains("经度 116.378，纬度 39.865"))
+    }
+
+    @Test
+    fun parsesOrderStatusAndDriverMapFields() {
+        val order = parseRideOrder(
+            objectOf(
+                """
+                {
+                  "statusCode": 1,
+                  "statusText": "司机已接单",
+                  "orderId": "order-1",
+                  "from": {"name": "公司"},
+                  "to": {"name": "机场"},
+                  "phoneNumberSuffix": "1234",
+                  "driver": {"name": "王师傅", "phone": "13800000000", "carModel": "黑·奥迪·A6", "carPlate": "粤A12345"},
+                  "map": {"distanceKm": "1.2", "eta": "3", "phase": "to_pickup"}
+                }
+                """.trimIndent(),
+            ),
+        )
+
+        assertEquals("1", order.statusCode)
+        assertEquals("司机已接单", order.statusText)
+        assertEquals("王师傅", order.driver)
+        assertEquals("黑·奥迪·A6", order.carModel)
+        assertEquals("13800000000", order.phone)
+        assertEquals("粤A12345", order.plate)
+        assertEquals("1.2", order.distanceKm)
+        assertEquals("3", order.eta)
+        assertEquals("to_pickup", order.phase)
+        assertEquals("公司 → 机场", order.route)
+        assertFalse(order.isEmpty)
+    }
+
+    @Test
+    fun orderStatusLabelMapsCodesAndKeepsRawCode() {
+        val zh: RideTranslate = { text, _ -> text }
+
+        assertEquals("司机已接单（1）", rideStatusLabel("1", "司机已接单", zh))
+        assertEquals("匹配中（0）", rideStatusLabel("0", null, zh))
+        assertEquals("行程中（4）", rideStatusLabel("4", null, zh))
+        assertEquals("未知状态（9）", rideStatusLabel("9", null, zh))
+        assertEquals("自定义状态", rideStatusLabel(null, "自定义状态", zh))
+        assertNull(rideStatusLabel(null, null, zh))
+    }
+
+    @Test
+    fun orderTextListsStatusDriverAndMap() {
+        val order = parseRideOrder(
+            objectOf(
+                """
+                {"statusCode":1,"statusText":"司机已接单","orderId":"order-1","from":{"name":"公司"},"to":{"name":"机场"},
+                 "phoneNumberSuffix":"1234","driver":{"name":"王师傅","phone":"13800000000","carModel":"黑·奥迪·A6","carPlate":"粤A12345"},
+                 "map":{"distanceKm":"1.2","eta":"3","phase":"to_pickup"}}
+                """.trimIndent(),
+            ),
+        )
+        val zh: RideTranslate = { text, _ -> text }
+
+        val text = rideOrderText(order, zh)
+
+        assertTrue(text.contains("状态：司机已接单（1）"))
+        assertTrue(text.contains("司机 王师傅"))
+        assertTrue(text.contains("车型 黑·奥迪·A6"))
+        assertTrue(text.contains("车牌 粤A12345"))
+        assertTrue(text.contains("距上车点 1.2"))
+        assertTrue(text.contains("预计到达 3"))
+        assertTrue(text.contains("前往上车点"))
+        assertTrue(text.contains("订单号 order-1"))
+        assertTrue(text.contains("账号尾号 1234"))
+        assertTrue(text.contains("行程 公司 → 机场"))
+    }
+
+    @Test
+    fun rateLimitErrorsAreActionableInsteadOfNoOrder() {
+        val zh: RideTranslate = { text, _ -> text }
+        val quota = DidiException("命中限流", RATE_LIMIT_CODE)
+
+        val text = rideErrorText(quota, null, zh, "查询失败", "Lookup failed")
+
+        assertTrue(text.contains("滴滴查询次数已达上限"))
+        assertTrue(text.contains("1 分钟后重试"))
+        assertTrue(text.contains("不是没有订单"))
+        assertEquals(RATE_LIMIT_CODE, parseDidiErrorCode("""{"code":-32001,"message":"命中限流"}"""))
+        assertTrue(isDidiRateLimited(null, "命中限流"))
+        assertTrue(isDidiRateLimited(null, "Too Many Requests"))
+    }
+
+    @Test
+    fun nonQuotaErrorsKeepReadableMessage() {
+        val zh: RideTranslate = { text, _ -> text }
+
+        val text = rideErrorText(
+            DidiException("订单不存在", -32011),
+            null,
+            zh,
+            "查询失败",
+            "Lookup failed",
+        )
+
+        assertTrue(text.startsWith("查询失败："))
+        assertTrue(text.contains("订单不存在"))
+        assertTrue(!text.contains("限流"))
     }
 }

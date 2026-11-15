@@ -130,34 +130,51 @@ internal fun RideEstimateCard(host: PluginHost, state: ToolResultState) {
     }
     val colors = deepDeepColors()
     val route = estimate.route.ifBlank { host.t("本次行程", "This trip") }
+    val routeFacts = listOfNotNull(
+        estimate.distance?.let { host.t("全程 $it", "distance $it") },
+        estimate.duration?.let { host.t("约 $it", "about $it") },
+        estimate.eta?.let { host.t("接驾约 $it", "pickup in $it") },
+    ).joinToString(" · ")
     RideCardShell(
         title = route,
-        subtitle = host.t("车型与参考价", "Ride options and estimated fares"),
+        subtitle = routeFacts.ifBlank {
+            host.t("车型与参考价", "Ride options and estimated fares")
+        },
         footer = host.t("参考价，实际以下单页为准", "Estimated fare; the booking page is final."),
     ) {
         DdHairline()
         estimate.items.take(MAX_ESTIMATE_ITEMS).forEachIndexed { index, item ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                DdText(
-                    text = item.productName,
-                    modifier = Modifier.weight(1f),
-                    style = DdType.body,
-                    color = colors.ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.width(DdSpacing.Sm))
-                val price = money(host, item.priceText)
-                val discounted = money(host, item.priceDiscounted)
-                val text = when {
-                    discounted != null && price != null ->
-                        host.tf("券后 %s / 参考 %s", "%s after coupon / %s list", discounted, price)
+            Column(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    DdText(
+                        text = item.productName,
+                        modifier = Modifier.weight(1f),
+                        style = DdType.body,
+                        color = colors.ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.width(DdSpacing.Sm))
+                    val price = money(host, item.priceText)
+                    val discounted = money(host, item.priceDiscounted)
+                    val text = when {
+                        discounted != null && price != null ->
+                            host.tf("券后 %s / 参考 %s", "%s after coupon / %s list", discounted, price)
 
-                    discounted != null -> host.tf("券后 %s", "%s after coupon", discounted)
-                    price != null -> price
-                    else -> host.t("—", "—")
+                        discounted != null -> host.tf("券后 %s", "%s after coupon", discounted)
+                        price != null -> price
+                        else -> host.t("—", "—")
+                    }
+                    DdText(text, style = DdType.bodySmall, color = colors.inkSecondary, maxLines = 1)
                 }
-                DdText(text, style = DdType.bodySmall, color = colors.inkSecondary, maxLines = 1)
+                val meta = listOfNotNull(
+                    item.eta?.let { host.t("接驾约 $it", "pickup in $it") },
+                    item.distance?.let { host.t("距离 $it", "distance $it") },
+                    item.duration?.let { host.t("约 $it", "about $it") },
+                ).joinToString(" · ")
+                if (meta.isNotBlank()) {
+                    DdText(meta, style = DdType.micro, color = colors.inkTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
             if (index < estimate.items.take(MAX_ESTIMATE_ITEMS).lastIndex) DdHairline()
         }
@@ -250,7 +267,8 @@ internal fun RideOrderCard(host: PluginHost, state: ToolResultState) {
             null
         },
     ) {
-        order.status?.let { status ->
+        val translate: RideTranslate = { zh, en -> host.t(zh, en) }
+        rideStatusLabel(order.statusCode ?: order.status, order.statusText, translate)?.let { status ->
             DdText(
                 status,
                 style = DdType.body,
@@ -259,16 +277,24 @@ internal fun RideOrderCard(host: PluginHost, state: ToolResultState) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (order.orderId != null || order.phoneSuffix != null) {
+        if (order.orderId != null || order.phoneSuffix != null || order.route.isNotBlank()) {
             DdHairline()
             order.orderId?.let { DdStatusRow(label = host.t("订单号", "Order"), value = it, tone = DdStatusTone.NEUTRAL) }
+            if (order.route.isNotBlank()) {
+                DdStatusRow(label = host.t("行程", "Trip"), value = order.route, tone = DdStatusTone.NEUTRAL)
+            }
             order.phoneSuffix?.let { DdStatusRow(label = host.t("账号尾号", "Phone suffix"), value = it, tone = DdStatusTone.NEUTRAL) }
         }
-        if (order.driver != null || order.plate != null || order.phone != null || order.eta != null) {
+        if (order.driver != null || order.carModel != null || order.plate != null || order.phone != null) {
             DdHairline()
             order.driver?.let { DdStatusRow(label = host.t("司机", "Driver"), value = it, tone = DdStatusTone.NEUTRAL) }
+            order.carModel?.let { DdStatusRow(label = host.t("车型", "Car"), value = it, tone = DdStatusTone.NEUTRAL) }
             order.plate?.let { DdStatusRow(label = host.t("车牌", "Plate"), value = it, tone = DdStatusTone.NEUTRAL) }
             order.phone?.let { DdStatusRow(label = host.t("电话", "Phone"), value = it, tone = DdStatusTone.NEUTRAL) }
+        }
+        if (order.distanceKm != null || order.eta != null) {
+            DdHairline()
+            order.distanceKm?.let { DdStatusRow(label = host.t("距上车点", "To pickup"), value = it, tone = DdStatusTone.NEUTRAL) }
             order.eta?.let { DdStatusRow(label = host.t("预计到达", "ETA"), value = it, tone = DdStatusTone.ACCENT) }
         }
     }

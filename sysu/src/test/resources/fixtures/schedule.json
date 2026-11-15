@@ -1,0 +1,74 @@
+{
+  "term": "2026-1",
+  "week": 10,
+  "startTime": "2026-11-09",
+  "endTime": "2026-11-15",
+  "days": [
+    {
+      "date": "2026-11-09",
+      "weekday": "星期一",
+      "items": [
+        {
+          "type": "class",
+          "name": "现代企业制度与公司治理",
+          "teacher": "教师甲",
+          "place": "岭南学院MBA大楼岭院MBA 602",
+          "time": "",
+          "sections": "9-11"
+        }
+      ]
+    },
+    {
+      "date": "2026-11-10",
+      "weekday": "星期二",
+      "items": [
+        {
+          "type": "class",
+          "name": "中级微观经济学（英）",
+          "teacher": "教师乙",
+          "place": "第六教学楼(392栋)6201",
+          "time": "",
+          "sections": "3-4"
+        },
+        {
+          "type": "class",
+          "name": "经济学研究方法",
+          "teacher": "教师丙",
+          "place": "岭南学院MBA大楼岭院MBA 202",
+          "time": "",
+          "sections": "5-6"
+        },
+        {
+          "type": "exam",
+          "name": "数字经济",
+          "teacher": "",
+          "place": "广州校区南校园第六教学楼(392栋)6101",
+          "time": "09:30~11:30",
+          "sections": "2-4"
+        }
+      ]
+    },
+    {
+      "date": "2026-11-11",
+      "weekday": "星期三",
+      "items": [
+        {
+          "type": "class",
+          "name": "经济金融机器学习",
+          "teacher": "教师丁",
+          "place": "岭南学院MBA大楼岭院MBA 701",
+          "time": "",
+          "sections": "2-4"
+        },
+        {
+          "type": "class",
+          "name": "国际财务管理（英）",
+          "teacher": "教师戊",
+          "place": "岭南学院MBA大楼岭院MBA 601",
+          "time": "",
+          "sections": "5-6"
+        }
+      ]
+    }
+  ]
+}

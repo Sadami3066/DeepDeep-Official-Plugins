@@ -29,7 +29,7 @@ class AmapModelsTest {
         assertEquals(2, places.size)
         assertEquals("西湖风景名胜区", places[0].name)
         assertEquals("龙井路1号", places[0].address)
-        assertEquals("110000", places[0].typeName)
+        assertNull(places[0].typeName)
     }
 
     @Test
@@ -533,4 +533,46 @@ class AmapModelsTest {
         val normal = objectOf("""{"jsonrpc":"2.0","id":2,"result":{}}""")
         assertFalse(AmapMcpProtocol.isSessionExpired(normal))
     }
+
+    @Test
+    fun hidesNumericTypeCodesWhenParsingPlaces() {
+        val payload = objectOf(
+            """
+            {
+              "pois": [
+                {"name": "瑞幸咖啡", "typecode": "050500", "location": "120.1,30.2"},
+                {"name": "西湖", "type": "风景名胜", "location": "120.1,30.2"}
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        val places = parsePlaces(payload)
+
+        assertEquals(2, places.size)
+        assertNull(places[0].typeName)
+        assertEquals("风景名胜", places[1].typeName)
+    }
+
+    @Test
+    fun hidesNumericTypeNameWhenDecodingPlaceDetails() {
+        val details = objectOf(
+            """
+            {
+              "kind": "places",
+              "items": [
+                {"name": "瑞幸咖啡", "typeName": "050500"},
+                {"name": "西湖", "typeName": "风景名胜"}
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        val decoded = decodePlacesDetails(details)
+
+        assertEquals(2, decoded.items.size)
+        assertNull(decoded.items[0].typeName)
+        assertEquals("风景名胜", decoded.items[1].typeName)
+    }
+
 }

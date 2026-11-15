@@ -362,7 +362,7 @@ internal class AmapClient(private val host: PluginHost) {
         const val ENDPOINT = "https://mcp.amap.com/mcp"
         const val PROTOCOL_VERSION = "2025-03-26"
         const val CLIENT_NAME = "deepdeep-amap"
-        const val CLIENT_VERSION = "1.0.0"
+        const val CLIENT_VERSION = "1.1.1"
         const val INIT_TIMEOUT_MS = 20_000L
         const val LIST_TIMEOUT_MS = 20_000L
         const val CALL_TIMEOUT_MS = 30_000L

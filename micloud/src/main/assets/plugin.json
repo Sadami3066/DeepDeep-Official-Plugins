@@ -1,11 +1,11 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.micloud",
-  "version": "2.2.2",
+  "version": "2.3.0",
   "publisher": {
     "name": "milous"
   },
   "apiLevel": 6,
-  "minHostVersion": "1.0.8",
+  "minHostVersion": "1.1.0",
   "capabilities": [
     "notifications",
     "secrets",

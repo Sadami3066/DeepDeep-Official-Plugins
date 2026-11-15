@@ -1,6 +1,6 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.feishu",
-  "version": "2.2.4",
+  "version": "2.3.4",
   "publisher": {
     "name": "milous"
   },
@@ -10,9 +10,11 @@
     "apiLevel": 2
   },
   "capabilities": [
+    "chat",
     "clipboard",
     "files",
     "linux",
+    "logs",
     "network",
     "notifications",
     "settings",
@@ -43,7 +45,9 @@
     "skills": [
       "deepdeep-feishu"
     ],
-    "uiSlots": [],
+    "uiSlots": [
+      "chat.message:feishu.card"
+    ],
     "pages": [
       "main"
     ]

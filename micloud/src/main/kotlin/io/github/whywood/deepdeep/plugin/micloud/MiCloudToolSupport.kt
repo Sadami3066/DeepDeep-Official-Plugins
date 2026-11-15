@@ -23,9 +23,9 @@ internal const val DEFAULT_LIST_LIMIT = 20
 
 internal const val MAX_LIST_LIMIT = 200
 
-internal const val MAX_RESULT_CHARS = 12_000
-
 internal const val MAX_BODY_CHARS = 4_000
+
+internal const val MAX_OBSERVATION_ITEMS = 50
 
 internal const val COMPACT_MAX_DEPTH = 3
 
@@ -133,39 +133,24 @@ internal fun limitArg(args: JsonObject): Int {
     return limit
 }
 
-internal fun itemsResult(items: List<JsonObject>, extra: JsonObject = JsonObject(emptyMap())): PluginToolResult {
-    val kept = mutableListOf<JsonObject>()
-    var chars = 0
-    for (item in items) {
-        val size = item.toString().length + 2
-        if (kept.isNotEmpty() && chars + size > MAX_RESULT_CHARS) break
-        kept += item
-        chars += size
-    }
-    val result = buildJsonObject {
-        put("count", kept.size)
-        if (kept.size < items.size) put("truncated", true)
-        putJsonArray("items") {
-            kept.forEach { item -> add(item) }
-        }
-        extra.forEach { (key, value) -> put(key, value) }
-    }
-    return textResult(result.toString())
-}
-
-internal fun writeResult(body: String): PluginToolResult {
+internal fun parseResponseObject(body: String): JsonObject? {
     val trimmed = body.trim()
-    val parsed = runCatching { Json.parseToJsonElement(trimmed) }.getOrNull()
-    val text = if (parsed != null) {
-        compactJson(parsed.payloadObject() ?: parsed).toString()
-    } else {
-        trimmed
-    }
-    return textResult(text.take(MAX_BODY_CHARS))
+    if (trimmed.isEmpty()) return null
+    val parsed = runCatching { Json.parseToJsonElement(trimmed) }.getOrNull() ?: return null
+    return parsed.payloadObject() ?: parsed as? JsonObject
 }
 
-internal fun compactPayload(element: JsonElement): String =
-    compactJson(element.payloadObject() ?: element).toString()
+internal fun responseId(response: JsonObject?): String {
+    val direct = response?.stringOrNull("id")
+    if (!direct.isNullOrBlank() && direct != "0") return direct
+    val nestedKeys = listOf("entry", "record", "data", "item", "result")
+    nestedKeys.forEach { key ->
+        val nested = response?.objectOrNull(key) ?: return@forEach
+        val id = nested.stringOrNull("id")
+        if (!id.isNullOrBlank() && id != "0") return id
+    }
+    return ""
+}
 
 internal fun compactObject(element: JsonObject): JsonObject =
     compactJson(element) as? JsonObject ?: JsonObject(emptyMap())

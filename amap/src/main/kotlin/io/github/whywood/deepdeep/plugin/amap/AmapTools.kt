@@ -73,8 +73,8 @@ private fun placeSearchTool(host: PluginHost): PluginTool = pluginTool(
     ),
     promptGuidelines = listOf(
         host.t(
-            "结果已显示为卡片，不要逐条复述；需要路线时使用返回的坐标调用 amap_route_* 工具。",
-            "The card already shows results; do not repeat the list. Use the coordinates with amap_route_* for routes.",
+            "结果包含名称、地址、类型、坐标和距离；需要路线时用返回的坐标调用 amap_route_*，不要编造地点或坐标。",
+            "Results include name, address, type, coordinates and distance. Use the coordinates with amap_route_* for routes; never invent places or coordinates.",
         ),
     ),
     execute = { call ->
@@ -94,21 +94,17 @@ private fun placeSearchTool(host: PluginHost): PluginTool = pluginTool(
                 },
             ) { payload ->
                 val places = parsePlaces(payload)
-                val text = if (places.isEmpty()) {
-                    host.tf(
-                        "没有找到「%s」相关地点。可以换个关键词或补充城市后重试。",
-                        "No places found for “%s”. Try another keyword or add a city.",
-                        keywords,
-                    )
-                } else {
-                    host.tf(
-                        "找到 %d 个地点：%s。卡片已展示结果，不要逐条复述；需要路线时用 amap_route_* 工具。",
-                        "Found %d places: %s. The card already shows them; do not repeat the list. Use amap_route_* for routes.",
-                        places.size,
-                        places.take(3).joinToString("、") { it.name },
-                    )
-                }
-                textResult(text, details = placesDetails("places", keywords, city, places))
+                val text = placeSearchObservation(host.localizer(), keywords, city, places)
+                textResult(
+                    text,
+                    details = placesDetails(
+                        kind = "places",
+                        query = keywords,
+                        city = city,
+                        places = places,
+                        map = searchMapSpec(places),
+                    ),
+                )
             }
         }
     },
@@ -148,21 +144,17 @@ private fun aroundSearchTool(host: PluginHost): PluginTool = pluginTool(
                 },
             ) { payload ->
                 val places = parsePlaces(payload)
-                val text = if (places.isEmpty()) {
-                    host.tf(
-                        "半径 %d 米内没有找到地点，可以扩大范围或换个关键词。",
-                        "No places found within %d m. Widen the radius or try another keyword.",
-                        radius,
-                    )
-                } else {
-                    host.tf(
-                        "周边找到 %d 个地点：%s。卡片已展示结果，不要逐条复述。",
-                        "Found %d nearby places: %s. The card already shows them; do not repeat the list.",
-                        places.size,
-                        places.take(3).joinToString("、") { it.name },
-                    )
-                }
-                textResult(text, details = placesDetails("around", keywords, null, places))
+                val text = aroundSearchObservation(host.localizer(), location, radius, places)
+                textResult(
+                    text,
+                    details = placesDetails(
+                        kind = "around",
+                        query = keywords,
+                        city = null,
+                        places = places,
+                        map = aroundMapSpec(location, places, radius),
+                    ),
+                )
             }
         }
     },
@@ -201,12 +193,8 @@ private fun regeoTool(host: PluginHost): PluginTool = pluginTool(
                     )
                 } else {
                     textResult(
-                        host.tf(
-                            "坐标位于：%s。卡片已展示结果，不要重复。",
-                            "Coordinates resolve to: %s. The card already shows this; do not repeat it.",
-                            regeo.formattedAddress,
-                        ),
-                        details = regeoDetails(regeo, location),
+                        regeoObservation(host.localizer(), regeo, regeo.location ?: location),
+                        details = regeoDetails(regeo, regeo.location ?: location),
                     )
                 }
             }
@@ -319,27 +307,25 @@ private suspend fun routeRequest(
             )
         } else {
             val navigationUrl = AmapUri.navigation(origin, destination, mode, originName, destinationName)
-            val distance = host.distanceText(route.distanceMeters)
-            val duration = host.durationText(route.durationSeconds)
-            val summary = listOfNotNull(distance, duration).joinToString(host.t("，约 ", ", about "))
-            val text = if (route.mode == AmapRouteMode.TRANSIT) {
-                host.tf(
-                    "公交路线：%s，共 %d 段。卡片已展示结果，不要重复步骤。",
-                    "Transit route: %s, %d segments. The card already shows them; do not repeat the steps.",
-                    summary,
-                    route.transitLines.size,
-                )
-            } else {
-                host.tf(
-                    "%s：%s。卡片已展示结果，不要重复步骤。",
-                    "%s: %s. The card already shows it; do not repeat the steps.",
-                    host.routeTitle(route.mode),
-                    summary,
-                )
-            }
+            val resolvedOrigin = route.origin ?: origin
+            val resolvedDestination = route.destination ?: destination
             textResult(
-                text,
-                details = routeDetails(route, originName, destinationName, navigationUrl),
+                routeObservation(
+                    localizer = host.localizer(),
+                    route = route,
+                    origin = resolvedOrigin,
+                    destination = resolvedDestination,
+                    originName = originName,
+                    destinationName = destinationName,
+                ),
+                details = routeDetails(
+                    route = route,
+                    originName = originName,
+                    destinationName = destinationName,
+                    navigationUrl = navigationUrl,
+                    origin = resolvedOrigin,
+                    destination = resolvedDestination,
+                ),
             )
         }
     }
@@ -358,8 +344,8 @@ private fun weatherTool(host: PluginHost): PluginTool = pluginTool(
     ),
     promptGuidelines = listOf(
         host.t(
-            "天气已显示为卡片，不要重复完整预报；可以补充出行建议。",
-            "The weather card already shows the forecast; do not repeat it. You can add travel advice.",
+            "结果包含城市、日期、白天与夜间天气、温度、风向和风力；不要编造预报数据，可以补充出行建议。",
+            "Results include city, dates, day and night weather, temperatures, wind direction and strength. Never invent forecast data; travel advice is fine.",
         ),
     ),
     execute = { call ->
@@ -384,12 +370,7 @@ private fun weatherTool(host: PluginHost): PluginTool = pluginTool(
                     )
                 } else {
                     textResult(
-                        host.tf(
-                            "%s未来 %d 天天气已在卡片中展示，不要重复完整预报。",
-                            "The %d-day forecast for %s is shown in the card; do not repeat it.",
-                            weather.city ?: city,
-                            weather.days.size,
-                        ),
+                        weatherObservation(host.localizer(), weather, city),
                         details = weatherDetails(weather, city),
                     )
                 }
@@ -423,10 +404,17 @@ private fun coordinateError(host: PluginHost, longitude: Double?, latitude: Doub
     else -> null
 }
 
-private fun placesDetails(kind: String, query: String?, city: String?, places: List<AmapPlace>): JsonObject = buildJsonObject {
+private fun placesDetails(
+    kind: String,
+    query: String?,
+    city: String?,
+    places: List<AmapPlace>,
+    map: AmapMapSpec?,
+): JsonObject = buildJsonObject {
     put("kind", kind)
     put("query", query.orEmpty())
     put("city", city.orEmpty())
+    if (map != null) put("map", map.toJson())
     put("items", buildJsonArray {
         places.take(8).forEach { place ->
             add(buildJsonObject {
@@ -443,16 +431,16 @@ private fun placesDetails(kind: String, query: String?, city: String?, places: L
     })
 }
 
-private fun regeoDetails(regeo: AmapRegeo, fallback: LatLng): JsonObject = buildJsonObject {
+private fun regeoDetails(regeo: AmapRegeo, location: LatLng): JsonObject = buildJsonObject {
     put("kind", "regeo")
     put("formattedAddress", regeo.formattedAddress)
     putIfPresent("province", regeo.province)
     putIfPresent("city", regeo.city)
     putIfPresent("district", regeo.district)
     putIfPresent("township", regeo.township)
-    val location = regeo.location ?: fallback
     put("longitude", location.longitude)
     put("latitude", location.latitude)
+    put("map", regeoMapSpec(location).toJson())
 }
 
 private fun routeDetails(
@@ -460,23 +448,22 @@ private fun routeDetails(
     originName: String?,
     destinationName: String?,
     navigationUrl: String,
+    origin: LatLng,
+    destination: LatLng,
 ): JsonObject = buildJsonObject {
     put("kind", "route")
     put("mode", route.mode.wire)
     putIfPresent("originName", originName)
     putIfPresent("destinationName", destinationName)
-    route.origin?.let { origin ->
-        put("origin", buildJsonObject {
-            put("longitude", origin.longitude)
-            put("latitude", origin.latitude)
-        })
-    }
-    route.destination?.let { destination ->
-        put("destination", buildJsonObject {
-            put("longitude", destination.longitude)
-            put("latitude", destination.latitude)
-        })
-    }
+    put("origin", buildJsonObject {
+        put("longitude", origin.longitude)
+        put("latitude", origin.latitude)
+    })
+    put("destination", buildJsonObject {
+        put("longitude", destination.longitude)
+        put("latitude", destination.latitude)
+    })
+    put("map", routeMapSpec(origin, destination, routePolyline(route)).toJson())
     putIfPresent("distanceMeters", route.distanceMeters)
     putIfPresent("durationSeconds", route.durationSeconds)
     put("steps", buildJsonArray {

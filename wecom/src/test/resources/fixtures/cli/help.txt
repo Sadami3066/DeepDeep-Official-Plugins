@@ -1,0 +1,24 @@
+Usage: wecom-cli [COMMAND]
+
+Commands:
+  auth        企业微信机器人授权管理
+  calendar    日历服务，提供日程创建、查询、取消、忙闲查询、搜索等能力
+  chat        聊天会话服务，提供会话消息列表查询、会话列表查询等能力
+  contact     通讯录服务，提供用户信息查询能力
+  disk        微盘服务
+  doc         文档服务，提供文档的创建、重命名、导入、搜索、权限管理以及 Word 文档内容读写等能力
+  mail        邮件服务，提供邮件发送、回复、转发、列表查询、详情读取与搜索能力
+  media       媒体文件服务，提供媒体文件上传、下载能力
+  message     消息服务，提供消息发送、消息媒体内容获取等能力
+  meeting     会议服务，提供会议的创建、查询、搜索、取消、更新等能力
+  sheet       表格服务，提供表格文档的基本信息查询、数据读写、工作表管理等能力
+  smartpage   智能主页服务，提供智能主页的页面读取、页面管理（创建/删除/重命名/移动/布局更新）、Block 编辑、内容追加与覆盖等能力
+  smartsheet  智能表格服务，提供智能表格的信息查询、子表与列结构管理、记录增删改查、视图管理、仪表盘图表管理等能力
+  todo        待办服务，提供待办事项的创建、查询、完成等能力
+  slide       腾讯文档 slide 服务，提供幻灯片/PPT 编辑能力
+  help        Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+

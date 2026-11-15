@@ -308,7 +308,7 @@ private fun ResultsSection(
                     color = colors.inkTertiary,
                 )
             }
-            DdText(text = displayDate(details.date), style = DdType.bodySmall, color = colors.inkTertiary)
+            DdText(text = routeSubtitle(host, details), style = DdType.bodySmall, color = colors.inkTertiary, maxLines = 2, overflow = TextOverflow.Ellipsis)
             DdHairline()
             if (details.trains.isEmpty()) {
                 DdText(
@@ -393,8 +393,13 @@ internal fun TrainToolCard(host: PluginHost, state: ToolCardSlotState) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                DdText(text = displayDate(details.date), style = DdType.bodySmall, color = colors.inkTertiary)
+                DdText(
+                    text = host.t("${details.trains.size} 趟", "${details.trains.size} trains"),
+                    style = DdType.bodySmall,
+                    color = colors.inkTertiary,
+                )
             }
+            DdText(text = routeSubtitle(host, details), style = DdType.bodySmall, color = colors.inkTertiary, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (details.trains.isEmpty()) {
                 DdText(
                     text = host.t(
@@ -454,7 +459,7 @@ private fun TrainResultRow(host: PluginHost, train: TrainOption) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             DdText(text = train.code, style = DdType.body, color = colors.ink)
             Spacer(Modifier.weight(1f))
-            DdText(text = "${train.depart} → ${train.arrive}", style = DdType.body, color = colors.ink)
+            DdText(text = "${train.depart} → ${arrivalLabel(train.depart, train.arrive, train.duration)}", style = DdType.body, color = colors.ink)
             Spacer(Modifier.width(DdSpacing.Sm))
             DdText(text = train.duration, style = DdType.bodySmall, color = colors.inkTertiary)
         }
@@ -477,7 +482,7 @@ private fun TrainResultRow(host: PluginHost, train: TrainOption) {
 
 private fun seatLine(host: PluginHost, seats: List<SeatAvailability>): String =
     seats.take(CARD_SEAT_LIMIT)
-        .joinToString(" · ") { "${seatLabel(host, it.name)} ${it.count}" }
+        .joinToString(" · ") { "${seatLabel({ zh, en -> host.t(zh, en) }, it.name)} ${it.count}" }
         .ifEmpty { "—" }
 
 @Composable
@@ -489,6 +494,15 @@ private fun displayDate(raw: String): String {
 private fun parseDetails(details: JsonObject): TrainSearchDetails? = runCatching {
     JsonFormat.decodeFromJsonElement(TrainSearchDetails.serializer(), details)
 }.getOrNull()
+
+@Composable
+private fun routeSubtitle(host: PluginHost, details: TrainSearchDetails): String = buildString {
+    append(displayDate(details.date))
+    if (details.fromCode.isNotBlank() && details.toCode.isNotBlank()) {
+        append(" · ").append(details.fromCode).append(" → ").append(details.toCode)
+    }
+    append(" · ").append(host.t("数据时间 ${dataClock(details.fetchedAt)}", "data ${dataClock(details.fetchedAt)}"))
+}
 
 private fun bookingLink(details: TrainSearchDetails): String = details.bookingUrl.takeIf { it.isNotBlank() }
     ?: if (details.fromCode.isNotBlank() && details.toCode.isNotBlank()) {

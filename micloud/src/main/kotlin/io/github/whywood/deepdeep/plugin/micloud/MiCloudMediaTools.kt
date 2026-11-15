@@ -9,7 +9,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-internal fun galleryTool(client: MiCloudReadApi): PluginTool = pluginTool(
+internal fun galleryTool(client: MiCloudReadApi, text: MiCloudText): PluginTool = pluginTool(
     name = "mi_cloud_gallery",
     label = "mi_cloud_gallery",
     description = "List Xiaomi Cloud gallery photos/videos or albums. Read-only.",
@@ -21,26 +21,22 @@ internal fun galleryTool(client: MiCloudReadApi): PluginTool = pluginTool(
         when (val action = args.argString("action") ?: "list") {
             "list" -> {
                 val limit = limitArg(args)
-                val response = client.getJson(galleriesPath(now()))
-                val payload = response.payloadObject()
-                val items = response.payloadArray("galleries")
+                val items = client.getJson(galleriesPath(now()))
+                    .payloadArray("galleries")
                     .mapNotNull { it as? JsonObject }
                     .map(::galleryItem)
                     .take(limit)
-                val extra = buildJsonObject {
-                    payload.boolOrNull("isLastPage")?.let { put("isLastPage", it) }
-                }
-                itemsResult(items, extra)
+                textResult(galleryObservation(items.take(MAX_OBSERVATION_ITEMS), text))
             }
 
             "albums" -> {
                 val limit = limitArg(args)
-                val response = client.getJson(albumsPath(now()))
-                val albums = response.payloadArray("albums")
+                val albums = client.getJson(albumsPath(now()))
+                    .payloadArray("albums")
                     .mapNotNull { it as? JsonObject }
                     .map(::compactObject)
                     .take(limit)
-                itemsResult(albums)
+                textResult(albumsObservation(albums.take(MAX_OBSERVATION_ITEMS), text))
             }
 
             else -> throw IllegalArgumentException("action must be list or albums")
@@ -51,6 +47,7 @@ internal fun galleryTool(client: MiCloudReadApi): PluginTool = pluginTool(
 internal fun recordingsTool(
     client: MiCloudReadApi,
     downloadDir: File,
+    text: MiCloudText,
 ): PluginTool = pluginTool(
     name = "mi_cloud_recordings",
     label = "mi_cloud_recordings",
@@ -68,14 +65,13 @@ internal fun recordingsTool(
                 if (offset < 0) {
                     throw IllegalArgumentException("offset must not be negative")
                 }
-                val response = client.getJson(recordingsPath(userId, now(), offset, limit))
-                val items = response.payloadArray("list")
+                val items = client.getJson(recordingsPath(userId, now(), offset, limit))
+                    .payloadArray("list")
                     .mapNotNull { it as? JsonObject }
                     .map(::recordingItem)
-                val extra = buildJsonObject {
-                    put("nextOffset", offset + items.size)
-                }
-                itemsResult(items, extra)
+                textResult(
+                    recordingsObservation(items.take(MAX_OBSERVATION_ITEMS), offset + items.size, text),
+                )
             }
 
             "download" -> {
@@ -85,13 +81,15 @@ internal fun recordingsTool(
                 downloadDir.mkdirs()
                 val target = uniqueFile(downloadDir, safeFileName(name))
                 val downloaded = client.download(recordingDownloadPath(userId, fileId), target)
-                val result = buildJsonObject {
-                    put("fileId", fileId)
-                    put("name", downloaded.name)
-                    put("size", downloaded.length())
-                    put("path", downloaded.absolutePath)
-                }
-                textResult(result.toString())
+                textResult(
+                    recordingDownloadObservation(
+                        fileId = fileId,
+                        name = downloaded.name,
+                        size = downloaded.length(),
+                        path = downloaded.absolutePath,
+                        t = text,
+                    ),
+                )
             }
 
             else -> throw IllegalArgumentException("action must be list or download")

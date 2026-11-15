@@ -13,6 +13,9 @@ import io.github.whywood.deepdeep.plugin.api.PluginTool
 import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
 import io.github.whywood.deepdeep.plugin.api.PromptSection
 import io.github.whywood.deepdeep.plugin.api.SlotBinding
+import io.github.whywood.deepdeep.plugin.api.ToolResultRenderer
+import io.github.whywood.deepdeep.plugin.api.ToolResultRendererContributor
+import io.github.whywood.deepdeep.plugin.api.ToolResultSource
 import io.github.whywood.deepdeep.plugin.api.assetIcon
 import io.github.whywood.deepdeep.plugin.api.available
 import io.github.whywood.deepdeep.plugin.api.contributions
@@ -22,6 +25,8 @@ import io.github.whywood.deepdeep.plugin.api.pluginNotificationWithActions
 import io.github.whywood.deepdeep.plugin.api.pluginPage
 import io.github.whywood.deepdeep.plugin.api.pluginSkill
 import io.github.whywood.deepdeep.plugin.api.promptSection
+import io.github.whywood.deepdeep.plugin.api.toolResultMatch
+import io.github.whywood.deepdeep.plugin.api.toolResultRenderer
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
@@ -83,7 +88,7 @@ internal class MiCloudContent(private val host: PluginHost) {
     fun isSignedIn(): Boolean = isSignedIn(lastStatus)
 
     fun tools(): List<PluginTool> =
-        miCloudTools(client, preferences, writer, downloadDir)
+        miCloudTools(client, preferences, writer, downloadDir) { zh, en -> host.t(zh, en) }
 
     suspend fun resolveStatus(force: Boolean = false): MiCloudSessionView {
         val view = session.status(force)
@@ -241,7 +246,7 @@ class MiCloudPlugin : DeepDeepPlugin {
 
     override fun ui(host: PluginHost): PluginUiContributions {
         val content = content(host)
-        return object : PluginUiContributions {
+        return object : PluginUiContributions, ToolResultRendererContributor {
             override val bindings: List<SlotBinding> = emptyList()
 
             override val pages: List<PluginPage> = listOf(
@@ -255,6 +260,21 @@ class MiCloudPlugin : DeepDeepPlugin {
                     icon = assetIcon(ICON_ASSET),
                     content = { MiCloudPage(host = host, content = content) },
                 ),
+            )
+
+            override val toolResultRenderers: List<ToolResultRenderer> = listOf(
+                toolResultRenderer(
+                    id = "micloud-account",
+                    match = toolResultMatch(source = ToolResultSource.PLUGIN, tool = "mi_cloud_account"),
+                ) { state -> MiCloudAccountToolCard(host, state) },
+                toolResultRenderer(
+                    id = "micloud-notes",
+                    match = toolResultMatch(source = ToolResultSource.PLUGIN, tool = "mi_cloud_notes"),
+                ) { state -> MiCloudNotesToolCard(host, state) },
+                toolResultRenderer(
+                    id = "micloud-todo",
+                    match = toolResultMatch(source = ToolResultSource.PLUGIN, tool = "mi_cloud_todo"),
+                ) { state -> MiCloudTodoToolCard(host, state) },
             )
         }
     }

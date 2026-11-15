@@ -19,6 +19,7 @@ internal fun notesTool(
     client: MiCloudReadApi,
     settings: MiCloudSettings,
     writer: MiCloudWriteApi,
+    text: MiCloudText,
 ): PluginTool = pluginTool(
     name = "mi_cloud_notes",
     label = "mi_cloud_notes",
@@ -35,32 +36,64 @@ internal fun notesTool(
                 val payload = response.payloadObject()
                 val entries = payload.arrayOrNull("entries").orEmpty()
                     .mapNotNull { it as? JsonObject }
-                    .map(::noteEntry)
-                val extra = buildJsonObject {
-                    payload.stringOrNull("syncTag")?.let { put("nextSyncTag", it) }
-                    payload.boolOrNull("lastPage")?.let { put("lastPage", it) }
-                }
-                itemsResult(entries, extra)
+                    .map(::noteItem)
+                val cursor = payload.stringOrNull("syncTag").orEmpty()
+                val lastPage = payload.boolOrNull("lastPage") ?: false
+                val card = MiCloudNotesCardData(
+                    action = NOTES_ACTION_LIST,
+                    total = entries.size,
+                    cursor = cursor,
+                    lastPage = lastPage,
+                    rows = entries.take(MAX_CARD_ROWS),
+                )
+                textResult(
+                    notesListObservation(entries.take(MAX_OBSERVATION_ITEMS), entries.size, cursor, lastPage, text),
+                    details = card.toJson(),
+                )
             }
 
             "read" -> {
                 val id = args.requiredArgString("id")
                 val entry = noteDetail(client, id)
-                textResult(compactPayload(entry))
+                val item = noteItem(entry)
+                val plain = notePlainText(entry.stringOrNull("content")).take(MAX_BODY_CHARS)
+                val card = MiCloudNotesCardData(
+                    action = NOTES_ACTION_READ,
+                    total = 1,
+                    noteId = id,
+                    subject = item.subject,
+                    preview = previewText(plain, 240),
+                    modifyTime = item.modifyTime,
+                )
+                textResult(noteReadObservation(id, item, plain, text), details = card.toJson())
             }
 
             "create" -> {
                 requireWrite(settings, MiCloudFeature.NOTES, TOOL_NOTE_WRITE_OFF)
                 val subject = args.requiredArgString("subject")
                 val content = args.argString("content").orEmpty()
+                val timestamp = now()
                 val entry = buildNoteEntry(
                     subject = subject,
                     content = content,
                     folderId = args.argString("folderId") ?: "0",
                     colorId = args.argInt("colorId") ?: 0,
-                    now = now(),
+                    now = timestamp,
                 )
-                writeResult(writer.post(noteCreatePath(), noteCreateForm(entry)))
+                val response = parseResponseObject(writer.post(noteCreatePath(), noteCreateForm(entry)))
+                val noteId = responseId(response)
+                val card = MiCloudNotesCardData(
+                    action = NOTES_ACTION_CREATE,
+                    total = 1,
+                    noteId = noteId,
+                    subject = subject,
+                    preview = previewText(content, 240),
+                    modifyTime = timestamp,
+                )
+                textResult(
+                    noteWriteObservation(NOTES_ACTION_CREATE, noteId, subject, content, timestamp, text),
+                    details = card.toJson(),
+                )
             }
 
             "update" -> {
@@ -72,18 +105,44 @@ internal fun notesTool(
                     throw IllegalArgumentException("update requires subject or content")
                 }
                 val existing = noteDetail(client, id)
-                val updated = updatedNoteEntry(existing, subject, content, now())
-                writeResult(writer.post(noteUpdatePath(id), noteUpdateForm(updated)))
+                val timestamp = now()
+                val updated = updatedNoteEntry(existing, subject, content, timestamp)
+                parseResponseObject(writer.post(noteUpdatePath(id), noteUpdateForm(updated)))
+                val updatedSubject = updated.stringOrNull("subject").orEmpty()
+                val updatedContent = notePlainText(updated.stringOrNull("content"))
+                val card = MiCloudNotesCardData(
+                    action = NOTES_ACTION_UPDATE,
+                    total = 1,
+                    noteId = id,
+                    subject = updatedSubject,
+                    preview = previewText(updatedContent, 240),
+                    modifyTime = timestamp,
+                )
+                textResult(
+                    noteWriteObservation(NOTES_ACTION_UPDATE, id, updatedSubject, updatedContent, timestamp, text),
+                    details = card.toJson(),
+                )
             }
 
             "delete" -> {
                 requireWrite(settings, MiCloudFeature.NOTES, TOOL_NOTE_WRITE_OFF)
                 val id = args.requiredArgString("id")
                 val entry = noteDetail(client, id)
+                val subject = entry.stringOrNull("subject").orEmpty()
                 val tag = entry.stringOrNull("tag")
                     ?: throw IllegalArgumentException("Note has no tag; cannot delete")
                 val purge = args.argBool("purge") ?: true
-                writeResult(writer.post(noteDeletePath(id), noteDeleteForm(tag, purge)))
+                parseResponseObject(writer.post(noteDeletePath(id), noteDeleteForm(tag, purge)))
+                val card = MiCloudNotesCardData(
+                    action = NOTES_ACTION_DELETE,
+                    total = 1,
+                    noteId = id,
+                    subject = subject,
+                )
+                textResult(
+                    noteWriteObservation(NOTES_ACTION_DELETE, id, subject, "", 0L, text),
+                    details = card.toJson(),
+                )
             }
 
             else -> throw IllegalArgumentException("action must be list, read, create, update or delete")
@@ -94,16 +153,6 @@ internal fun notesTool(
 private suspend fun noteDetail(client: MiCloudReadApi, id: String): JsonObject {
     val payload = client.getJson(noteDetailPath(id, now())).payloadObject()
     return payload.objectOrNull("entry") ?: payload ?: throw IOException("Note data format is invalid")
-}
-
-private fun noteEntry(item: JsonObject): JsonObject = buildJsonObject {
-    put("id", item.stringOrNull("id") ?: "")
-    put("subject", item.stringOrNull("subject") ?: "")
-    put("snippet", item.stringOrNull("snippet") ?: "")
-    item.stringOrNull("tag")?.let { put("tag", it) }
-    item.longOrNull("modifyDate")?.let { put("modifyDate", it) }
-    item.longOrNull("createDate")?.let { put("createDate", it) }
-    item.stringOrNull("folderId")?.let { put("folderId", it) }
 }
 
 internal fun notesPagePath(ts: Long, limit: Int, syncTag: String?): String {

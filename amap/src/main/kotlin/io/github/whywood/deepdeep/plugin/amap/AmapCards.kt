@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
@@ -26,33 +27,67 @@ import io.github.whywood.deepdeep.design.DdTextAction
 import io.github.whywood.deepdeep.design.DdType
 import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.PluginToolResult
 import io.github.whywood.deepdeep.plugin.api.ToolResultState
+
+internal enum class AmapCardPhase { LOADING, ERROR, EMPTY, READY }
+
+internal fun placesCardPhase(result: PluginToolResult?): AmapCardPhase = when {
+    result == null -> AmapCardPhase.LOADING
+    result.isError -> AmapCardPhase.ERROR
+    decodePlacesDetails(result.details).items.isEmpty() -> AmapCardPhase.EMPTY
+    else -> AmapCardPhase.READY
+}
+
+internal fun regeoCardPhase(result: PluginToolResult?): AmapCardPhase = when {
+    result == null -> AmapCardPhase.LOADING
+    result.isError -> AmapCardPhase.ERROR
+    decodeRegeoDetails(result.details) == null -> AmapCardPhase.EMPTY
+    else -> AmapCardPhase.READY
+}
+
+internal fun routeCardPhase(result: PluginToolResult?): AmapCardPhase = when {
+    result == null -> AmapCardPhase.LOADING
+    result.isError -> AmapCardPhase.ERROR
+    decodeRouteDetails(result.details) == null -> AmapCardPhase.EMPTY
+    else -> AmapCardPhase.READY
+}
+
+internal fun weatherCardPhase(result: PluginToolResult?): AmapCardPhase = when {
+    result == null -> AmapCardPhase.LOADING
+    result.isError -> AmapCardPhase.ERROR
+    decodeWeatherDetails(result.details)?.days?.isEmpty() != false -> AmapCardPhase.EMPTY
+    else -> AmapCardPhase.READY
+}
 
 @Composable
 internal fun AmapPlacesCard(host: PluginHost, state: ToolResultState, around: Boolean) {
     val fallbackTitle = if (around) host.t("周边搜索", "Nearby") else host.t("地点搜索", "Place search")
     val result = state.result
-    if (result == null) {
-        AmapLoadingCard(host, fallbackTitle, DdIcons.Search)
-        return
+    when (placesCardPhase(result)) {
+        AmapCardPhase.LOADING -> {
+            AmapLoadingCard(host, fallbackTitle, DdIcons.Search)
+            return
+        }
+        AmapCardPhase.ERROR -> {
+            AmapErrorCard(host, fallbackTitle, result?.text)
+            return
+        }
+        AmapCardPhase.EMPTY -> {
+            AmapEmptyCard(
+                host = host,
+                title = fallbackTitle,
+                message = host.t(
+                    "没有找到相关地点，换个关键词或扩大范围再试。",
+                    "No places found. Try another keyword or a wider range.",
+                ),
+                icon = DdIcons.Search,
+            )
+            return
+        }
+        AmapCardPhase.READY -> Unit
     }
-    if (result.isError) {
-        AmapErrorCard(host, fallbackTitle, result.text)
-        return
-    }
-    val details = decodePlacesDetails(result.details)
-    if (details.items.isEmpty()) {
-        AmapEmptyCard(
-            host = host,
-            title = fallbackTitle,
-            message = host.t(
-                "没有找到相关地点，换个关键词或扩大范围再试。",
-                "No places found. Try another keyword or a wider range.",
-            ),
-            icon = DdIcons.Search,
-        )
-        return
-    }
+    val details = decodePlacesDetails(result?.details)
     val title = if (around) {
         listOfNotNull(host.t("周边", "Nearby"), details.query?.takeIf { it.isNotBlank() }).joinToString(" · ")
     } else {
@@ -61,6 +96,21 @@ internal fun AmapPlacesCard(host: PluginHost, state: ToolResultState, around: Bo
     val trailing = details.city?.takeIf { it.isNotBlank() }
         ?: host.tf("%d 个", "%d", details.items.size)
     AmapCardShell(title = title, icon = DdIcons.Search, trailing = trailing) {
+        val map = decodeMapSpec(result?.details)
+        if (map != null) {
+            val mapOpen = if (around) {
+                AmapUri.marker(map.center, details.query)
+            } else {
+                AmapUri.search(details.query.orEmpty(), details.city)
+            }
+            AmapMapPreview(
+                host = host,
+                spec = map,
+                openUrl = mapOpen,
+                contentDescription = title,
+            )
+            Spacer(Modifier.height(DdSpacing.Sm))
+        }
         details.items.take(6).forEachIndexed { index, item ->
             if (index > 0) DdHairline()
             AmapPlaceRow(host, item)
@@ -125,24 +175,27 @@ private fun AmapPlaceRow(host: PluginHost, item: AmapPlaceItem) {
 internal fun AmapRegeoCard(host: PluginHost, state: ToolResultState) {
     val title = host.t("位置", "Location")
     val result = state.result
-    if (result == null) {
-        AmapLoadingCard(host, title, DdIcons.Pin)
-        return
+    when (regeoCardPhase(result)) {
+        AmapCardPhase.LOADING -> {
+            AmapLoadingCard(host, title, DdIcons.Pin)
+            return
+        }
+        AmapCardPhase.ERROR -> {
+            AmapErrorCard(host, title, result?.text)
+            return
+        }
+        AmapCardPhase.EMPTY -> {
+            AmapEmptyCard(
+                host = host,
+                title = title,
+                message = host.t("没有解析出地址，请检查经纬度。", "No address found. Check the coordinates."),
+                icon = DdIcons.Pin,
+            )
+            return
+        }
+        AmapCardPhase.READY -> Unit
     }
-    if (result.isError) {
-        AmapErrorCard(host, title, result.text)
-        return
-    }
-    val details = decodeRegeoDetails(result.details)
-    if (details == null) {
-        AmapEmptyCard(
-            host = host,
-            title = title,
-            message = host.t("没有解析出地址，请检查经纬度。", "No address found. Check the coordinates."),
-            icon = DdIcons.Pin,
-        )
-        return
-    }
+    val details = decodeRegeoDetails(result?.details) ?: return
     val meta = listOfNotNull(
         details.province?.takeIf { it.isNotBlank() },
         details.city?.takeIf { it.isNotBlank() && it != details.province },
@@ -161,11 +214,21 @@ internal fun AmapRegeoCard(host: PluginHost, state: ToolResultState) {
     } else {
         null
     }
+    val openUrl = location?.let { AmapUri.marker(it, details.formattedAddress) }
     AmapCardShell(
         title = title,
         icon = DdIcons.Pin,
         footer = footer,
     ) {
+        decodeMapSpec(result?.details)?.let { map ->
+            AmapMapPreview(
+                host = host,
+                spec = map,
+                openUrl = openUrl,
+                contentDescription = title,
+            )
+            Spacer(Modifier.height(DdSpacing.Sm))
+        }
         DdText(
             text = details.formattedAddress,
             style = DdType.body,
@@ -181,24 +244,27 @@ internal fun AmapRegeoCard(host: PluginHost, state: ToolResultState) {
 internal fun AmapRouteCard(host: PluginHost, state: ToolResultState) {
     val fallbackTitle = host.t("路线", "Route")
     val result = state.result
-    if (result == null) {
-        AmapLoadingCard(host, fallbackTitle, DdIcons.Target)
-        return
+    when (routeCardPhase(result)) {
+        AmapCardPhase.LOADING -> {
+            AmapLoadingCard(host, fallbackTitle, DdIcons.Target)
+            return
+        }
+        AmapCardPhase.ERROR -> {
+            AmapErrorCard(host, fallbackTitle, result?.text)
+            return
+        }
+        AmapCardPhase.EMPTY -> {
+            AmapEmptyCard(
+                host = host,
+                title = fallbackTitle,
+                message = host.t("没有规划出路线，请检查起终点。", "No route found. Check the start and end points."),
+                icon = DdIcons.Target,
+            )
+            return
+        }
+        AmapCardPhase.READY -> Unit
     }
-    if (result.isError) {
-        AmapErrorCard(host, fallbackTitle, result.text)
-        return
-    }
-    val details = decodeRouteDetails(result.details)
-    if (details == null) {
-        AmapEmptyCard(
-            host = host,
-            title = fallbackTitle,
-            message = host.t("没有规划出路线，请检查起终点。", "No route found. Check the start and end points."),
-            icon = DdIcons.Target,
-        )
-        return
-    }
+    val details = decodeRouteDetails(result?.details) ?: return
     val summary = listOfNotNull(
         host.distanceText(details.distanceMeters),
         host.durationText(details.durationSeconds),
@@ -221,6 +287,15 @@ internal fun AmapRouteCard(host: PluginHost, state: ToolResultState) {
         trailing = summary.takeIf { it.isNotBlank() },
         footer = footer,
     ) {
+        decodeMapSpec(result?.details)?.let { map ->
+            AmapMapPreview(
+                host = host,
+                spec = map,
+                openUrl = navigationUrl,
+                contentDescription = host.routeTitle(details.mode),
+            )
+            Spacer(Modifier.height(DdSpacing.Sm))
+        }
         val routeNames = listOfNotNull(
             details.originName?.takeIf { it.isNotBlank() },
             details.destinationName?.takeIf { it.isNotBlank() },
@@ -295,24 +370,27 @@ private fun transitLineText(host: PluginHost, line: AmapTransitLine): String {
 internal fun AmapWeatherCard(host: PluginHost, state: ToolResultState) {
     val fallbackTitle = host.t("天气", "Weather")
     val result = state.result
-    if (result == null) {
-        AmapLoadingCard(host, fallbackTitle, DdIcons.Sun)
-        return
+    when (weatherCardPhase(result)) {
+        AmapCardPhase.LOADING -> {
+            AmapLoadingCard(host, fallbackTitle, DdIcons.Sun)
+            return
+        }
+        AmapCardPhase.ERROR -> {
+            AmapErrorCard(host, fallbackTitle, result?.text)
+            return
+        }
+        AmapCardPhase.EMPTY -> {
+            AmapEmptyCard(
+                host = host,
+                title = fallbackTitle,
+                message = host.t("没有获取到天气，请稍后重试。", "Weather is not available. Try again later."),
+                icon = DdIcons.Sun,
+            )
+            return
+        }
+        AmapCardPhase.READY -> Unit
     }
-    if (result.isError) {
-        AmapErrorCard(host, fallbackTitle, result.text)
-        return
-    }
-    val details = decodeWeatherDetails(result.details)
-    if (details == null || details.days.isEmpty()) {
-        AmapEmptyCard(
-            host = host,
-            title = fallbackTitle,
-            message = host.t("没有获取到天气，请稍后重试。", "Weather is not available. Try again later."),
-            icon = DdIcons.Sun,
-        )
-        return
-    }
+    val details = decodeWeatherDetails(result?.details) ?: return
     AmapCardShell(
         title = listOfNotNull(
             host.t("天气", "Weather"),

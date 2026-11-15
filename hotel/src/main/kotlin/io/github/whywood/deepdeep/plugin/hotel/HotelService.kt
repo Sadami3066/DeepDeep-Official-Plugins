@@ -57,8 +57,12 @@ internal class HotelService(private val host: PluginHost) {
                 adults = adults,
             ),
         )
-        return parseHotelDetail(output, name.orEmpty())
+        val parsed = parseHotelDetail(output, name.orEmpty())
             ?: throw HotelToolException(host.t("没有查到这家酒店的房型，请稍后再试。", "No room types came back for this hotel. Try again."))
+        if (parsed.rooms.isEmpty() && !parsed.errorMessage.isNullOrBlank()) {
+            throw HotelToolException(host.t("房型查询失败：${parsed.errorMessage}", "Room lookup failed: ${parsed.errorMessage}"))
+        }
+        return parsed
     }
 
     suspend fun book(
@@ -84,7 +88,11 @@ internal class HotelService(private val host: PluginHost) {
             ),
         )
         val referenceNo = parseHotelPriceConfirmation(priceOutput)
-            ?: throw HotelToolException(host.t("价格确认没有返回预订参考号，请稍后再试。", "Price confirmation didn't return a reference. Try again."))
+            ?: throw HotelToolException(
+                parseHotelOrderMessage(priceOutput)?.let {
+                    host.t("锁价失败：$it", "Price confirmation failed: $it")
+                } ?: host.t("价格确认没有返回预订参考号，请稍后再试。", "Price confirmation didn't return a reference. Try again."),
+            )
         val bookOutput = exec(
             HotelCli.bookCommand(
                 referenceNo = referenceNo.referenceNo,
@@ -94,14 +102,22 @@ internal class HotelService(private val host: PluginHost) {
             ),
         )
         return parseHotelBooking(bookOutput)
-            ?: throw HotelToolException(host.t("订单没有创建成功，请稍后再试。", "The order wasn't created. Try again."))
+            ?: throw HotelToolException(
+                parseHotelOrderMessage(bookOutput)?.let {
+                    host.t("下单失败：$it", "Booking failed: $it")
+                } ?: host.t("订单没有创建成功，请稍后再试。", "The order wasn't created. Try again."),
+            )
     }
 
     suspend fun orders(status: String?): HotelOrdersDetails {
         ensureReady()
         val output = exec(HotelCli.ordersCommand(status))
         return parseHotelOrders(output)
-            ?: throw HotelToolException(host.t("没有查到订单，请稍后再试。", "Couldn't load your orders. Try again."))
+            ?: run {
+                val detail = parseHotelOrderMessage(output)?.takeIf { it.isNotBlank() }
+                val reason = detail ?: host.t("RollingGo 返回的数据无法识别", "RollingGo returned unreadable data")
+                throw HotelToolException(host.t("订单查询失败：$reason", "Order lookup failed: $reason"))
+            }
     }
 
     private suspend fun ensureReady() {

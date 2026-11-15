@@ -21,10 +21,13 @@ import io.github.whywood.deepdeep.plugin.api.unavailable
 import java.io.File
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 class WecomPlugin : DeepDeepPlugin {
     @Volatile
     private var lastStatus: WecomStatus? = null
+
+    private val callTracker = WecomCallTracker()
 
     internal fun updateStatus(status: WecomStatus) {
         lastStatus = status
@@ -48,6 +51,7 @@ class WecomPlugin : DeepDeepPlugin {
             }
         }
         WecomStatusStore(host).clear()
+        runCatching { WecomReleaseStore(host).clear() }
         runCatching {
             host.files().workspaceDir?.let { host.files().delete(WecomCli.qrFile(it).absolutePath) }
         }
@@ -55,12 +59,29 @@ class WecomPlugin : DeepDeepPlugin {
     }
 
     override fun contributions(host: PluginHost): Contributions = contributions(
-        hooks = object : PluginHooks {
+        hooks = object : PluginHooks by wecomHooks(host) {
             override suspend fun notificationAction(event: NotificationActionEvent) {
                 if (event.actionId == WecomTexts.ACTION_OPEN_PAGE) host.ui().openPage(PAGE_ID)
             }
         },
     )
+
+    private fun wecomHooks(host: PluginHost): WecomHooks = WecomHooks(callTracker) { sessionId, kind, payload, observation ->
+        runCatching {
+            withTimeoutOrNull(CARD_POST_TIMEOUT_MS) {
+                host.chat().postCustomMessage(
+                    sessionId = sessionId,
+                    customType = kind.customType,
+                    payload = WecomCardPayloads.encode(payload),
+                    text = observation.lineSequence().firstOrNull().orEmpty().take(120),
+                    display = true,
+                )
+            }
+        }.onFailure { error ->
+            runCatching { host.logs().warn("wecom card post failed: ${kind.customType}", error) }
+        }
+        Unit
+    }
 
     override fun skills(host: PluginHost): List<PluginSkill> {
         val workspace = runCatching { host.files().workspaceDir }.getOrNull() ?: host.dataDir.absolutePath
@@ -73,7 +94,7 @@ class WecomPlugin : DeepDeepPlugin {
     )
 
     override fun ui(host: PluginHost): PluginUiContributions = object : PluginUiContributions {
-        override val bindings: List<SlotBinding> = emptyList()
+        override val bindings: List<SlotBinding> = wecomChatCardBindings(host)
 
         override val pages: List<PluginPage> = listOf(
             pluginPage(
@@ -107,6 +128,7 @@ class WecomPlugin : DeepDeepPlugin {
         const val CLI_STAGING_DIR = "cli-staging"
         const val DOWNLOAD_DIRECTORY_PLACEHOLDER = "<download-directory>"
         const val UNINSTALL_TIMEOUT_MS = 60_000L
+        const val CARD_POST_TIMEOUT_MS = 1_200L
 
         val SKILL_MARKDOWN = """
             ---
@@ -116,15 +138,18 @@ class WecomPlugin : DeepDeepPlugin {
 
             # 企业微信 CLI
 
-            DeepDeep 已安装官方 `wecom-cli`，在 bash 中直接运行。命令默认输出 compact JSON，以退出码和输出字段判断结果。
+            DeepDeep 已安装官方 `wecom-cli`，在 bash 中直接运行。命令输出 JSON，以退出码和输出字段判断结果；未授权时先提示用户在插件页扫码连接，不要反复重试。
+
+            高频读取用一条命令完成：`wecom-cli chat groups list`、`wecom-cli chat messages list`、`wecom-cli doc search`、`wecom-cli doc contents get`、`wecom-cli calendar schedules list`、`wecom-cli todo list`、`wecom-cli contact users search`。这些读取成功后模型侧会得到整理过的完整字段；不要接管道、重定向、head/less 或 `--page-count`，也不要拆成多条命令或额外加 echo。
 
             - 先确认命令与参数：`wecom-cli --help`、`wecom-cli <service> --help`；需要文档或 schema 时加 `--doc` / `--schema`。
+            - 时间参数格式 `YYYY-MM-DD HH:MM:SS`；chat 只支持最近 7 天，日程默认查询未来 30 天。
             - 服务目录在线获取，需要已授权与网络。
-            - 已授权范围内直接执行；超出授权的发送、修改、删除等操作先询问；支持时可用 `--dry-run` 预览。
+            - 已授权范围内直接执行；超出授权的发送、修改、删除等操作先询问；支持时可用 `--dry-run` 预览。发送、修改、删除的确认纪律不变。
             - 请求体可用命名参数、`--json '<JSON>'` 或 `--set path=value` 组合给出。
-            - 发消息前先 `wecom-cli message aibot sessions list`，用本次返回的 `chat_id`；给授权人发消息可用 `wecom-cli identity whoami` 的 ID 作为 chat_id。
+            - 发消息前先 `wecom-cli chat groups list` 取本次返回的 `chat_id`；给授权人发消息可用 `wecom-cli identity whoami` 的 ID 作为 chat_id。
             - 发送图片、文件、语音或视频前，先经 `wecom-cli media` 上传拿到 `media_id`。
-            - 拉取多页数据用 `--page-count <n>`；下载文件用 `--output-dir <download-directory>` 落到工作区，再按当前运行支持的交付方式返回文件绝对路径。
+            - 拉取更多结果时按返回的 `next_cursor` 继续单条读取；下载文件用 `--output-dir <download-directory>` 落到工作区，再按当前运行支持的交付方式返回文件绝对路径。
         """.trimIndent()
     }
 }

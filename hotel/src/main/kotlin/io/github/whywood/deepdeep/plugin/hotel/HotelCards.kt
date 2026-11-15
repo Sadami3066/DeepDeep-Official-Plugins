@@ -103,7 +103,7 @@ private fun HotelSummaryBody(host: PluginHost, hotel: HotelSummary) {
             val meta = listOfNotNull(
                 hotel.starRating?.let { "$it★" },
                 hotel.priceText,
-                hotel.distance,
+                hotel.distanceMeters?.let(::hotelDistanceText) ?: hotel.distance,
             ).joinToString(" · ")
             if (meta.isNotBlank()) {
                 DdText(meta, style = DdType.bodySmall, color = colors.inkSecondary, maxLines = 1)
@@ -148,37 +148,63 @@ internal fun HotelDetailCard(host: PluginHost, state: ToolCardSlotState) {
         title = details.name,
         subtitle = listOfNotNull(details.checkIn, details.checkOut).joinToString(" → ").ifBlank { null },
         footer = if (details.bookingUrl != null) {
-            host.t("以 RollingGo 实时价格为准", "Live prices are confirmed on RollingGo")
+            host.t("价格按 ${hotelNights(details.checkIn, details.checkOut)} 晚计算，以 RollingGo 实时价格为准", "Total for ${hotelNights(details.checkIn, details.checkOut)} night(s); live prices are confirmed on RollingGo")
         } else {
             null
         },
     ) {
         if (details.rooms.isEmpty()) {
             DdText(
-                host.t("暂时没有可订房型。", "No rooms are available right now."),
+                details.errorMessage ?: host.t("暂时没有可订房型。", "No rooms are available right now."),
                 style = DdType.bodySmall,
                 color = deepDeepColors().inkSecondary,
             )
         } else {
-            details.rooms.take(6).forEachIndexed { index, room ->
+            val groups = details.roomGroups.ifEmpty { groupHotelRooms(details.rooms) }
+            val nights = hotelNights(details.checkIn, details.checkOut)
+            groups.take(6).forEachIndexed { index, group ->
                 if (index > 0) DdHairline()
                 Column(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        DdText(room.name, modifier = Modifier.weight(1f), style = DdType.body, color = deepDeepColors().ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        room.priceText?.let {
-                            DdText(it, style = DdType.body, color = deepDeepColors().ink)
-                        }
-                    }
-                    listOfNotNull(room.bed, room.cancellation).takeIf { it.isNotEmpty() }?.let { values ->
+                        DdText(group.name, modifier = Modifier.weight(1f), style = DdType.body, color = deepDeepColors().ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         DdText(
-                            values.joinToString(" · "),
+                            group.lowestPriceText ?: host.t("价格待确认", "Price pending"),
+                            style = DdType.body,
+                            color = deepDeepColors().ink,
+                        )
+                    }
+                    val cheapest = group.plans.firstOrNull()
+                    val meta = listOfNotNull(
+                        cheapest?.avgPriceText?.let { host.t("每晚 $it", "$it/night") },
+                        group.bed,
+                        if (group.planCount > 1) host.t("${group.planCount} 个方案", "${group.planCount} rate plans") else null,
+                        group.cheapestCancellation,
+                    ).joinToString(" · ")
+                    if (meta.isNotBlank()) {
+                        DdText(
+                            meta,
                             style = DdType.bodySmall,
                             color = deepDeepColors().inkSecondary,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
+                    cheapest?.meal?.takeIf { it.isNotBlank() }?.let {
+                        DdText(
+                            "$it · ${host.t("共 $nights 晚", "$nights night(s)")}",
+                            style = DdType.chip,
+                            color = deepDeepColors().inkTertiary,
+                            maxLines = 1,
+                        )
+                    }
                 }
+            }
+            if (groups.size > 6) {
+                DdText(
+                    host.t("还有 ${groups.size - 6} 个房型", "${groups.size - 6} more room types"),
+                    style = DdType.chip,
+                    color = deepDeepColors().inkTertiary,
+                )
             }
         }
         val bookingUrl = details.bookingUrl
@@ -213,15 +239,39 @@ internal fun HotelOrdersCard(host: PluginHost, state: ToolCardSlotState) {
         subtitle = if (details.orders.isEmpty()) null else host.t("${details.orders.size} 笔订单", "${details.orders.size} orders"),
     ) {
         if (details.orders.isEmpty()) {
-            DdText(host.t("暂时没有酒店订单。", "No hotel orders yet."), style = DdType.bodySmall, color = deepDeepColors().inkSecondary)
+            DdText(
+                details.message?.takeIf { it.isNotBlank() } ?: host.t("暂时没有酒店订单。", "No hotel orders yet."),
+                style = DdType.bodySmall,
+                color = deepDeepColors().inkSecondary,
+            )
         } else {
+            val translate: HotelTranslate = { zh, en -> host.t(zh, en) }
             details.orders.take(5).forEachIndexed { index, order ->
                 if (index > 0) DdHairline()
                 Column(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    DdText(order.hotelName, style = DdType.body, color = deepDeepColors().ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    val meta = listOfNotNull(order.checkIn, order.checkOut, order.status, order.totalPrice).joinToString(" · ")
-                    if (meta.isNotBlank()) {
-                        DdText(meta, style = DdType.bodySmall, color = deepDeepColors().inkSecondary, maxLines = 2)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        DdText(order.hotelName, modifier = Modifier.weight(1f), style = DdType.body, color = deepDeepColors().ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        order.totalPrice?.let {
+                            DdText(it, style = DdType.body, color = deepDeepColors().ink)
+                        }
+                    }
+                    val stayMeta = listOfNotNull(
+                        order.checkIn,
+                        order.checkOut,
+                        order.nights?.let { host.t("$it 晚", "$it night(s)") },
+                        order.roomCount?.let { host.t("$it 间", "$it room(s)") },
+                        order.roomName,
+                    ).joinToString(" · ")
+                    if (stayMeta.isNotBlank()) {
+                        DdText(stayMeta, style = DdType.bodySmall, color = deepDeepColors().inkSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                    val stateMeta = listOfNotNull(
+                        hotelOrderStatusText(order.status, translate),
+                        hotelPaymentStatusText(order.paymentStatus, translate),
+                        order.orderNo?.let { host.t("订单号 $it", "Order $it") },
+                    ).joinToString(" · ")
+                    if (stateMeta.isNotBlank()) {
+                        DdText(stateMeta, style = DdType.chip, color = deepDeepColors().inkTertiary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -279,13 +329,19 @@ internal fun HotelBookCard(host: PluginHost, state: ToolCardSlotState) {
         },
     ) {
         DdStatusRow(label = host.t("订单号", "Order"), value = details.orderNo, tone = DdStatusTone.NEUTRAL)
-        details.roomName?.let { DdStatusRow(label = host.t("房型", "Room"), value = it, tone = DdStatusTone.NEUTRAL) }
+        details.roomName?.let {
+            val room = listOfNotNull(it, details.ratePlanName).joinToString(" · ")
+            DdStatusRow(label = host.t("房型", "Room"), value = room, tone = DdStatusTone.NEUTRAL)
+        }
         if (details.checkIn != null && details.checkOut != null) {
             DdStatusRow(
                 label = host.t("入住", "Stay"),
                 value = "${details.checkIn} → ${details.checkOut}",
                 tone = DdStatusTone.NEUTRAL,
             )
+        }
+        details.cancellation?.takeIf { it.isNotBlank() }?.let {
+            DdStatusRow(label = host.t("取消政策", "Cancellation"), value = it, tone = DdStatusTone.NEUTRAL)
         }
         details.totalPrice?.let { DdStatusRow(label = host.t("总价", "Total"), value = it, tone = DdStatusTone.ACCENT) }
         details.paymentUrl?.takeIf { it.isNotBlank() }?.let { url ->

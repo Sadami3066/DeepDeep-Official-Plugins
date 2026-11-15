@@ -1,0 +1,24 @@
+{
+  "info": {
+    "success": true,
+    "xm": "张三",
+    "sn": "00000000",
+    "bmmc": "计算机学院",
+    "netid": "zhangsan"
+  },
+  "services": [
+    {
+      "no": "1",
+      "service": "校园网-学生宿舍",
+      "address": "东校园明德园 1 号",
+      "mac": "AA:BB:CC:DD:EE:FF",
+      "dept": "计算机学院",
+      "user": "张三",
+      "status": "正常",
+      "expire": "2027-06-30",
+      "paused": "",
+      "id": "svc-1",
+      "daysLeft": 227
+    }
+  ]
+}

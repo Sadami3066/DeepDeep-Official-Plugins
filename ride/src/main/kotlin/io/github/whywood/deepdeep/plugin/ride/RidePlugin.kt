@@ -101,11 +101,11 @@ private val SKILL_MARKDOWN = """
 
     DeepDeep 打车插件提供从估价到下单、取消、订单跟踪的完整流程。
 
-    - 地点坐标：用 `ride_place_search`（keywords + city）拿经纬度，不要把地址猜成坐标。
-    - 预估：用 `ride_estimate`，传出发/目的地的名称与经纬度；把车型、参考价和券后价展示给用户，让用户选车型。
-    - 下单：用户明确确认车型和价格后，调用 `ride_create_order`，传 `product_name`（预估卡片里的车型名）和 `confirm=true`。调用后立即产生真实订单，不要在用户确认前调用。
+    - 地点坐标：用 `ride_place_search`（keywords + city）拿名称、地址和经纬度，不要把地址猜成坐标；文本里的经度对应 *_lng、纬度对应 *_lat。
+    - 预估：用 `ride_estimate`，传出发/目的地的名称与经纬度；结果文本给出车型、参考价、券后价、接驾等待、距离、时长、车型品类和 traceId，把车型与价格交给用户选择。
+    - 下单：用户明确确认车型和价格后，调用 `ride_create_order`，传 `product_name`（ride_estimate 返回的车型名）和 `confirm=true`。调用后立即产生真实订单，不要在用户确认前调用。
     - 支付：滴滴订单由滴滴账号完成支付；插件不会自动支付，也没有支付工具。
     - 取消：用户明确要求取消时用 `ride_cancel_order`，传 `confirm=true`；未传 order_id 时取消最近创建的订单。
-    - 订单状态：用 `ride_order_status`；司机位置：`ride_driver_location`。
-    - 展示时只保留地名、车型、价格、车牌/司机/ETA 等用户需要的信息，不暴露 traceId、品类代码等内部字段。
+    - 订单状态：用 `ride_order_status`，结果文本包含状态、司机、车型、车牌、电话、距上车点距离与预计到达；返回限流提示时告诉用户稍后重试，不要说成没有订单。司机位置：`ride_driver_location`。
+    - 展示时只保留地名、车型、价格、车牌/司机/ETA 等用户需要的信息，不向用户暴露 traceId、品类代码等内部字段。
 """.trimIndent()

@@ -51,8 +51,11 @@ internal fun FeishuPage(host: PluginHost, runtime: FeishuRuntime) {
     val checked = snapshot != null
     val version = snapshot?.installedVersion
     val installed = version != null
-    val outdated = version != null && version != FEISHU_VERSION
     val connected = snapshot?.connected == true
+    val latestVersion = state.latestVersion
+    val updateChecking = state.updateChecking
+    val updateFailed = installed && !updateChecking && latestVersion == null && state.lastCheckedAt > 0
+    val canUpdate = version != null && FeishuUpdate.isNewer(latestVersion ?: FEISHU_VERSION, version)
     val checkingFirstTime = !checked && state.checking
     val checkFailed = !checked && !state.checking
     val problem = state.error
@@ -112,12 +115,21 @@ internal fun FeishuPage(host: PluginHost, runtime: FeishuRuntime) {
             )
         }
 
-        if (outdated && !busy && linuxAvailable) {
+        if (canUpdate && !busy && linuxAvailable) {
             DdNoticeBar(
-                text = host.t("飞书组件有新版本，建议更新。", "A newer Feishu component is available."),
+                text = host.text(UPDATE_NOTICE),
                 tone = DdNoticeTone.INFO,
-                actionLabel = host.t("更新", "Update"),
-                onAction = { runtime.startInstall(host) },
+                actionLabel = host.text(UPDATE_ACTION),
+                onAction = { runtime.startUpdate(host) },
+            )
+        }
+
+        if (updateFailed && !canUpdate && !busy && linuxAvailable) {
+            DdNoticeBar(
+                text = host.text(UPDATE_FAILED_NOTICE),
+                tone = DdNoticeTone.WARNING,
+                actionLabel = host.text(UPDATE_CHECK_AGAIN),
+                onAction = { runtime.requestUpdateCheck(host, force = true) },
             )
         }
 
@@ -194,10 +206,19 @@ private fun StatusCard(host: PluginHost, state: FeishuPageState, linuxAvailable:
     val checked = snapshot != null
     val version = snapshot?.installedVersion
     val installed = version != null
-    val outdated = version != null && version != FEISHU_VERSION
     val connected = snapshot?.connected == true
+    val latestVersion = state.latestVersion
+    val updateFailed = installed && !state.updateChecking && latestVersion == null && state.lastCheckedAt > 0
+    val updateStatus = FeishuUpdate.statusTextKey(
+        installedVersion = version,
+        latestVersion = latestVersion,
+        checking = state.updateChecking || (latestVersion == null && state.lastCheckedAt == 0L),
+        failed = updateFailed,
+        pinnedVersion = FEISHU_VERSION,
+    )
     val unknown = host.t("检查中…", "Checking…")
     val checkFailed = host.t("检查失败", "Check failed")
+    val updateBusy = installed && updateStatus == FeishuUpdateStatus.CHECKING
     DdGroupCard {
         Column(
             modifier = Modifier
@@ -226,18 +247,26 @@ private fun StatusCard(host: PluginHost, state: FeishuPageState, linuxAvailable:
                     !checked -> checkFailed
                     !linuxAvailable -> host.t("不可用", "Unavailable")
                     !installed -> host.t("未安装", "Not installed")
-                    outdated -> host.t("待更新", "Update available")
-                    else -> host.t("已就绪", "Ready")
+                    else -> when (updateStatus) {
+                        FeishuUpdateStatus.CHECKING -> host.text(UPDATE_STATUS_CHECKING)
+                        FeishuUpdateStatus.AVAILABLE -> host.text(UPDATE_STATUS_AVAILABLE)
+                        FeishuUpdateStatus.FAILED -> host.text(UPDATE_STATUS_FAILED)
+                        FeishuUpdateStatus.LATEST -> host.t("已就绪", "Ready")
+                        FeishuUpdateStatus.NOT_INSTALLED -> host.t("未安装", "Not installed")
+                    }
                 },
                 tone = when {
                     !checked && checking -> DdStatusTone.NEUTRAL
                     !checked -> DdStatusTone.WARNING
                     !linuxAvailable -> DdStatusTone.NEUTRAL
                     !installed -> DdStatusTone.NEUTRAL
-                    outdated -> DdStatusTone.WARNING
-                    else -> DdStatusTone.SUCCESS
+                    updateStatus == FeishuUpdateStatus.CHECKING -> DdStatusTone.ACCENT
+                    updateStatus == FeishuUpdateStatus.AVAILABLE -> DdStatusTone.WARNING
+                    updateStatus == FeishuUpdateStatus.FAILED -> DdStatusTone.WARNING
+                    updateStatus == FeishuUpdateStatus.LATEST -> DdStatusTone.SUCCESS
+                    else -> DdStatusTone.NEUTRAL
                 },
-                busy = !checked && checking,
+                busy = (!checked && checking) || updateBusy,
             )
             DdHairline()
             DdStatusRow(

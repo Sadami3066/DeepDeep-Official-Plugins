@@ -406,7 +406,7 @@ private fun MiCloudFeatureRow(
     onToggle: (MiCloudFeature, Boolean) -> Unit,
 ) {
     DdListRow(
-        title = featureName(host, feature),
+        title = host.featureName(feature),
         trailing = {
             DdSwitch(
                 checked = capabilities.readEnabled(feature),
@@ -592,16 +592,6 @@ private fun connectionTone(view: MiCloudSessionView?): DdStatusTone = when (view
     MiCloudSessionState.UNVERIFIED -> DdStatusTone.WARNING
     MiCloudSessionState.EXPIRED -> DdStatusTone.DANGER
     MiCloudSessionState.SIGNED_OUT, null -> DdStatusTone.NEUTRAL
-}
-
-private fun featureName(host: PluginHost, feature: MiCloudFeature): String = when (feature) {
-    MiCloudFeature.NOTES -> host.t("笔记", "Notes")
-    MiCloudFeature.TODOS -> host.t("待办", "To-dos")
-    MiCloudFeature.SMS -> host.t("短信与通话", "SMS and calls")
-    MiCloudFeature.CONTACTS -> host.t("联系人", "Contacts")
-    MiCloudFeature.GALLERY -> host.t("相册", "Gallery")
-    MiCloudFeature.RECORDINGS -> host.t("录音", "Recordings")
-    MiCloudFeature.ACCOUNT -> host.t("账号信息", "Account info")
 }
 
 private fun currentWebCookie(): String? = runCatching {

@@ -1,7 +1,17 @@
 package io.github.whywood.deepdeep.plugin.wecom
 
 import io.github.whywood.deepdeep.plugin.api.LocalizedText
+import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.localizedText
+
+internal fun PluginHost.t(zh: String, en: String): String =
+    text(localizedText(mapOf("default" to zh, "zh" to zh, "en" to en)))
+
+internal fun PluginHost.tf(zh: String, en: String, vararg args: Any): String =
+    text(localizedText(mapOf("default" to zh, "zh" to zh, "en" to en)), *args)
+
+internal val PluginHost.chinese: Boolean
+    get() = app().info.language.startsWith("zh")
 
 internal object WecomTexts {
     val pageTitle = literal("企业微信", "WeCom")
@@ -29,10 +39,6 @@ internal object WecomTexts {
     val componentReady = literal("已就绪", "Ready")
     val componentUpdate = literal("待更新", "Update available")
     val checkingStatus = literal("正在检查企业微信状态…", "Checking WeCom status…")
-    val updateAvailable = literal(
-        "企业微信组件有新版本，建议更新。",
-        "A newer WeCom component is available.",
-    )
     val authorization = literal("授权", "Authorization")
     val checking = literal("检查中…", "Checking…")
     val checkFailed = literal("检查失败", "Check failed")
@@ -40,7 +46,19 @@ internal object WecomTexts {
     val notConnected = literal("未连接", "Not connected")
 
     val install = literal("安装", "Install")
-    val update = literal("更新组件", "Update")
+    val update = literal("更新", "Update")
+    val checkingUpdate = literal("正在检查组件更新…", "Checking for updates…")
+    val updateCheckFailed = literal("检查更新失败：%s", "Update check failed: %s")
+    val updateNotice = literal("企业微信组件有新版本，建议更新。", "A newer WeCom component is available.")
+    val errorIntegrityMissing = literal(
+        "更新包缺少 sha512 校验信息，已拒绝更新。",
+        "The update package has no sha512 checksum; the update was rejected.",
+    )
+    val errorIntegrityMismatch = literal(
+        "更新包校验失败，已取消更新，现有组件保持不变。",
+        "The update package failed verification; the update was cancelled and the current component is unchanged.",
+    )
+    val snackbarUpdated = literal("企业微信组件已更新", "WeCom component updated")
     val connect = literal("连接企业微信", "Connect WeCom")
     val reauthorize = literal("重新授权", "Reauthorize")
     val logout = literal("退出登录", "Sign out")

@@ -1,14 +1,17 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.wecom",
-  "version": "2.2.3",
+  "version": "2.3.0",
   "publisher": {
     "name": "milous"
   },
   "apiLevel": 6,
   "minHostVersion": "1.0.8",
   "capabilities": [
+    "app",
+    "chat",
     "files",
     "linux",
+    "logs",
     "network",
     "notifications",
     "settings",
@@ -42,7 +45,15 @@
     "skills": [
       "deepdeep-wecom"
     ],
-    "uiSlots": [],
+    "uiSlots": [
+      "chat.message:wecom.chat.groups",
+      "chat.message:wecom.chat.messages",
+      "chat.message:wecom.doc.search",
+      "chat.message:wecom.doc.content",
+      "chat.message:wecom.calendar.schedules",
+      "chat.message:wecom.todo.list",
+      "chat.message:wecom.contact.users"
+    ],
     "pages": [
       "main"
     ]
