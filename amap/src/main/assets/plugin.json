@@ -1,0 +1,56 @@
+{
+  "id": "io.github.whywood.deepdeep.plugin.amap",
+  "version": "1.0.0",
+  "apiLevel": 6,
+  "minHostVersion": "1.1.0",
+  "capabilities": [
+    "logs",
+    "network",
+    "secrets",
+    "settings",
+    "ui"
+  ],
+  "entryClass": "io.github.whywood.deepdeep.plugin.amap.AmapPlugin",
+  "name": {
+    "default": "高德地图",
+    "zh": "高德地图",
+    "en": "Amap Maps"
+  },
+  "summary": {
+    "default": "在对话里查地点、路线和天气，在高德地图里出发",
+    "zh": "在对话里查地点、路线和天气，在高德地图里出发",
+    "en": "Search places, plan routes and check weather in chat, then continue in Amap Maps"
+  },
+  "description": {
+    "default": "搜索地点、查看周边、把坐标还原成地址、规划驾车/公交/步行/骑行路线和查询天气，结果以卡片展示；点卡片可在高德地图里查看与导航。高德 Key 只保存在本机，导航和打车在高德地图内完成。",
+    "zh": "搜索地点、查看周边、把坐标还原成地址、规划驾车/公交/步行/骑行路线和查询天气，结果以卡片展示；点卡片可在高德地图里查看与导航。高德 Key 只保存在本机，导航和打车在高德地图内完成。",
+    "en": "Search places, explore nearby spots, turn coordinates into addresses, plan driving, transit, walking and cycling routes, and check weather. Results appear as cards you can open in Amap Maps. The key stays on this device; navigation and rides happen inside Amap Maps."
+  },
+  "publisher": {
+    "name": "milous"
+  },
+  "ui": {
+    "apiLevel": 2
+  },
+  "provides": {
+    "tools": [
+      "amap_place_search",
+      "amap_around_search",
+      "amap_regeo",
+      "amap_route_driving",
+      "amap_route_transit",
+      "amap_route_walking",
+      "amap_route_bicycling",
+      "amap_weather"
+    ],
+    "skills": [
+      "deepdeep-amap"
+    ],
+    "uiSlots": [],
+    "pages": [
+      "main"
+    ]
+  },
+  "defaultEnabled": true,
+  "icon": "asset:icon.png"
+}

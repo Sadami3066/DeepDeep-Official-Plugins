@@ -20,4 +20,5 @@ fi
   :themes:verifyPlugin \
   :rail:verifyPlugin \
   :hotel:verifyPlugin \
-  :ride:verifyPlugin
+  :ride:verifyPlugin \
+  :amap:verifyPlugin
