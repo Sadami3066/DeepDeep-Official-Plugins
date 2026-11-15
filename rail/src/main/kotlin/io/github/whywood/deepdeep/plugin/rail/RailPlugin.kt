@@ -38,7 +38,7 @@ class RailPlugin : DeepDeepPlugin {
         tools = listOf(
             pluginTool(
                 name = TOOL_NAME,
-                label = host.t("火车票", "Trains"),
+                label = host.t("12306铁路", "12306 Railway"),
                 description = host.t(
                     "查询 12306 火车时刻与余票。参数：from 出发城市/车站，to 到达城市/车站，date 可选 YYYY-MM-DD（默认今天，限今天起 $RAIL_DATE_WINDOW_DAYS 天内）。只查票，购票、登录与支付由用户在 12306 完成。",
                     "Search 12306 train times and seat availability. Parameters: from departure city/station, to arrival city/station, optional date YYYY-MM-DD (default today, within $RAIL_DATE_WINDOW_DAYS days). This tool only searches; sign-in, booking and payment happen on 12306.",
@@ -105,7 +105,7 @@ class RailPlugin : DeepDeepPlugin {
         override val pages = listOf(
             pluginPage(
                 id = "main",
-                title = localizedText(default = "火车票", zh = "火车票", en = "Trains"),
+                title = localizedText(default = "12306铁路", zh = "12306铁路", en = "12306 Railway"),
             ) {
                 TrainPage(host)
             },

@@ -32,6 +32,7 @@ class RidePayloadsTest {
         assertEquals("公司 → 机场", estimate.route)
         assertEquals(2, estimate.items.size)
         assertEquals("快车", estimate.items[0].productName)
+        assertEquals("trace-1", estimate.traceId)
         assertEquals("20", estimate.items[0].priceText)
         assertEquals("18", estimate.items[0].priceDiscounted)
         assertEquals("35", estimate.items[1].priceText)
@@ -80,7 +81,7 @@ class RidePayloadsTest {
     fun parsesOrderFieldsAndDetectsEmpty() {
         val order = parseRideOrder(
             objectOf(
-                """{"status":"司机已接单","driverName":"王师傅","driverPhone":"13800000000","plateNumber":"粤A12345","eta":"5 分钟"}""",
+                """{"status":"司机已接单","driverName":"王师傅","driverPhone":"13800000000","plateNumber":"粤A12345","eta":"5 分钟","orderId":"order-1","from":{"name":"公司"},"to":{"name":"机场"},"phoneNumberSuffix":"1234"}""",
             ),
         )
         assertEquals("司机已接单", order.status)
@@ -88,6 +89,10 @@ class RidePayloadsTest {
         assertEquals("13800000000", order.phone)
         assertEquals("粤A12345", order.plate)
         assertEquals("5 分钟", order.eta)
+        assertEquals("order-1", order.orderId)
+        assertEquals("公司", order.fromName)
+        assertEquals("机场", order.toName)
+        assertEquals("1234", order.phoneSuffix)
         assertFalse(order.isEmpty)
 
         assertTrue(parseRideOrder(null).isEmpty)

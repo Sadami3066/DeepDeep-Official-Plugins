@@ -61,6 +61,42 @@ internal class HotelService(private val host: PluginHost) {
             ?: throw HotelToolException(host.t("没有查到这家酒店的房型，请稍后再试。", "No room types came back for this hotel. Try again."))
     }
 
+    suspend fun book(
+        hotelId: Long,
+        ratePlanId: String,
+        checkIn: String,
+        checkOut: String,
+        rooms: Int,
+        adults: Int,
+        firstName: String,
+        lastName: String,
+        email: String,
+    ): HotelBookingDetails {
+        ensureReady()
+        val priceOutput = exec(
+            HotelCli.priceConfirmCommand(
+                hotelId = hotelId,
+                ratePlanId = ratePlanId,
+                rooms = rooms,
+                checkIn = checkIn,
+                checkOut = checkOut,
+                adults = adults,
+            ),
+        )
+        val referenceNo = parseHotelPriceConfirmation(priceOutput)
+            ?: throw HotelToolException(host.t("价格确认没有返回预订参考号，请稍后再试。", "Price confirmation didn't return a reference. Try again."))
+        val bookOutput = exec(
+            HotelCli.bookCommand(
+                referenceNo = referenceNo.referenceNo,
+                firstName = firstName,
+                lastName = lastName,
+                email = email,
+            ),
+        )
+        return parseHotelBooking(bookOutput)
+            ?: throw HotelToolException(host.t("订单没有创建成功，请稍后再试。", "The order wasn't created. Try again."))
+    }
+
     suspend fun orders(status: String?): HotelOrdersDetails {
         ensureReady()
         val output = exec(HotelCli.ordersCommand(status))

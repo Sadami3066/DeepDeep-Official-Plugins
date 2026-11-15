@@ -18,6 +18,8 @@ import io.github.whywood.deepdeep.plugin.api.toolResultMatch
 import io.github.whywood.deepdeep.plugin.api.toolResultRenderer
 
 class RidePlugin : DeepDeepPlugin {
+    private val toolState = RideToolState()
+
     override suspend fun availability(host: PluginHost): PluginAvailability = available()
 
     override suspend fun onEnable(host: PluginHost) {
@@ -25,7 +27,8 @@ class RidePlugin : DeepDeepPlugin {
             .onFailure { runCatching { host.logs().warn("didi key migration failed") } }
     }
 
-    override fun contributions(host: PluginHost) = io.github.whywood.deepdeep.plugin.api.contributions(tools = rideTools(host))
+    override fun contributions(host: PluginHost) =
+        io.github.whywood.deepdeep.plugin.api.contributions(tools = rideTools(host, toolState))
 
     override fun skills(host: PluginHost): List<PluginSkill> = listOf(
         pluginSkill(id = SKILL_ID, markdown = SKILL_MARKDOWN),
@@ -38,13 +41,15 @@ class RidePlugin : DeepDeepPlugin {
             override val pages = listOf(
                 pluginPage(
                     id = "main",
-                    title = localizedText(mapOf("default" to "打车", "zh" to "打车", "en" to "Ride")),
+                    title = localizedText(mapOf("default" to "滴滴打车", "zh" to "滴滴打车", "en" to "DiDi Ride")),
                 ) { RidePage(host) },
             )
 
             override val toolResultRenderers = listOf(
                 pluginRenderer("ride-estimate", "ride_estimate") { state -> RideEstimateCard(host, state) },
                 pluginRenderer("ride-app-link", "ride_app_link") { state -> RideLinkCard(host, state) },
+                pluginRenderer("ride-create-order", "ride_create_order") { state -> RideOrderCard(host, state) },
+                pluginRenderer("ride-cancel-order", "ride_cancel_order") { state -> RideCancelCard(host, state) },
                 pluginRenderer("ride-order-status", "ride_order_status") { state -> RideOrderCard(host, state) },
                 pluginRenderer("ride-driver-location", "ride_driver_location") { state ->
                     RideDriverLocationCard(host, state)
@@ -94,12 +99,13 @@ private val SKILL_MARKDOWN = """
 
     # 滴滴打车
 
-    DeepDeep 打车插件提供五个查询工具，真实下单和支付始终在滴滴 App 或小程序里由用户完成。
+    DeepDeep 打车插件提供从估价到下单、取消、订单跟踪的完整流程。
 
     - 地点坐标：用 `ride_place_search`（keywords + city）拿经纬度，不要把地址猜成坐标。
     - 预估：用 `ride_estimate`，传出发/目的地的名称与经纬度；把车型、参考价和券后价展示给用户，让用户选车型。
-    - 发单：优先 `ride_app_link`，给用户滴滴 App / 小程序跳转链接；插件不会创建真实订单，也不能自动支付。
-    - 不能自动发单、不能自动支付；用户未明确选择车型前不要发单。
+    - 下单：用户明确确认车型和价格后，调用 `ride_create_order`，传 `product_name`（预估卡片里的车型名）和 `confirm=true`。调用后立即产生真实订单，不要在用户确认前调用。
+    - 支付：滴滴订单由滴滴账号完成支付；插件不会自动支付，也没有支付工具。
+    - 取消：用户明确要求取消时用 `ride_cancel_order`，传 `confirm=true`；未传 order_id 时取消最近创建的订单。
     - 订单状态：用 `ride_order_status`；司机位置：`ride_driver_location`。
     - 展示时只保留地名、车型、价格、车牌/司机/ETA 等用户需要的信息，不暴露 traceId、品类代码等内部字段。
 """.trimIndent()

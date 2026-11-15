@@ -217,8 +217,8 @@ internal fun HotelPage(host: PluginHost, runtime: HotelRuntime) {
         Spacer(Modifier.height(DdSpacing.Xs))
         DdText(
             text = host.t(
-                "连接后，在对话里描述目的地和日期即可搜索酒店、查看房型。真实预订在 RollingGo 完成。",
-                "After connecting, describe the destination and dates in chat to search hotels and view rooms. Booking happens on RollingGo.",
+                "连接后，在对话里描述目的地和日期即可搜索酒店、查看房型；确认后可创建待支付订单，支付在 RollingGo 完成。",
+                "After connecting, search hotels and view rooms from chat; after confirmation the plugin can create a pending order, with payment on RollingGo.",
             ),
             style = DdType.bodySmall,
             color = colors.inkTertiary,

@@ -1,6 +1,6 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.rail",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "apiLevel": 6,
   "minHostVersion": "1.1.0",
   "capabilities": [
@@ -11,19 +11,19 @@
   ],
   "entryClass": "io.github.whywood.deepdeep.plugin.rail.RailPlugin",
   "name": {
-    "default": "火车票",
-    "zh": "火车票",
-    "en": "Trains"
+    "default": "12306铁路",
+    "zh": "12306铁路",
+    "en": "12306 Railway"
   },
   "summary": {
-    "default": "查 12306 车次、时刻与余票，去 12306 完成预订",
-    "zh": "查 12306 车次、时刻与余票，去 12306 完成预订",
+    "default": "查询 12306 车次、时刻与余票，去 12306 完成预订",
+    "zh": "查询 12306 车次、时刻与余票，去 12306 完成预订",
     "en": "Search 12306 trains, times and seats, then book on 12306"
   },
   "description": {
-    "default": "按出发站、到达站和出发日期查询 12306 车次、时刻、历时与余票，保存最近路线；结果可在聊天里查看前几趟并一键打开 12306 完成登录与购票。",
-    "zh": "按出发站、到达站和出发日期查询 12306 车次、时刻、历时与余票，保存最近路线；结果可在聊天里查看前几趟并一键打开 12306 完成登录与购票。",
-    "en": "Search 12306 trains by route and date with times, duration and seat availability, keep recent routes, and jump to 12306 to sign in and book."
+    "default": "按出发站、到达站和出发日期查询中国铁路 12306 车次、时刻、历时与余票，保存最近路线；结果可在聊天里查看前几趟并一键打开 12306 完成登录与购票。",
+    "zh": "按出发站、到达站和出发日期查询中国铁路 12306 车次、时刻、历时与余票，保存最近路线；结果可在聊天里查看前几趟并一键打开 12306 完成登录与购票。",
+    "en": "Search China Railway 12306 trains by route and date with times, duration and seat availability, keep recent routes, and jump to 12306 to sign in and book."
   },
   "publisher": {
     "name": "milous"

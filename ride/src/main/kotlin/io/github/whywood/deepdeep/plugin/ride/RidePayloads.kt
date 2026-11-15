@@ -21,12 +21,14 @@ internal data class RideEstimateItem(
     val productName: String,
     val priceText: String?,
     val priceDiscounted: String?,
+    val productCategory: String? = null,
 )
 
 internal data class RideEstimate(
     val fromName: String?,
     val toName: String?,
     val items: List<RideEstimateItem>,
+    val traceId: String? = null,
 ) {
     val route: String
         get() = listOfNotNull(fromName, toName).joinToString(" → ")
@@ -49,9 +51,14 @@ internal data class RideOrder(
     val phone: String?,
     val plate: String?,
     val eta: String?,
+    val orderId: String? = null,
+    val fromName: String? = null,
+    val toName: String? = null,
+    val phoneSuffix: String? = null,
 ) {
     val isEmpty: Boolean
-        get() = listOf(status, driver, phone, plate, eta).all { it.isNullOrBlank() }
+        get() = listOf(status, driver, phone, plate, eta, orderId, fromName, toName, phoneSuffix)
+            .all { it.isNullOrBlank() }
 }
 
 internal data class RideDriverLocation(
@@ -113,11 +120,17 @@ internal fun parseRideEstimate(root: JsonObject?, fromName: String?, toName: Str
                     "discountedPrice",
                     "discountPrice",
                 ),
+                productCategory = item.stringValue("productCategory", "product_category", "category"),
             )
         }
         .orEmpty()
         .filter { it.productName.isNotBlank() }
-    return RideEstimate(fromName = fromName?.takeIf { it.isNotBlank() }, toName = toName?.takeIf { it.isNotBlank() }, items = items)
+    return RideEstimate(
+        fromName = fromName?.takeIf { it.isNotBlank() },
+        toName = toName?.takeIf { it.isNotBlank() },
+        items = items,
+        traceId = source?.stringValue("traceId", "trace_id", "estimateTraceId", "estimate_trace_id"),
+    )
 }
 
 private fun findItemsArray(root: JsonObject): JsonArray? {
@@ -143,11 +156,17 @@ internal fun parseRideLink(root: JsonObject?): RideLink {
 
 internal fun parseRideOrder(root: JsonObject?): RideOrder {
     val source = root?.let { unwrapRidePayload(it) }
+    val from = source?.get("from") as? JsonObject
+    val to = source?.get("to") as? JsonObject
+    val driver = source?.get("driver") as? JsonObject
     return RideOrder(
-        status = source?.stringValue("status", "orderStatus", "order_status", "state"),
-        driver = source?.stringValue("driverName", "driver_name", "driver"),
-        phone = source?.stringValue("driverPhone", "driver_phone", "phone", "mobile"),
-        plate = source?.stringValue("plateNumber", "plate_number", "carPlate", "plate", "licensePlate"),
+        status = source?.stringValue("status", "statusText", "orderStatus", "order_status", "state"),
+        driver = source?.stringValue("driverName", "driver_name", "driver")
+            ?: driver?.stringValue("name", "driverName"),
+        phone = source?.stringValue("driverPhone", "driver_phone", "phone", "mobile")
+            ?: driver?.stringValue("phone", "mobile"),
+        plate = source?.stringValue("plateNumber", "plate_number", "carPlate", "plate", "licensePlate")
+            ?: driver?.stringValue("carPlate", "plate"),
         eta = source?.stringValue(
             "eta",
             "estimatedArriveTime",
@@ -155,8 +174,13 @@ internal fun parseRideOrder(root: JsonObject?): RideOrder {
             "arriveTime",
             "arrive_time",
         ),
+        orderId = source?.stringValue("orderId", "order_id"),
+        fromName = from?.stringValue("name", "displayName"),
+        toName = to?.stringValue("name", "displayName"),
+        phoneSuffix = source?.stringValue("phoneNumberSuffix", "phone_suffix"),
     )
 }
+
 
 internal fun parseRideDriverLocation(root: JsonObject?): RideDriverLocation {
     val source = root?.let { unwrapRidePayload(it) }

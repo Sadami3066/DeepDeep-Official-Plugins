@@ -39,6 +39,7 @@ class HotelJsonTest {
         assertEquals("富春街道金桥北路61号", hotel.address)
         assertEquals(listOf("五星酒店", "免费WiFi", "免费停车场"), hotel.tags)
         assertEquals("https://rollinggo.cn/example", hotel.bookingUrl)
+        assertEquals(1090005L, hotel.hotelId)
         assertEquals("杭州西湖", details.place)
     }
 
@@ -76,6 +77,7 @@ class HotelJsonTest {
         assertEquals("2 单人床", room.bed)
         assertEquals("¥352", room.priceText)
         assertEquals("2026-06-19 起 ¥352", room.cancellation)
+        assertEquals(1090005L, details.hotelId)
     }
 
     @Test
@@ -104,6 +106,31 @@ class HotelJsonTest {
         assertEquals("3", order.status)
         assertEquals("普通双床房", order.roomName)
         assertEquals("¥352", order.totalPrice)
+    }
+
+
+    @Test
+    fun parsesPriceConfirmationAndBookingWithPaymentUrl() {
+        val price = requireNotNull(
+            parseHotelPriceConfirmation(
+                """
+                {"success":true,"priceDetailsInfo":{"referenceNo":"ref-1","hotelList":[{"totalPrice":352,"ratePlanList":[{"totalPrice":352,"currency":"CNY"}]}]}}
+                """.trimIndent(),
+            ),
+        )
+        assertEquals("ref-1", price.referenceNo)
+        assertEquals(352.0, price.totalPrice)
+
+        val booking = requireNotNull(
+            parseHotelBooking(
+                """
+                {"success":true,"bookingResult":{"orderNo":"order-1","paymentType":"URL","paymentUrl":"https://rollinggo.cn/pay"}}
+                """.trimIndent(),
+            ),
+        )
+        assertEquals("order-1", booking.orderNo)
+        assertEquals("URL", booking.paymentType)
+        assertEquals("https://rollinggo.cn/pay", booking.paymentUrl)
     }
 
     @Test

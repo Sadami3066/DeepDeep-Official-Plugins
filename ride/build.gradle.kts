@@ -10,8 +10,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.ride"
         minSdk = 29
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.0.0"
+        versionCode = 4
+        versionName = "1.0.1"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

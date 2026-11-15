@@ -84,6 +84,7 @@ internal fun parseHotelSearch(
             tags = item.stringList("tags").take(5),
             bookingUrl = item.string("bookingUrl", "booking_url"),
             distance = item.string("distanceText", "distance_text"),
+            hotelId = item.number("hotelId", "hotel_id")?.toLong(),
         )
     }
     return HotelSearchDetails(
@@ -113,6 +114,9 @@ internal fun parseHotelDetail(raw: String, fallbackName: String): HotelDetailDet
             bed = item.string("bedTypeDescription", "bedType"),
             priceText = money(item.number("totalPrice"), item.string("currency")),
             cancellation = item.cancellationText(),
+            ratePlanId = item.string("ratePlanId", "rate_plan_id"),
+            totalPrice = item.number("totalPrice", "total_price"),
+            currency = item.string("currency"),
         )
     }.orEmpty()
     return HotelDetailDetails(
@@ -121,6 +125,40 @@ internal fun parseHotelDetail(raw: String, fallbackName: String): HotelDetailDet
         checkOut = root.string("checkOut", "check_out")?.take(10),
         rooms = rooms,
         bookingUrl = bookingUrl,
+        fetchedAt = System.currentTimeMillis(),
+        hotelId = root.number("hotelId", "hotel_id")?.toLong(),
+    )
+}
+
+internal fun parseHotelPriceConfirmation(raw: String): HotelPriceConfirmation? {
+    val root = extractJsonElements(raw).filterIsInstance<JsonObject>()
+        .firstOrNull { it["priceDetailsInfo"] is JsonObject } ?: return null
+    val details = root["priceDetailsInfo"] as? JsonObject ?: return null
+    val reference = details.string("referenceNo", "reference_no") ?: return null
+    val hotel = (details["hotelList"] as? JsonArray)?.firstOrNull() as? JsonObject
+    val rate = (hotel?.get("ratePlanList") as? JsonArray)?.firstOrNull() as? JsonObject
+    return HotelPriceConfirmation(
+        referenceNo = reference,
+        totalPrice = hotel?.number("totalPrice") ?: rate?.number("totalPrice"),
+        currency = rate?.string("currency") ?: hotel?.string("currency"),
+    )
+}
+
+internal fun parseHotelBooking(raw: String): HotelBookingDetails? {
+    val root = extractJsonElements(raw).filterIsInstance<JsonObject>()
+        .firstOrNull { it["bookingResult"] is JsonObject || it["success"] != null } ?: return null
+    val booking = root["bookingResult"] as? JsonObject ?: return null
+    val orderNo = booking.string("orderNo", "order_no", "orderId", "order_id") ?: return null
+    return HotelBookingDetails(
+        orderNo = orderNo,
+        hotelName = root.string("hotelName", "name").orEmpty(),
+        roomName = root.string("roomName"),
+        checkIn = root.string("checkIn", "checkInDate")?.take(10),
+        checkOut = root.string("checkOut", "checkOutDate")?.take(10),
+        totalPrice = money(root.number("totalPrice"), root.string("currency")),
+        paymentType = booking.string("paymentType", "payment_type"),
+        paymentUrl = booking.string("paymentUrl", "payment_url", "alipayUrl", "alipay_url"),
+        message = root.string("message"),
         fetchedAt = System.currentTimeMillis(),
     )
 }

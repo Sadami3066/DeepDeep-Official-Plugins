@@ -1,6 +1,6 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.ride",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiLevel": 6,
   "minHostVersion": "1.1.0",
   "capabilities": [
@@ -12,19 +12,19 @@
   ],
   "entryClass": "io.github.whywood.deepdeep.plugin.ride.RidePlugin",
   "name": {
-    "default": "打车",
-    "zh": "打车",
-    "en": "Ride"
+    "default": "滴滴打车",
+    "zh": "滴滴打车",
+    "en": "DiDi Ride"
   },
   "summary": {
-    "default": "滴滴打车的车型预估、发单链接与订单卡片",
-    "zh": "滴滴打车的车型预估、发单链接与订单卡片",
-    "en": "Didi ride estimates, booking links and order cards"
+    "default": "滴滴车型预估、创建订单、订单与司机位置",
+    "zh": "滴滴车型预估、创建订单、订单与司机位置",
+    "en": "Didi estimates, order creation, ride status and driver location"
   },
   "description": {
-    "default": "在对话里搜索地点、预估车型与价格、生成滴滴 App/小程序发单链接、查询订单与司机位置。滴滴 Key 加密保存在本机；插件不会自动下单或支付，真实发单由你在滴滴内确认。",
-    "zh": "在对话里搜索地点、预估车型与价格、生成滴滴 App/小程序发单链接、查询订单与司机位置。滴滴 Key 加密保存在本机；插件不会自动下单或支付，真实发单由你在滴滴内确认。",
-    "en": "Search places, estimate ride options and fares, create Didi app or mini program booking links, and check orders and driver locations from chat. The Didi key is stored encrypted on this device; the plugin never books or pays automatically — you confirm the ride in Didi."
+    "default": "在对话里搜索地点、预估车型与价格、创建滴滴订单、查询订单与司机位置；也可生成滴滴 App/小程序发单链接。滴滴 Key 加密保存在本机；支付在滴滴内完成，插件不会自动支付。",
+    "zh": "在对话里搜索地点、预估车型与价格、创建滴滴订单、查询订单与司机位置；也可生成滴滴 App/小程序发单链接。滴滴 Key 加密保存在本机；支付在滴滴内完成，插件不会自动支付。",
+    "en": "Search places, estimate ride options and fares, create Didi orders, and check orders and driver locations from chat; also generate Didi app or mini program booking links. The Didi key is stored encrypted on this device; payment happens in Didi and the plugin never pays automatically."
   },
   "publisher": {
     "name": "milous"
@@ -37,6 +37,8 @@
       "ride_place_search",
       "ride_estimate",
       "ride_app_link",
+      "ride_create_order",
+      "ride_cancel_order",
       "ride_order_status",
       "ride_driver_location"
     ],

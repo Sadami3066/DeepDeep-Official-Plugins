@@ -220,7 +220,8 @@ internal fun RideLinkCard(host: PluginHost, state: ToolResultState) {
 
 @Composable
 internal fun RideOrderCard(host: PluginHost, state: ToolResultState) {
-    val title = host.t("打车订单", "Ride order")
+    val created = state.toolName == "ride_create_order"
+    val title = if (created) host.t("订单已创建", "Order created") else host.t("打车订单", "Ride order")
     rideCardError(state)?.let { error ->
         RideErrorCard(host, title, error)
         return
@@ -239,7 +240,16 @@ internal fun RideOrderCard(host: PluginHost, state: ToolResultState) {
         return
     }
     val colors = deepDeepColors()
-    RideCardShell(title = title) {
+    val route = listOfNotNull(order.fromName, order.toName).joinToString(" → ")
+    RideCardShell(
+        title = title,
+        subtitle = route.ifBlank { null },
+        footer = if (created) {
+            host.t("支付在滴滴内完成；司机接单后可查询状态和位置。", "Payment happens in Didi. Check status and driver location after a driver accepts.")
+        } else {
+            null
+        },
+    ) {
         order.status?.let { status ->
             DdText(
                 status,
@@ -249,11 +259,18 @@ internal fun RideOrderCard(host: PluginHost, state: ToolResultState) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        DdHairline()
-        order.driver?.let { DdStatusRow(label = host.t("司机", "Driver"), value = it, tone = DdStatusTone.NEUTRAL) }
-        order.plate?.let { DdStatusRow(label = host.t("车牌", "Plate"), value = it, tone = DdStatusTone.NEUTRAL) }
-        order.phone?.let { DdStatusRow(label = host.t("电话", "Phone"), value = it, tone = DdStatusTone.NEUTRAL) }
-        order.eta?.let { DdStatusRow(label = host.t("预计到达", "ETA"), value = it, tone = DdStatusTone.ACCENT) }
+        if (order.orderId != null || order.phoneSuffix != null) {
+            DdHairline()
+            order.orderId?.let { DdStatusRow(label = host.t("订单号", "Order"), value = it, tone = DdStatusTone.NEUTRAL) }
+            order.phoneSuffix?.let { DdStatusRow(label = host.t("账号尾号", "Phone suffix"), value = it, tone = DdStatusTone.NEUTRAL) }
+        }
+        if (order.driver != null || order.plate != null || order.phone != null || order.eta != null) {
+            DdHairline()
+            order.driver?.let { DdStatusRow(label = host.t("司机", "Driver"), value = it, tone = DdStatusTone.NEUTRAL) }
+            order.plate?.let { DdStatusRow(label = host.t("车牌", "Plate"), value = it, tone = DdStatusTone.NEUTRAL) }
+            order.phone?.let { DdStatusRow(label = host.t("电话", "Phone"), value = it, tone = DdStatusTone.NEUTRAL) }
+            order.eta?.let { DdStatusRow(label = host.t("预计到达", "ETA"), value = it, tone = DdStatusTone.ACCENT) }
+        }
     }
 }
 

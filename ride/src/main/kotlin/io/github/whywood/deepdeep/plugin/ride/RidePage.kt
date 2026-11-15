@@ -128,8 +128,8 @@ internal fun RidePage(host: PluginHost) {
             DdText(host.t("滴滴出行", "Didi"), style = DdType.heading, color = colors.ink)
             DdText(
                 host.t(
-                    "连接后可以在对话里搜索地点、预估价格、查看订单和司机位置。",
-                    "After connecting, search places, estimate fares, and check rides and driver locations in chat.",
+                    "连接后可以在对话里搜索地点、预估价格、创建订单、查看司机位置；支付在滴滴内完成。",
+                    "After connecting, search places, estimate fares, create orders and check driver locations in chat; payment happens in Didi.",
                 ),
                 style = DdType.bodySmall,
                 color = colors.inkSecondary,
@@ -327,8 +327,8 @@ internal fun RidePage(host: PluginHost) {
         Spacer(Modifier.height(DdSpacing.Xs))
         DdText(
             host.t(
-                "打车查询在对话里完成；下单和支付都在滴滴 App 或小程序里完成。",
-                "Search and lookups happen in chat; booking and payment happen in the Didi app or mini program.",
+                "对话里可以完成查询和下单；支付始终在滴滴内完成，插件不会自动支付。",
+                "Search and order creation happen in chat; payment always happens in Didi, and the plugin never pays automatically.",
             ),
             style = DdType.micro,
             color = colors.inkTertiary,

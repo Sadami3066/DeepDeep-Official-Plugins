@@ -87,6 +87,52 @@ internal object HotelCli {
         add("2>&1")
     }.joinToString(" ")
 
+    fun priceConfirmCommand(
+        hotelId: Long,
+        ratePlanId: String,
+        rooms: Int,
+        checkIn: String,
+        checkOut: String,
+        adults: Int,
+    ): String = buildList {
+        add(ENV)
+        add(BINARY)
+        add("price-confirm")
+        add("--hotel-id")
+        add(hotelId.toString())
+        add("--rate-plan-id")
+        add(quote(ratePlanId))
+        add("--rooms")
+        add(rooms.toString())
+        add("--check-in-date")
+        add(quote(checkIn))
+        add("--check-out-date")
+        add(quote(checkOut))
+        add("--adults")
+        add(adults.toString())
+        add("2>&1")
+    }.joinToString(" ")
+
+    fun bookCommand(
+        referenceNo: String,
+        firstName: String,
+        lastName: String,
+        email: String,
+    ): String = buildList {
+        add(ENV)
+        add(BINARY)
+        add("book")
+        add("--reference-no")
+        add(quote(referenceNo))
+        add("--first-name")
+        add(quote(firstName))
+        add("--last-name")
+        add(quote(lastName))
+        add("--email")
+        add(quote(email))
+        add("2>&1")
+    }.joinToString(" ")
+
     fun ordersCommand(status: String?): String = buildList {
         add(ENV)
         add(BINARY)

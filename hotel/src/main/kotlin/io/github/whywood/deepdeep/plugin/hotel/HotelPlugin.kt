@@ -28,6 +28,7 @@ import kotlinx.coroutines.withContext
 
 class HotelPlugin : DeepDeepPlugin {
     private val runtime = HotelRuntime()
+    private val toolState = HotelToolState()
 
     override suspend fun availability(host: PluginHost): PluginAvailability =
         if (runCatching { host.linux().available }.getOrDefault(false)) {
@@ -52,7 +53,7 @@ class HotelPlugin : DeepDeepPlugin {
     }
 
     override fun contributions(host: PluginHost): Contributions = contributions(
-        tools = hotelTools(host),
+        tools = hotelTools(host, toolState),
         hooks = object : PluginHooks {
             override suspend fun notificationAction(event: NotificationActionEvent) {
                 if (event.actionId == ACTION_OPEN_PAGE) host.ui().openPage(HOTEL_PAGE_ID)
@@ -82,12 +83,16 @@ class HotelPlugin : DeepDeepPlugin {
                 slotId = SlotIds.toolCard("hotel_orders"),
                 content = composeSlot { state -> HotelOrdersCard(host, state as ToolCardSlotState) },
             ),
+            slotBinding(
+                slotId = SlotIds.toolCard("hotel_book"),
+                content = composeSlot { state -> HotelBookCard(host, state as ToolCardSlotState) },
+            ),
         )
 
         override val pages: List<PluginPage> = listOf(
             pluginPage(
                 id = HOTEL_PAGE_ID,
-                title = literal("酒店", "Hotels"),
+                title = literal("RollingGo酒店", "RollingGo Hotels"),
                 icon = assetIcon(HOTEL_ICON_ASSET),
                 content = { HotelPage(host, runtime) },
             ),
@@ -104,9 +109,8 @@ class HotelPlugin : DeepDeepPlugin {
         val account = snapshot.account?.takeIf { it.isNotBlank() }?.let { "，账号 $it" }.orEmpty()
         return buildString {
             append("酒店插件已登录$account。")
-            append("查询酒店用 hotel_search，房型用 hotel_detail，订单用 hotel_orders；结果已经显示为卡片，不要复述完整列表。")
-            append("不要在用户未确认价格前执行 price-confirm 或 book。真实预订和支付通过卡片里的 RollingGo 链接完成。")
-            append("需要高级 CLI 操作时参考 deepdeep-hotel 技能，且必须两步确认。")
+            append("查询酒店用 hotel_search，房型用 hotel_detail，预订用 hotel_book，订单用 hotel_orders；结果已经显示为卡片，不要复述完整列表。")
+            append("只有用户明确确认酒店、房型、日期和总价，并提供联系人名、姓和邮箱后，才能调用 hotel_book；插件只创建待支付订单并返回官方支付链接，不代替用户支付。")
         }
     }
 

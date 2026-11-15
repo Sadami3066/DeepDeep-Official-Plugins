@@ -20,6 +20,8 @@ import io.github.whywood.deepdeep.design.DdNoticeBar
 import io.github.whywood.deepdeep.design.DdNoticeTone
 import io.github.whywood.deepdeep.design.DdPressable
 import io.github.whywood.deepdeep.design.DdSpacing
+import io.github.whywood.deepdeep.design.DdStatusRow
+import io.github.whywood.deepdeep.design.DdStatusTone
 import io.github.whywood.deepdeep.design.DdText
 import io.github.whywood.deepdeep.design.DdTextAction
 import io.github.whywood.deepdeep.design.DdType
@@ -252,6 +254,54 @@ private fun HotelCardShell(
 }
 
 @Composable
+internal fun HotelBookCard(host: PluginHost, state: ToolCardSlotState) {
+    val result = state.result
+    if (result == null) {
+        HotelLoadingCard(host)
+        return
+    }
+    if (result.isError) {
+        HotelErrorCard(host, result.text ?: host.t("订单没有创建成功", "The order wasn't created"))
+        return
+    }
+    val details = result.details?.let(::decodeBooking)
+    if (details == null) {
+        HotelFallbackCard(host, result.text)
+        return
+    }
+    HotelCardShell(
+        title = host.t("订单已创建", "Order created"),
+        subtitle = details.hotelName,
+        footer = if (details.paymentUrl.isNullOrBlank()) {
+            host.t("请在 RollingGo 完成支付。", "Complete payment on RollingGo.")
+        } else {
+            host.t("请在 30 分钟内完成支付，超时订单可能关闭。", "Pay within 30 minutes; unpaid orders may close.")
+        },
+    ) {
+        DdStatusRow(label = host.t("订单号", "Order"), value = details.orderNo, tone = DdStatusTone.NEUTRAL)
+        details.roomName?.let { DdStatusRow(label = host.t("房型", "Room"), value = it, tone = DdStatusTone.NEUTRAL) }
+        if (details.checkIn != null && details.checkOut != null) {
+            DdStatusRow(
+                label = host.t("入住", "Stay"),
+                value = "${details.checkIn} → ${details.checkOut}",
+                tone = DdStatusTone.NEUTRAL,
+            )
+        }
+        details.totalPrice?.let { DdStatusRow(label = host.t("总价", "Total"), value = it, tone = DdStatusTone.ACCENT) }
+        details.paymentUrl?.takeIf { it.isNotBlank() }?.let { url ->
+            DdHairline()
+            DdTextAction(
+                text = host.t("去支付", "Pay now"),
+                onClick = { host.openHotelBooking(url) },
+            )
+        }
+        details.message?.takeIf { it.isNotBlank() }?.let {
+            DdText(it, style = DdType.bodySmall, color = deepDeepColors().inkSecondary)
+        }
+    }
+}
+
+@Composable
 private fun HotelLoadingCard(host: PluginHost) {
     DdGroupCard {
         DdLoadingBlock(
@@ -301,4 +351,8 @@ private fun decodeDetail(details: JsonObject): HotelDetailDetails? = runCatching
 
 private fun decodeOrders(details: JsonObject): HotelOrdersDetails? = runCatching {
     HotelJson.decodeFromJsonElement(HotelOrdersDetails.serializer(), details)
+}.getOrNull()
+
+private fun decodeBooking(details: JsonObject): HotelBookingDetails? = runCatching {
+    HotelJson.decodeFromJsonElement(HotelBookingDetails.serializer(), details)
 }.getOrNull()

@@ -54,6 +54,27 @@ class HotelCliTest {
     }
 
     @Test
+    fun buildsPriceConfirmAndBookCommands() {
+        val confirm = HotelCli.priceConfirmCommand(
+            hotelId = 1090005,
+            ratePlanId = "plan-1",
+            rooms = 1,
+            checkIn = "2026-06-20",
+            checkOut = "2026-06-21",
+            adults = 2,
+        )
+        assertTrue(confirm.startsWith("HOME=/root rgh price-confirm"))
+        assertTrue(confirm.contains("--rate-plan-id 'plan-1'"))
+        assertTrue(confirm.contains("--rooms 1"))
+        assertTrue(confirm.contains("--adults 2"))
+
+        val book = HotelCli.bookCommand("ref-1", "San", "Zhang", "san@example.com")
+        assertTrue(book.startsWith("HOME=/root rgh book"))
+        assertTrue(book.contains("--reference-no 'ref-1'"))
+        assertTrue(book.contains("--email 'san@example.com'"))
+    }
+
+    @Test
     fun parsesVersionAndStatus() {
         assertEquals("1.2.25", HotelCli.parseVersion("1.2.25"))
         assertEquals("1.2.25", HotelCli.parseVersion("rgh 1.2.25\n更新可用"))
