@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.whywood.deepdeep.design.DdEmptyState
 import io.github.whywood.deepdeep.design.DdGroupCard
+import io.github.whywood.deepdeep.design.DdHairline
 import io.github.whywood.deepdeep.design.DdIconButton
 import io.github.whywood.deepdeep.design.DdIcons
 import io.github.whywood.deepdeep.design.DdInfoTooltip
@@ -51,6 +52,7 @@ import io.github.whywood.deepdeep.design.DdNoticeTone
 import io.github.whywood.deepdeep.design.DdPrimaryButton
 import io.github.whywood.deepdeep.design.DdProgressBar
 import io.github.whywood.deepdeep.design.DdSectionLabel
+import io.github.whywood.deepdeep.design.DdSpacing
 import io.github.whywood.deepdeep.design.DdStatusRow
 import io.github.whywood.deepdeep.design.DdStatusTone
 import io.github.whywood.deepdeep.design.DdSwitch
@@ -256,30 +258,73 @@ private fun MiCloudHomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(
+                start = DdSpacing.ScreenHorizontal,
+                end = DdSpacing.ScreenHorizontal,
+                top = DdSpacing.Md,
+                bottom = DdSpacing.Xxl,
+            ),
+        verticalArrangement = Arrangement.spacedBy(DdSpacing.Lg),
     ) {
+        Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Xs)) {
+            DdText(host.t("小米云", "Xiaomi Cloud"), style = DdType.heading, color = colors.ink)
+            DdText(
+                host.t(
+                    "登录后，可以在对话里让助手读取笔记、待办与个人数据。",
+                    "Sign in and let the assistant read your notes, to-dos and personal data in chat.",
+                ),
+                style = DdType.bodySmall,
+                color = colors.inkSecondary,
+            )
+        }
         DdGroupCard {
-            Box(Modifier.padding(horizontal = 18.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = DdSpacing.Card, vertical = DdSpacing.Sm),
+            ) {
                 DdStatusRow(
-                    label = host.t("登录状态", "Sign-in status"),
-                    value = if (status == null) {
-                        host.t("检查中…", "Checking…")
-                    } else {
-                        statusValue(host, status)
-                    },
-                    tone = statusTone(status),
+                    label = host.t("账号", "Account"),
+                    value = accountValue(host, status),
+                    tone = accountTone(status),
+                )
+                DdHairline()
+                DdStatusRow(
+                    label = host.t("连接", "Connection"),
+                    value = connectionValue(host, status),
+                    tone = connectionTone(status),
                     busy = busy,
                 )
+                DdHairline()
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
+                    horizontalArrangement = Arrangement.spacedBy(DdSpacing.Lg),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DdTextAction(
+                        text = host.t("刷新状态", "Refresh"),
+                        onClick = onRefresh,
+                        enabled = !busy,
+                        color = colors.inkSecondary,
+                    )
+                    if (signedIn) {
+                        DdTextAction(
+                            text = host.t("退出登录", "Sign out"),
+                            onClick = onLogout,
+                            enabled = !busy,
+                            color = colors.danger,
+                        )
+                    }
+                }
             }
-            if (signedIn) {
-                DdListRow(
-                    title = host.t("刷新登录状态", "Refresh sign-in status"),
-                    onClick = onRefresh,
-                    enabled = !busy,
-                    showChevron = true,
-                )
-            }
+        }
+        logoutError?.let { message ->
+            DdNoticeBar(
+                text = message,
+                tone = DdNoticeTone.DANGER,
+                actionLabel = host.t("重试", "Retry"),
+                onAction = onRetryLogout,
+            )
         }
         when {
             status?.state == MiCloudSessionState.UNVERIFIED -> DdNoticeBar(
@@ -295,14 +340,8 @@ private fun MiCloudHomeScreen(
             expired -> DdNoticeBar(
                 text = host.t("登录已失效，需要重新登录。", "Your sign-in expired. Sign in again."),
                 tone = DdNoticeTone.DANGER,
-            )
-
-            !signedIn -> DdNoticeBar(
-                text = host.t(
-                    "登录小米账号后，就能读取云端的笔记、待办和个人数据。",
-                    "Sign in to your Xiaomi account to read notes, to-dos and personal data from the cloud.",
-                ),
-                tone = DdNoticeTone.INFO,
+                actionLabel = host.t("重新登录", "Sign in again"),
+                onAction = onOpenLogin,
             )
         }
         if (!signedIn) {
@@ -347,24 +386,14 @@ private fun MiCloudHomeScreen(
                 MiCloudFeatureRow(host, feature, capabilities, signedIn && !busy, onToggle)
             }
         }
-        if (signedIn) {
-            logoutError?.let { message ->
-                DdNoticeBar(
-                    text = message,
-                    tone = DdNoticeTone.DANGER,
-                    actionLabel = host.t("重试", "Retry"),
-                    onAction = onRetryLogout,
-                )
-            }
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                DdTextAction(
-                    text = host.t("退出登录", "Sign out"),
-                    onClick = onLogout,
-                    color = colors.danger,
-                    enabled = !busy,
-                )
-            }
-        }
+        DdText(
+            host.t(
+                "数据只在对话里读取；修改笔记与待办前会先征求你的确认。",
+                "Data is read in chat only, and you'll be asked before notes or to-dos change.",
+            ),
+            style = DdType.micro,
+            color = colors.inkTertiary,
+        )
     }
 }
 
@@ -536,19 +565,29 @@ private fun MiCloudLoginScreen(
 private fun isSignedIn(view: MiCloudSessionView?): Boolean =
     view?.state == MiCloudSessionState.VERIFIED || view?.state == MiCloudSessionState.UNVERIFIED
 
-private fun statusValue(host: PluginHost, view: MiCloudSessionView?): String = when (view?.state) {
-    MiCloudSessionState.VERIFIED -> view.nickname
-        ?.takeIf { it.isNotBlank() }
-        ?.let { host.tf("已登录 · %s", "Signed in · %s", it) }
-        ?: host.t("已登录", "Signed in")
-
-    MiCloudSessionState.UNVERIFIED -> host.t("已登录 · 暂时无法连接", "Signed in · can't connect")
-    MiCloudSessionState.EXPIRED -> host.t("登录已失效", "Sign-in expired")
-    MiCloudSessionState.SIGNED_OUT -> host.t("未登录", "Not signed in")
-    null -> host.t("状态未知", "Status unknown")
+private fun accountValue(host: PluginHost, view: MiCloudSessionView?): String = when {
+    view == null -> host.t("检查中…", "Checking…")
+    view.state == MiCloudSessionState.EXPIRED -> host.t("登录已失效", "Sign-in expired")
+    view.state == MiCloudSessionState.SIGNED_OUT -> host.t("未登录", "Not signed in")
+    !view.nickname.isNullOrBlank() -> view.nickname
+    else -> host.t("已登录", "Signed in")
 }
 
-private fun statusTone(view: MiCloudSessionView?): DdStatusTone = when (view?.state) {
+private fun accountTone(view: MiCloudSessionView?): DdStatusTone = when (view?.state) {
+    MiCloudSessionState.VERIFIED, MiCloudSessionState.UNVERIFIED -> DdStatusTone.SUCCESS
+    MiCloudSessionState.EXPIRED -> DdStatusTone.DANGER
+    MiCloudSessionState.SIGNED_OUT, null -> DdStatusTone.NEUTRAL
+}
+
+private fun connectionValue(host: PluginHost, view: MiCloudSessionView?): String = when (view?.state) {
+    MiCloudSessionState.VERIFIED -> host.t("正常", "Connected")
+    MiCloudSessionState.UNVERIFIED -> host.t("暂时无法连接", "Can't connect")
+    MiCloudSessionState.EXPIRED -> host.t("需要重新登录", "Sign in again")
+    MiCloudSessionState.SIGNED_OUT -> host.t("未连接", "Not connected")
+    null -> host.t("检查中…", "Checking…")
+}
+
+private fun connectionTone(view: MiCloudSessionView?): DdStatusTone = when (view?.state) {
     MiCloudSessionState.VERIFIED -> DdStatusTone.SUCCESS
     MiCloudSessionState.UNVERIFIED -> DdStatusTone.WARNING
     MiCloudSessionState.EXPIRED -> DdStatusTone.DANGER

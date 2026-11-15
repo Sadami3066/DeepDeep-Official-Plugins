@@ -6,6 +6,16 @@ import io.github.whywood.deepdeep.plugin.api.localizedText
 internal object WecomTexts {
     val pageTitle = literal("企业微信", "WeCom")
 
+    val purpose = literal(
+        "连接后可以在对话里处理消息、邮件、文档、日程与待办。",
+        "Connect to handle WeCom messages, mail, docs, calendar and to-dos in chat.",
+    )
+
+    val footer = literal(
+        "连接后在对话里告诉我要做什么，例如发消息或查日程。",
+        "Once connected, tell me what to do in chat, such as sending a message or checking your calendar.",
+    )
+
     val unavailableLinux = literal(
         "当前设备不支持 Linux 环境，或尚未安装 Linux 环境；请先在 设置 → 运行环境 中安装。",
         "Linux is not supported on this device or not installed; install it in Settings → Runtime first.",
@@ -16,30 +26,32 @@ internal object WecomTexts {
     val unavailable = literal("不可用", "Unavailable")
     val component = literal("组件", "Component")
     val notInstalled = literal("未安装", "Not installed")
+    val componentReady = literal("已就绪", "Ready")
+    val componentUpdate = literal("待更新", "Update available")
+    val checkingStatus = literal("正在检查企业微信状态…", "Checking WeCom status…")
+    val updateAvailable = literal(
+        "企业微信组件有新版本，建议更新。",
+        "A newer WeCom component is available.",
+    )
     val authorization = literal("授权", "Authorization")
     val checking = literal("检查中…", "Checking…")
     val checkFailed = literal("检查失败", "Check failed")
     val connected = literal("已连接", "Connected")
     val notConnected = literal("未连接", "Not connected")
-    val botId = literal("机器人 ID", "Bot ID")
 
     val install = literal("安装", "Install")
     val update = literal("更新组件", "Update")
     val connect = literal("连接企业微信", "Connect WeCom")
     val reauthorize = literal("重新授权", "Reauthorize")
     val logout = literal("退出登录", "Sign out")
-    val installHint = literal(
-        "安装后即可扫码连接企业微信。",
-        "Install it, then scan to connect WeCom.",
-    )
 
     val stageWorking = literal("正在处理…", "Working…")
     val stagePreparing = literal("正在生成二维码…", "Creating QR code…")
     val stageWaiting = literal("等待扫码…", "Waiting for scan…")
     val stageScan = literal("扫码连接企业微信", "Scan to connect WeCom")
-    val hintScan = literal(
-        "用企业微信扫描二维码，或打开链接完成授权；完成后会自动继续。",
-        "Scan the QR code with WeCom, or open the link to authorize; sign-in continues automatically.",
+    val scanHint = literal(
+        "用企业微信扫描二维码完成授权。",
+        "Scan the QR code with WeCom to authorize.",
     )
     val openLink = literal("打开链接", "Open link")
     val stageFinishing = literal("正在完成登录…", "Finishing sign-in…")

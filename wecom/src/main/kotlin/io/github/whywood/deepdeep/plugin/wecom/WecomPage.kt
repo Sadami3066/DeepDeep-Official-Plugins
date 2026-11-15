@@ -1,9 +1,5 @@
 package io.github.whywood.deepdeep.plugin.wecom
 
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,13 +23,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.whywood.deepdeep.design.DdGroupCard
+import io.github.whywood.deepdeep.design.DdHairline
 import io.github.whywood.deepdeep.design.DdImage
-import io.github.whywood.deepdeep.design.DdMotion
+import io.github.whywood.deepdeep.design.DdLoadingBlock
 import io.github.whywood.deepdeep.design.DdNoticeBar
 import io.github.whywood.deepdeep.design.DdNoticeTone
 import io.github.whywood.deepdeep.design.DdPrimaryButton
 import io.github.whywood.deepdeep.design.DdProgressBar
-import io.github.whywood.deepdeep.design.DdSectionLabel
 import io.github.whywood.deepdeep.design.DdSpacing
 import io.github.whywood.deepdeep.design.DdSpinner
 import io.github.whywood.deepdeep.design.DdStatusRow
@@ -41,7 +37,6 @@ import io.github.whywood.deepdeep.design.DdStatusTone
 import io.github.whywood.deepdeep.design.DdText
 import io.github.whywood.deepdeep.design.DdTextAction
 import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.LocalDdMotionEnabled
 import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.LinuxChunkKind
 import io.github.whywood.deepdeep.plugin.api.LocalizedText
@@ -485,21 +480,11 @@ internal fun WecomPage(plugin: WecomPlugin, host: PluginHost) {
     val controller = remember(host, plugin, scope) { WecomPageController(host, plugin, scope) }
     val scrollState = rememberScrollState()
     val page = controller.state
-    val motionEnabled = LocalDdMotionEnabled.current
-    val fadeSpec = motionFadeSpec(motionEnabled)
     LaunchedEffect(controller) { controller.refresh() }
     LaunchedEffect(page.operation) {
-        if (page.operation != WecomOperation.NONE) {
-            if (motionEnabled) {
-                scrollState.animateScrollTo(
-                    0,
-                    tween(durationMillis = DdMotion.BASE, easing = DdMotion.EaseOut),
-                )
-            } else {
-                scrollState.scrollTo(0)
-            }
-        }
+        if (page.operation != WecomOperation.NONE) scrollState.scrollTo(0)
     }
+    val colors = deepDeepColors()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -510,58 +495,79 @@ internal fun WecomPage(plugin: WecomPlugin, host: PluginHost) {
                 top = DdSpacing.Md,
                 bottom = DdSpacing.Xxl,
             ),
+        verticalArrangement = Arrangement.spacedBy(DdSpacing.Lg),
     ) {
-        Crossfade(
-            targetState = page.operation,
-            animationSpec = fadeSpec,
-            label = "wecom-operation",
-        ) { operation ->
-            Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Lg)) {
-                when (operation) {
-                    WecomOperation.CONNECT -> {
-                        ScanSection(host, page, controller)
-                        StatusSummary(host, page)
-                    }
-                    WecomOperation.INSTALL, WecomOperation.LOGOUT -> {
-                        OperationSection(host, page, controller)
-                        StatusSummary(host, page)
-                    }
-                    WecomOperation.NONE -> {
-                        StatusSummary(host, page)
-                        page.error?.let { message ->
-                            DdNoticeBar(
-                                text = message,
-                                tone = DdNoticeTone.DANGER,
-                                actionLabel = host.text(WecomTexts.retry),
-                                onAction = { controller.retry() },
-                            )
-                        }
-                        if (page.checked && !page.linuxAvailable) {
-                            DdNoticeBar(
-                                text = host.text(WecomTexts.unavailableLinux),
-                                tone = DdNoticeTone.WARNING,
-                                actionLabel = host.text(WecomTexts.recheck),
-                                onAction = { controller.retryCheck() },
-                            )
-                        }
-                        if (page.checked && page.linuxAvailable) {
-                            ActionSection(host, page, controller, scope)
-                        }
-                    }
-                }
+        Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Xs)) {
+            DdText(
+                text = host.text(WecomTexts.pageTitle),
+                style = DdType.heading,
+                color = colors.ink,
+            )
+            DdText(
+                text = host.text(WecomTexts.purpose),
+                style = DdType.bodySmall,
+                color = colors.inkSecondary,
+            )
+        }
+        if (page.operation == WecomOperation.CONNECT) {
+            ConnectCard(host = host, page = page, controller = controller)
+        }
+        StatusCard(host = host, page = page)
+        if (page.operation != WecomOperation.CONNECT) {
+            if (page.checked && !page.linuxAvailable) {
+                DdNoticeBar(
+                    text = host.text(WecomTexts.unavailableLinux),
+                    tone = DdNoticeTone.WARNING,
+                    actionLabel = host.text(WecomTexts.recheck),
+                    onAction = { controller.retryCheck() },
+                )
+            }
+            if (page.error != null) {
+                DdNoticeBar(
+                    text = page.error,
+                    tone = DdNoticeTone.DANGER,
+                    actionLabel = host.text(WecomTexts.retry),
+                    onAction = { controller.retry() },
+                )
+            }
+            if (page.operation == WecomOperation.NONE && page.installed && page.cliVersion != WecomCli.VERSION) {
+                DdNoticeBar(
+                    text = host.text(WecomTexts.updateAvailable),
+                    tone = DdNoticeTone.INFO,
+                    actionLabel = host.text(WecomTexts.update),
+                    onAction = { controller.startInstall() },
+                )
+            }
+            if (!page.checked && page.checking) {
+                DdLoadingBlock(text = host.text(WecomTexts.checkingStatus))
+            }
+            when {
+                page.busy -> OperationCard(host = host, page = page, controller = controller)
+                page.checked && page.linuxAvailable -> ActionSection(
+                    host = host,
+                    page = page,
+                    controller = controller,
+                    scope = scope,
+                )
             }
         }
+        DdText(
+            text = host.text(WecomTexts.footer),
+            style = DdType.micro,
+            color = colors.inkTertiary,
+        )
     }
 }
 
 @Composable
-private fun StatusSummary(host: PluginHost, page: WecomPageState) {
+private fun StatusCard(host: PluginHost, page: WecomPageState) {
     val unknownValue = if (page.checking) {
         host.text(WecomTexts.checking)
     } else {
         host.text(WecomTexts.checkFailed)
     }
     val unknownTone = if (page.checking) DdStatusTone.NEUTRAL else DdStatusTone.WARNING
+    val outdated = page.cliVersion != null && page.cliVersion != WecomCli.VERSION
     DdGroupCard {
         Column(
             modifier = Modifier
@@ -582,46 +588,43 @@ private fun StatusSummary(host: PluginHost, page: WecomPageState) {
                 },
                 busy = page.checking && !page.checked,
             )
+            DdHairline()
             DdStatusRow(
                 label = host.text(WecomTexts.component),
                 value = when {
-                    page.checked && !page.linuxAvailable -> host.text(WecomTexts.unavailable)
-                    page.cliVersion != null -> page.cliVersion
-                    page.checked -> host.text(WecomTexts.notInstalled)
-                    else -> unknownValue
+                    !page.checked -> unknownValue
+                    !page.linuxAvailable -> host.text(WecomTexts.unavailable)
+                    !page.installed -> host.text(WecomTexts.notInstalled)
+                    outdated -> host.text(WecomTexts.componentUpdate)
+                    else -> host.text(WecomTexts.componentReady)
                 },
                 tone = when {
-                    page.checked && !page.linuxAvailable -> DdStatusTone.NEUTRAL
-                    page.cliVersion != null -> DdStatusTone.SUCCESS
-                    page.checked -> DdStatusTone.NEUTRAL
-                    else -> unknownTone
+                    !page.checked -> unknownTone
+                    !page.linuxAvailable -> DdStatusTone.NEUTRAL
+                    !page.installed -> DdStatusTone.NEUTRAL
+                    outdated -> DdStatusTone.WARNING
+                    else -> DdStatusTone.SUCCESS
                 },
-                busy = page.checking,
+                busy = page.checking && !page.checked,
             )
+            DdHairline()
             DdStatusRow(
                 label = host.text(WecomTexts.authorization),
                 value = when {
-                    page.checked && !page.linuxAvailable -> host.text(WecomTexts.unavailable)
                     !page.checked -> unknownValue
+                    !page.linuxAvailable -> host.text(WecomTexts.unavailable)
                     page.authorized -> host.text(WecomTexts.connected)
                     else -> host.text(WecomTexts.notConnected)
                 },
                 tone = when {
-                    page.checked && !page.linuxAvailable -> DdStatusTone.NEUTRAL
                     !page.checked -> unknownTone
+                    !page.linuxAvailable -> DdStatusTone.NEUTRAL
                     page.authorized -> DdStatusTone.SUCCESS
+                    page.installed -> DdStatusTone.WARNING
                     else -> DdStatusTone.NEUTRAL
                 },
-                busy = page.checking,
+                busy = page.checking && !page.checked,
             )
-            if (page.botId != null && page.linuxAvailable) {
-                DdStatusRow(
-                    label = host.text(WecomTexts.botId),
-                    value = page.botId,
-                    tone = DdStatusTone.NEUTRAL,
-                    busy = page.checking,
-                )
-            }
         }
     }
 }
@@ -634,101 +637,69 @@ private fun ActionSection(
     scope: CoroutineScope,
 ) {
     val colors = deepDeepColors()
-    val enabled = !page.busy
-    DdGroupCard {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(DdSpacing.Lg),
-            verticalArrangement = Arrangement.spacedBy(DdSpacing.Md),
+    val enabled = !page.busy && !page.checking
+    when {
+        !page.installed -> DdPrimaryButton(
+            text = host.text(WecomTexts.install),
+            onClick = { controller.startInstall() },
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        !page.authorized -> DdPrimaryButton(
+            text = host.text(WecomTexts.connect),
+            onClick = { controller.startConnect() },
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        else -> Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            when {
-                !page.installed -> {
-                    DdPrimaryButton(
-                        text = host.text(WecomTexts.install),
-                        onClick = { controller.startInstall() },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = enabled,
-                    )
-                    DdText(
-                        text = host.text(WecomTexts.installHint),
-                        style = DdType.bodySmall,
-                        color = colors.inkSecondary,
-                    )
-                }
-                !page.authorized -> {
-                    DdPrimaryButton(
-                        text = host.text(WecomTexts.connect),
-                        onClick = { controller.startConnect() },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = enabled,
-                    )
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        DdTextAction(
-                            text = host.text(WecomTexts.update),
-                            onClick = { controller.startInstall() },
-                            enabled = enabled,
+            DdTextAction(
+                text = host.text(WecomTexts.reauthorize),
+                enabled = enabled,
+                onClick = {
+                    scope.launch {
+                        val confirmed = host.ui().confirm(
+                            uiConfirmRequest(
+                                title = host.text(WecomTexts.confirmReauthTitle),
+                                message = host.text(WecomTexts.confirmReauthBody),
+                                confirmLabel = host.text(WecomTexts.confirmReauthOk),
+                                cancelLabel = host.text(WecomTexts.confirmCancel),
+                            ),
                         )
+                        if (confirmed) controller.startConnect()
                     }
-                }
-                else -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        DdTextAction(
-                            text = host.text(WecomTexts.reauthorize),
-                            onClick = {
-                                scope.launch {
-                                    val confirmed = host.ui().confirm(
-                                        uiConfirmRequest(
-                                            title = host.text(WecomTexts.confirmReauthTitle),
-                                            message = host.text(WecomTexts.confirmReauthBody),
-                                            confirmLabel = host.text(WecomTexts.confirmReauthOk),
-                                            cancelLabel = host.text(WecomTexts.confirmCancel),
-                                        ),
-                                    )
-                                    if (confirmed) controller.startConnect()
-                                }
-                            },
-                            enabled = enabled,
+                },
+            )
+            DdTextAction(
+                text = host.text(WecomTexts.logout),
+                enabled = enabled,
+                color = colors.danger,
+                onClick = {
+                    scope.launch {
+                        val confirmed = host.ui().confirm(
+                            uiConfirmRequest(
+                                title = host.text(WecomTexts.confirmLogoutTitle),
+                                message = host.text(WecomTexts.confirmLogoutBody),
+                                confirmLabel = host.text(WecomTexts.confirmLogoutOk),
+                                cancelLabel = host.text(WecomTexts.confirmCancel),
+                                destructive = true,
+                            ),
                         )
-                        DdTextAction(
-                            text = host.text(WecomTexts.logout),
-                            onClick = {
-                                scope.launch {
-                                    val confirmed = host.ui().confirm(
-                                        uiConfirmRequest(
-                                            title = host.text(WecomTexts.confirmLogoutTitle),
-                                            message = host.text(WecomTexts.confirmLogoutBody),
-                                            confirmLabel = host.text(WecomTexts.confirmLogoutOk),
-                                            cancelLabel = host.text(WecomTexts.confirmCancel),
-                                            destructive = true,
-                                        ),
-                                    )
-                                    if (confirmed) controller.startLogout()
-                                }
-                            },
-                            color = colors.danger,
-                            enabled = enabled,
-                        )
+                        if (confirmed) controller.startLogout()
                     }
-                }
-            }
+                },
+            )
         }
     }
 }
 
 @Composable
-private fun OperationSection(
-    host: PluginHost,
-    page: WecomPageState,
-    controller: WecomPageController,
-) {
+private fun OperationCard(host: PluginHost, page: WecomPageState, controller: WecomPageController) {
     val colors = deepDeepColors()
     DdGroupCard {
         Column(
@@ -746,7 +717,7 @@ private fun OperationSection(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                page.percent?.let { percent ->
+                page.percent?.takeIf { !page.cancelling }?.let { percent ->
                     DdText(
                         text = "$percent%",
                         style = DdType.bodySmall,
@@ -759,84 +730,69 @@ private fun OperationSection(
                     enabled = page.canCancel && !page.cancelling,
                 )
             }
-            DdProgressBar(progress = page.progress ?: 0f)
+            DdProgressBar(progress = if (page.cancelling) null else page.progress ?: 0f)
         }
     }
 }
 
 @Composable
-private fun ScanSection(
-    host: PluginHost,
-    page: WecomPageState,
-    controller: WecomPageController,
-) {
+private fun ConnectCard(host: PluginHost, page: WecomPageState, controller: WecomPageController) {
     val colors = deepDeepColors()
-    val motionEnabled = LocalDdMotionEnabled.current
-    val qrSpec = motionFadeSpec(motionEnabled)
-    Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Sm)) {
-        DdSectionLabel(host.text(WecomTexts.stageScan))
-        DdGroupCard {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = DdSpacing.Card, vertical = DdSpacing.Lg),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(DdSpacing.Md),
+    DdGroupCard {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = DdSpacing.Card, vertical = DdSpacing.Lg),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(DdSpacing.Md),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    DdText(
-                        text = page.stage?.let { host.text(it) } ?: host.text(WecomTexts.stageWorking),
-                        modifier = Modifier.weight(1f),
-                        style = DdType.body,
-                        color = colors.ink,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    DdTextAction(
-                        text = host.text(WecomTexts.cancel),
-                        onClick = { controller.cancelOperation() },
-                        enabled = page.canCancel && !page.cancelling,
-                    )
-                }
-                DdProgressBar(progress = page.progress ?: 0f)
-                Box(
-                    modifier = Modifier.size(220.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Crossfade(
-                        targetState = page.qrPath,
-                        animationSpec = qrSpec,
-                        label = "wecom-qr",
-                    ) { path ->
-                        if (path == null) {
-                            DdSpinner(size = 20.dp, color = colors.inkTertiary)
-                        } else {
-                            DdImage(
-                                path = path,
-                                contentDescription = host.text(WecomTexts.stageScan),
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                    }
-                }
                 DdText(
-                    text = host.text(WecomTexts.hintScan),
-                    style = DdType.bodySmall,
-                    color = colors.inkSecondary,
-                    textAlign = TextAlign.Center,
+                    text = page.stage?.let { host.text(it) } ?: host.text(WecomTexts.stageWorking),
+                    modifier = Modifier.weight(1f),
+                    style = DdType.body,
+                    color = colors.ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 DdTextAction(
-                    text = host.text(WecomTexts.openLink),
-                    onClick = { page.qrUrl?.let { host.ui().openUrl(it) } },
-                    enabled = page.qrUrl != null,
+                    text = host.text(WecomTexts.cancel),
+                    onClick = { controller.cancelOperation() },
+                    enabled = page.canCancel && !page.cancelling,
                 )
             }
+            DdProgressBar(progress = if (page.cancelling) null else page.progress ?: 0f)
+            Box(
+                modifier = Modifier.size(QrCodeSize),
+                contentAlignment = Alignment.Center,
+            ) {
+                val path = page.qrPath
+                if (path == null) {
+                    DdSpinner(size = 20.dp, color = colors.inkTertiary)
+                } else {
+                    DdImage(
+                        path = path,
+                        contentDescription = host.text(WecomTexts.stageScan),
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+            DdText(
+                text = host.text(WecomTexts.scanHint),
+                style = DdType.bodySmall,
+                color = colors.inkSecondary,
+                textAlign = TextAlign.Center,
+            )
+            DdTextAction(
+                text = host.text(WecomTexts.openLink),
+                onClick = { page.qrUrl?.let { host.ui().openUrl(it) } },
+                enabled = page.qrUrl != null,
+            )
         }
     }
 }
 
-private fun motionFadeSpec(motionEnabled: Boolean): FiniteAnimationSpec<Float> =
-    if (motionEnabled) tween(durationMillis = DdMotion.FAST, easing = DdMotion.EaseOut) else snap()
+private val QrCodeSize = 220.dp

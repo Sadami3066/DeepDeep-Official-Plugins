@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -30,13 +29,14 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import io.github.whywood.deepdeep.design.DdGroupCard
+import io.github.whywood.deepdeep.design.DdHairline
 import io.github.whywood.deepdeep.design.DdIconButton
 import io.github.whywood.deepdeep.design.DdIcons
 import io.github.whywood.deepdeep.design.DdMotion
 import io.github.whywood.deepdeep.design.DdNoticeBar
 import io.github.whywood.deepdeep.design.DdNoticeTone
+import io.github.whywood.deepdeep.design.DdLoadingBlock
 import io.github.whywood.deepdeep.design.DdPrimaryButton
-import io.github.whywood.deepdeep.design.DdSectionLabel
 import io.github.whywood.deepdeep.design.DdSpacing
 import io.github.whywood.deepdeep.design.DdSpinner
 import io.github.whywood.deepdeep.design.DdStatusRow
@@ -304,18 +304,23 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
             .fillMaxSize()
             .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp),
+            .padding(
+                start = DdSpacing.ScreenHorizontal,
+                end = DdSpacing.ScreenHorizontal,
+                top = DdSpacing.Md,
+                bottom = DdSpacing.Xxl,
+            ),
         verticalArrangement = Arrangement.spacedBy(DdSpacing.Lg),
     ) {
-        StatusCard(host, state)
-        state.error?.let { message ->
-            DdNoticeBar(
-                text = message,
-                tone = DdNoticeTone.DANGER,
-                actionLabel = retryAction?.let { host.text(TEXT_RETRY) },
-                onAction = retryAction,
+        Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Xs)) {
+            DdText(host.text(TEXT_PAGE_TITLE), style = DdType.heading, color = deepDeepColors().ink)
+            DdText(
+                host.text(TEXT_PAGE_SUBTITLE),
+                style = DdType.bodySmall,
+                color = deepDeepColors().inkSecondary,
             )
         }
+        StatusCard(host, state)
         environmentHint(host, status)?.let { hint ->
             DdNoticeBar(
                 text = hint,
@@ -324,13 +329,21 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
                 onAction = refreshStatus,
             )
         }
+        state.error?.let { message ->
+            DdNoticeBar(
+                text = message,
+                tone = DdNoticeTone.DANGER,
+                actionLabel = retryAction?.let { host.text(TEXT_RETRY) },
+                onAction = retryAction,
+            )
+        }
         Crossfade(
             targetState = stage,
             animationSpec = tween(durationMillis = if (motionEnabled) DdMotion.BASE else 0),
             label = "sysu-stage",
         ) { current ->
             when (current) {
-                SysuStage.Checking -> Unit
+                SysuStage.Checking -> DdLoadingBlock(text = host.text(TEXT_CHECKING))
                 SysuStage.Account -> SignInSection(
                     host = host,
                     state = state,
@@ -346,10 +359,16 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
                 SysuStage.SignedIn -> SignedInSection(
                     host = host,
                     state = state,
+                    onRefresh = refreshStatus,
                     onSignOut = signOut,
                 )
             }
         }
+        DdText(
+            host.text(TEXT_FOOTER),
+            style = DdType.micro,
+            color = deepDeepColors().inkTertiary,
+        )
     }
 }
 
@@ -367,6 +386,7 @@ private fun StatusCard(host: PluginHost, state: SysuPageState) {
                 value = status?.account ?: state.netId.trim().ifEmpty { host.text(TEXT_NOT_SET) },
                 tone = DdStatusTone.NEUTRAL,
             )
+            DdHairline()
             DdStatusRow(
                 label = host.text(TEXT_SIGN_IN_STATE),
                 value = when {
@@ -374,13 +394,24 @@ private fun StatusCard(host: PluginHost, state: SysuPageState) {
                     status.loggedIn -> host.text(TEXT_SIGNED_IN_STATE)
                     else -> host.text(TEXT_NOT_SIGNED_IN)
                 },
-                tone = if (status?.loggedIn == true) DdStatusTone.SUCCESS else DdStatusTone.NEUTRAL,
+                tone = when {
+                    status == null -> DdStatusTone.NEUTRAL
+                    status.loggedIn -> DdStatusTone.SUCCESS
+                    else -> DdStatusTone.NEUTRAL
+                },
             )
+            DdHairline()
             DdStatusRow(
                 label = host.text(TEXT_ENVIRONMENT),
                 value = environmentValue(host, status),
                 tone = environmentTone(status),
                 busy = state.checking,
+            )
+            DdHairline()
+            DdStatusRow(
+                label = host.text(TEXT_SERVICE_VERSION),
+                value = versionValue(host, status),
+                tone = versionTone(status),
             )
         }
     }
@@ -389,15 +420,13 @@ private fun StatusCard(host: PluginHost, state: SysuPageState) {
 @Composable
 private fun SignInSection(host: PluginHost, state: SysuPageState, onSignIn: () -> Unit) {
     val colors = deepDeepColors()
-    Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Sm)) {
-        DdSectionLabel(host.text(TEXT_SIGN_IN_SECTION))
-        DdGroupCard {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(DdSpacing.Card),
-                verticalArrangement = Arrangement.spacedBy(DdSpacing.Md),
-            ) {
+    DdGroupCard {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(DdSpacing.Card),
+            verticalArrangement = Arrangement.spacedBy(DdSpacing.Md),
+        ) {
                 Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Xs)) {
                     DdTextField(
                         value = state.netId,
@@ -465,7 +494,6 @@ private fun SignInSection(host: PluginHost, state: SysuPageState, onSignIn: () -
                     enabled = !state.busy,
                 )
                 if (state.busy && state.progress != null) ProgressRow(state.progress.orEmpty())
-            }
         }
     }
 }
@@ -479,29 +507,18 @@ private fun CodeSection(
     onResend: () -> Unit,
 ) {
     val colors = deepDeepColors()
-    Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Sm)) {
-        DdSectionLabel(host.text(TEXT_CODE_SECTION))
-        DdGroupCard {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(DdSpacing.Card),
-                verticalArrangement = Arrangement.spacedBy(DdSpacing.Md),
-            ) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    DdTextAction(
-                        text = host.text(TEXT_BACK),
-                        onClick = onBack,
-                        modifier = Modifier.offset(x = -DdSpacing.Md),
-                        color = colors.inkSecondary,
-                        enabled = !state.busy,
-                    )
-                }
-                DdText(
-                    text = host.text(TEXT_CODE_HINT),
-                    style = DdType.bodySmall,
-                    color = colors.inkSecondary,
-                )
+    DdGroupCard {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(DdSpacing.Card),
+            verticalArrangement = Arrangement.spacedBy(DdSpacing.Md),
+        ) {
+            DdText(
+                text = host.text(TEXT_CODE_HINT),
+                style = DdType.bodySmall,
+                color = colors.inkSecondary,
+            )
                 Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Xs)) {
                     DdTextField(
                         value = state.code,
@@ -528,27 +545,30 @@ private fun CodeSection(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !state.busy,
                 )
-                if (state.busy && state.progress != null) ProgressRow(state.progress.orEmpty())
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 44.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (state.codeRemaining > 0) {
-                        DdText(
-                            text = host.text(TEXT_RESEND_IN, state.codeRemaining),
-                            style = DdType.bodySmall,
-                            color = colors.inkTertiary,
-                        )
-                    } else {
-                        DdTextAction(
-                            text = host.text(TEXT_RESEND),
-                            onClick = onResend,
-                            enabled = !state.busy,
-                        )
-                    }
+            if (state.busy && state.progress != null) ProgressRow(state.progress.orEmpty())
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
+                horizontalArrangement = Arrangement.spacedBy(DdSpacing.Lg),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                DdTextAction(
+                    text = host.text(TEXT_BACK),
+                    onClick = onBack,
+                    color = colors.inkSecondary,
+                    enabled = !state.busy,
+                )
+                if (state.codeRemaining > 0) {
+                    DdText(
+                        text = host.text(TEXT_RESEND_IN, state.codeRemaining),
+                        style = DdType.bodySmall,
+                        color = colors.inkTertiary,
+                    )
+                } else {
+                    DdTextAction(
+                        text = host.text(TEXT_RESEND),
+                        onClick = onResend,
+                        enabled = !state.busy,
+                    )
                 }
             }
         }
@@ -556,20 +576,39 @@ private fun CodeSection(
 }
 
 @Composable
-private fun SignedInSection(host: PluginHost, state: SysuPageState, onSignOut: () -> Unit) {
+private fun SignedInSection(
+    host: PluginHost,
+    state: SysuPageState,
+    onRefresh: () -> Unit,
+    onSignOut: () -> Unit,
+) {
     val colors = deepDeepColors()
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(DdSpacing.Sm),
-    ) {
-        DdTextAction(
-            text = host.text(TEXT_SIGN_OUT),
-            onClick = onSignOut,
-            color = colors.danger,
-            enabled = !state.busy,
-        )
-        if (state.busy && state.progress != null) ProgressRow(state.progress.orEmpty())
+    DdGroupCard {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = DdSpacing.Card, vertical = DdSpacing.Sm),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
+                horizontalArrangement = Arrangement.spacedBy(DdSpacing.Lg),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                DdTextAction(
+                    text = host.text(TEXT_REFRESH),
+                    onClick = onRefresh,
+                    color = colors.inkSecondary,
+                    enabled = !state.busy,
+                )
+                DdTextAction(
+                    text = host.text(TEXT_SIGN_OUT),
+                    onClick = onSignOut,
+                    color = colors.danger,
+                    enabled = !state.busy,
+                )
+            }
+            if (state.busy && state.progress != null) ProgressRow(state.progress.orEmpty())
+        }
     }
 }
 
@@ -602,15 +641,26 @@ private fun environmentValue(host: PluginHost, status: SysuStatus?): String = wh
     !status.linuxAvailable -> host.text(TEXT_ENV_UNAVAILABLE)
     status.nodeVersion == null -> host.text(TEXT_ENV_NEEDS_SETUP)
     status.nodeTooOld -> host.text(TEXT_ENV_NEEDS_UPGRADE)
-    !status.installed -> host.text(TEXT_ENV_PENDING)
-    status.outdated -> host.text(TEXT_ENV_PENDING_UPDATE)
     else -> host.text(TEXT_ENV_READY)
 }
 
 private fun environmentTone(status: SysuStatus?): DdStatusTone = when {
     status == null -> DdStatusTone.NEUTRAL
     !status.linuxAvailable || status.nodeVersion == null || status.nodeTooOld -> DdStatusTone.DANGER
-    !status.installed || status.outdated -> DdStatusTone.WARNING
+    else -> DdStatusTone.SUCCESS
+}
+
+private fun versionValue(host: PluginHost, status: SysuStatus?): String = when {
+    status == null -> host.text(TEXT_CHECKING)
+    !status.installed -> host.text(TEXT_NOT_INSTALLED)
+    status.outdated -> host.text(TEXT_UPDATE_AVAILABLE)
+    else -> status.installedVersion ?: host.text(TEXT_ENV_READY)
+}
+
+private fun versionTone(status: SysuStatus?): DdStatusTone = when {
+    status == null -> DdStatusTone.NEUTRAL
+    !status.installed -> DdStatusTone.NEUTRAL
+    status.outdated -> DdStatusTone.WARNING
     else -> DdStatusTone.SUCCESS
 }
 
@@ -625,22 +675,30 @@ private fun environmentHint(host: PluginHost, status: SysuStatus?): String? = wh
 private const val CODE_RESEND_SECONDS = 60
 private const val CODE_RESEND_MILLIS = CODE_RESEND_SECONDS * 1000L
 
+private val TEXT_PAGE_TITLE = literal("中山大学", "SYSU")
+private val TEXT_PAGE_SUBTITLE = literal(
+    "登录后，可以在对话里查询教务、在线教学、体育场馆与网费。",
+    "Sign in to check academics, the LMS, sports venues and campus network fees in chat.",
+)
+private val TEXT_FOOTER = literal(
+    "校园服务在对话里使用，登录信息只保存在本机。",
+    "Campus services are used in chat, and your sign-in stays on this device.",
+)
 private val TEXT_ACCOUNT = literal("账号", "Account")
 private val TEXT_SIGN_IN_STATE = literal("登录状态", "Sign-in")
+private val TEXT_SERVICE_VERSION = literal("服务版本", "Service version")
 private val TEXT_ENVIRONMENT = literal("环境", "Environment")
 private val TEXT_CHECKING = literal("检查中…", "Checking…")
 private val TEXT_NOT_SET = literal("未设置", "Not set")
 private val TEXT_SIGNED_IN_STATE = literal("已登录", "Signed in")
 private val TEXT_NOT_SIGNED_IN = literal("未登录", "Not signed in")
 private val TEXT_ENV_READY = literal("已就绪", "Ready")
-private val TEXT_ENV_PENDING = literal("待准备", "Not set up")
-private val TEXT_ENV_PENDING_UPDATE = literal("待更新", "Update available")
+private val TEXT_NOT_INSTALLED = literal("未安装", "Not installed")
+private val TEXT_UPDATE_AVAILABLE = literal("可更新", "Update available")
 private val TEXT_ENV_NEEDS_SETUP = literal("需安装", "Needs setup")
 private val TEXT_ENV_NEEDS_UPGRADE = literal("需升级", "Needs upgrade")
 private val TEXT_ENV_UNAVAILABLE = literal("不可用", "Unavailable")
-private val TEXT_SIGN_IN_SECTION = literal("登录", "Sign in")
-private val TEXT_CODE_SECTION = literal("验证码", "Verification")
-private val TEXT_NET_ID = literal("NetID", "NetID")
+private val TEXT_NET_ID = literal("校园账号", "Campus account")
 private val TEXT_PASSWORD = literal("密码", "Password")
 private val TEXT_SHOW_PASSWORD = literal("显示密码", "Show password")
 private val TEXT_HIDE_PASSWORD = literal("隐藏密码", "Hide password")
@@ -659,8 +717,9 @@ private val TEXT_CODE_RESENT = literal("验证码已重新发送", "A new code w
 private val TEXT_CANCEL = literal("取消", "Cancel")
 private val TEXT_SIGN_OUT = literal("退出登录", "Sign out")
 private val TEXT_RETRY = literal("重试", "Retry")
+private val TEXT_REFRESH = literal("刷新状态", "Refresh")
 private val TEXT_RECHECK = literal("重新检查", "Check again")
-private val TEXT_ERROR_NET_ID = literal("请输入 NetID", "Enter your NetID")
+private val TEXT_ERROR_NET_ID = literal("请输入校园账号", "Enter your campus account")
 private val TEXT_ERROR_PASSWORD = literal("请输入密码", "Enter your password")
 private val TEXT_ERROR_CODE = literal("请输入 4 位数字验证码", "Enter the 4-digit code")
 private val TEXT_SIGNED_IN = literal("登录成功", "Signed in successfully")

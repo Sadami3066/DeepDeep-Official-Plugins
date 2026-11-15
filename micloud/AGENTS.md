@@ -10,7 +10,7 @@ DeepDeep 官方小米云插件，打成外部 `.ddp`：WebView 登录 i.mi.com �
 | `src/main/assets/plugin.json` | 清单：id/version/apiLevel=6/`ui.apiLevel`=2/minHostVersion/capabilities/entryClass/icon/provides（7 个工具、skills `deepdeep-micloud`、pages `main`；页面内容直接挂在 `PluginPage.content`，不需要槽位） |
 | `src/main/assets/icon.png` | 清单 `icon: asset:icon.png` 引用的小米图标 |
 | `src/main/kotlin/.../MiCloudPlugin.kt` | 入口：availability/uninstall/onEnable/onDisable/skills/promptSections/contributions/ui；`MiCloudContent` 持有各组件与登录态缓存 |
-| `.../MiCloudPage.kt` | 插件页面 Compose：`DdStatusRow` 登录摘要、就地提示与重试、分组能力开关、危险操作确认；登录是独立子页，`DdWebView` + `BackHandler`/`canGoBack` 返回处理与淡入滑动过渡 |
+| `.../MiCloudPage.kt` | 插件页面 Compose：标题与用途、登录摘要卡（账号/连接）+ 刷新与退出的次级文字操作、能力开关分组、就地提示与重试、危险操作确认；登录是独立子页，`DdWebView` + `BackHandler`/`canGoBack` 返回处理与淡入滑动过渡 |
 | `.../MiCloudStrings.kt` | `PluginHost.t(zh, en)` / `tf(zh, en, vararg args)` 中英文成对取文案 |
 | `.../MiCloudPreferences.kt` | 能力开关与 `MiCloudCapabilities`，持久化到 `host.settings()`（旧 `capabilities.json` 首次读入后迁移删除） |
 | `.../MiCloudCookieStore.kt` | cookie 加密存取（`host.secrets()`，按插件隔离） |
@@ -30,7 +30,8 @@ DeepDeep 官方小米云插件，打成外部 `.ddp`：WebView 登录 i.mi.com �
 
 - 构建：在仓库根执行 `./scripts/gradlew-locked :micloud:verifyPlugin`，产物 `micloud/build/plugin/micloud.ddp`。
 - 登录 = 插件页面内的独立子页：`DdWebView` 加载 `https://i.mi.com`，登录后点「完成登录」读取 `CookieManager` 的 cookie，经 `MiCloudClient.profile()` 校验后存入 `host.secrets()`；只有这一条完成路径。系统返回与左上角返回先在网页内回退（`canGoBack`），到根页才关闭子页；校验期间显示阶段文字与 `DdProgressBar`。
-- 登录态由 `MiCloudSession` 缓存（验证 60s TTL、失效 10 分钟内不重复打接口）；页面打开与宿主刷新时异步探测，工具收到 401/403 立即标记失效。页面用 `DdStatusRow` 展示状态，刷新失败、未登录、登录失效、离线都就地用 `DdNoticeBar` 说明并给出登录或重试入口。
+- 登录态由 `MiCloudSession` 缓存（验证 60s TTL、失效 10 分钟内不重复打接口）；页面打开与宿主刷新时异步探测，工具收到 401/403 立即标记失效。
+- 页面结构：顶部标题 + 一句用途 → 摘要卡（`DdStatusRow` × 账号/连接，行间 `DdHairline`；刷新与退出是次级 `DdTextAction`）→ 未登录/登录失效只在摘要卡下给一个主操作 `DdPrimaryButton` → 失败、离线、失效就地用 `DdNoticeBar` 说明并可重试 → 能力开关分「笔记与待办」「个人数据」两组 → 底部一句说明；不展示 cookie、接口或内部字段。
 - 读走 `MiCloudClient`（HttpURLConnection + cookie），写（笔记/待办）必须走 `MiCloudWebWriter` 的隐藏 WebView JS fetch——小米云写接口校验浏览器环境，直接 HTTP POST 会失败。
 - 工具按登录态与能力开关双重门控：只有登录有效（VERIFIED/UNVERIFIED）才注册 `mi_cloud_*` 工具，未登录/登录失效时不注入；登录、退出、登录失效都会调用 `host.requestContributionsRefresh()` 重新物化，启动时异步探测完成后的登录态变化也会触发一次刷新。能力开关再决定具体注册哪些工具；笔记/待办的开关同时打开读写，写操作前 agent 必须先向用户确认，删除/批量改不可逆。
 - 录音下载落到 `host.dataDir/recordings`，工具返回绝对路径；相册只列不下载。

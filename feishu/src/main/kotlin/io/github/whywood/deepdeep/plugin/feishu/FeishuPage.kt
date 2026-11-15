@@ -1,14 +1,5 @@
 package io.github.whywood.deepdeep.plugin.feishu
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,40 +15,55 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntSize
 import io.github.whywood.deepdeep.design.DdGroupCard
+import io.github.whywood.deepdeep.design.DdHairline
 import io.github.whywood.deepdeep.design.DdListRow
-import io.github.whywood.deepdeep.design.DdMotion
+import io.github.whywood.deepdeep.design.DdLoadingBlock
 import io.github.whywood.deepdeep.design.DdNoticeBar
 import io.github.whywood.deepdeep.design.DdNoticeTone
 import io.github.whywood.deepdeep.design.DdPrimaryButton
 import io.github.whywood.deepdeep.design.DdProgressBar
-import io.github.whywood.deepdeep.design.DdSectionLabel
 import io.github.whywood.deepdeep.design.DdSpacing
 import io.github.whywood.deepdeep.design.DdStatusRow
 import io.github.whywood.deepdeep.design.DdStatusTone
 import io.github.whywood.deepdeep.design.DdText
 import io.github.whywood.deepdeep.design.DdTextAction
 import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.LocalDdMotionEnabled
 import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.uiConfirmRequest
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-
-private const val ShownScopeLimit = 6
 
 @Composable
 internal fun FeishuPage(host: PluginHost, runtime: FeishuRuntime) {
     val state by runtime.pageState.collectAsState()
+    val colors = deepDeepColors()
+    val scope = rememberCoroutineScope()
     val linuxAvailable = runCatching { host.linux().available }.getOrDefault(false)
-    val motionEnabled = LocalDdMotionEnabled.current
     LaunchedEffect(Unit) {
         if (runtime.pageState.value.operation == FeishuOperation.NONE) {
             runtime.refresh(host)
         }
     }
+    val snapshot = state.snapshot
+    val busy = state.operation != FeishuOperation.NONE
+    val checked = snapshot != null
+    val version = snapshot?.installedVersion
+    val installed = version != null
+    val outdated = version != null && version != FEISHU_VERSION
+    val connected = snapshot?.connected == true
+    val checkingFirstTime = !checked && state.checking
+    val checkFailed = !checked && !state.checking
+    val problem = state.error
+        ?: snapshot?.message
+        ?: if (checkFailed) {
+            host.t("无法读取飞书状态，请重试。", "Couldn't read the Feishu status. Try again.")
+        } else {
+            null
+        }
+    val problemTone = if (state.error != null || checkFailed) DdNoticeTone.DANGER else DdNoticeTone.WARNING
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -70,224 +76,282 @@ internal fun FeishuPage(host: PluginHost, runtime: FeishuRuntime) {
             ),
         verticalArrangement = Arrangement.spacedBy(DdSpacing.Lg),
     ) {
-        StatusSummary(host = host, state = state, linuxAvailable = linuxAvailable)
-        Crossfade(
-            targetState = state.operation,
-            animationSpec = motionFadeSpec(motionEnabled),
-            label = "feishu-operation",
-        ) { operation ->
-            when (operation) {
-                FeishuOperation.INSTALL -> InstallProgress(host = host, runtime = runtime, state = state)
-                FeishuOperation.CONNECT -> ConnectProgress(host, runtime, state, motionEnabled)
-                FeishuOperation.LOGOUT -> SignOutProgress(host = host, state = state)
-                FeishuOperation.NONE -> IdleContent(host, runtime, state, linuxAvailable, motionEnabled)
+        Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Xs)) {
+            DdText(
+                text = host.t("飞书", "Feishu"),
+                style = DdType.heading,
+                color = colors.ink,
+            )
+            DdText(
+                text = host.t(
+                    "连接后可以在对话里读写消息、日历和云文档。",
+                    "Connect to read and write Feishu messages, calendar and docs in chat.",
+                ),
+                style = DdType.bodySmall,
+                color = colors.inkSecondary,
+            )
+        }
+
+        StatusCard(host = host, state = state, linuxAvailable = linuxAvailable)
+
+        if (checked && !linuxAvailable) {
+            DdNoticeBar(
+                text = host.text(UNAVAILABLE_LINUX),
+                tone = DdNoticeTone.WARNING,
+                actionLabel = host.t("重新检查", "Check again"),
+                onAction = { runtime.check(host) },
+            )
+        }
+
+        problem?.let { message ->
+            DdNoticeBar(
+                text = message,
+                tone = problemTone,
+                actionLabel = host.t("重试", "Retry"),
+                onAction = { runtime.retry(host) },
+            )
+        }
+
+        if (outdated && !busy && linuxAvailable) {
+            DdNoticeBar(
+                text = host.t("飞书组件有新版本，建议更新。", "A newer Feishu component is available."),
+                tone = DdNoticeTone.INFO,
+                actionLabel = host.t("更新", "Update"),
+                onAction = { runtime.startInstall(host) },
+            )
+        }
+
+        if (snapshot != null && snapshot.appConfigured && snapshot.missingScopes.isNotEmpty()) {
+            DdNoticeBar(
+                text = host.tf(
+                    "有 %d 项应用权限尚未开通，开通并重新登录后生效。",
+                    "%d app permissions are not granted yet; grant them and sign in again.",
+                    snapshot.missingScopes.size,
+                ),
+                tone = DdNoticeTone.WARNING,
+            )
+        }
+
+        if (checkingFirstTime) {
+            DdLoadingBlock(text = host.t("正在检查飞书状态…", "Checking Feishu status…"))
+        }
+
+        if (busy) {
+            OperationCard(host = host, runtime = runtime, state = state)
+        } else if (linuxAvailable && checked) {
+            when {
+                !installed -> DdPrimaryButton(
+                    text = host.t("安装飞书组件", "Install Feishu component"),
+                    onClick = { runtime.startInstall(host) },
+                    enabled = !state.checking,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                !connected -> DdPrimaryButton(
+                    text = host.t("连接飞书", "Connect Feishu"),
+                    onClick = { runtime.startConnect(host) },
+                    enabled = !state.checking,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
+
+        if (snapshot != null && snapshot.appConfigured && !busy) {
+            DdGroupCard {
+                DdListRow(
+                    title = host.t("应用权限", "App permissions"),
+                    value = if (snapshot.missingScopes.isEmpty()) {
+                        host.t("已开通", "Granted")
+                    } else {
+                        host.tf("%d 项待开通", "%d to grant", snapshot.missingScopes.size)
+                    },
+                    showChevron = true,
+                    enabled = !state.checking,
+                    onClick = { runtime.openAppScopes(host) },
+                )
+            }
+        }
+
+        if (connected && !busy) {
+            AccountActions(host = host, runtime = runtime, scope = scope, enabled = !state.checking)
+        }
+
+        DdText(
+            text = host.t(
+                "连接后在对话里告诉我要做什么，例如发消息、查日程或读写文档。",
+                "Once connected, tell me what to do in chat, such as sending a message, checking your calendar or editing docs.",
+            ),
+            style = DdType.micro,
+            color = colors.inkTertiary,
+        )
     }
 }
 
 @Composable
-private fun StatusSummary(host: PluginHost, state: FeishuPageState, linuxAvailable: Boolean) {
+private fun StatusCard(host: PluginHost, state: FeishuPageState, linuxAvailable: Boolean) {
     val snapshot = state.snapshot
-    val checked = snapshot != null
     val checking = state.checking
+    val checked = snapshot != null
     val version = snapshot?.installedVersion
+    val installed = version != null
+    val outdated = version != null && version != FEISHU_VERSION
     val connected = snapshot?.connected == true
-    val account = snapshot?.account?.takeIf { it.isNotBlank() }
-    val unknownValue = if (checking) {
-        host.t("检查中…", "Checking…")
-    } else {
-        host.t("检查失败", "Check failed")
-    }
-    val unknownTone = if (checking) DdStatusTone.NEUTRAL else DdStatusTone.WARNING
+    val unknown = host.t("检查中…", "Checking…")
+    val checkFailed = host.t("检查失败", "Check failed")
     DdGroupCard {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = DdSpacing.Card, vertical = DdSpacing.Xs),
         ) {
-        DdStatusRow(
-            label = host.t("运行环境", "Runtime"),
-            value = if (linuxAvailable) host.t("已就绪", "Ready") else host.t("不可用", "Unavailable"),
-            tone = if (linuxAvailable) DdStatusTone.SUCCESS else DdStatusTone.DANGER,
-        )
-        DdStatusRow(
-            label = host.t("飞书 CLI", "Feishu CLI"),
-            value = when {
-                version != null -> "v$version"
-                checked -> host.t("未安装", "Not installed")
-                else -> unknownValue
-            },
-            tone = when {
-                version == FEISHU_VERSION -> DdStatusTone.SUCCESS
-                version != null -> DdStatusTone.WARNING
-                checked -> DdStatusTone.NEUTRAL
-                else -> unknownTone
-            },
-            busy = checking && !checked,
-        )
-        DdStatusRow(
-            label = host.t("账号", "Account"),
-            value = when {
-                connected -> account ?: host.t("已登录", "Signed in")
-                checked -> host.t("未登录", "Not signed in")
-                else -> unknownValue
-            },
-            tone = when {
-                connected -> DdStatusTone.SUCCESS
-                checked -> DdStatusTone.NEUTRAL
-                else -> unknownTone
-            },
-            busy = checking && !checked,
-        )
-        DdStatusRow(
-            label = host.t("连接状态", "Connection"),
-            value = when {
-                connected -> host.t("已连接", "Connected")
-                checked -> host.t("未连接", "Not connected")
-                else -> unknownValue
-            },
-            tone = when {
-                connected -> DdStatusTone.SUCCESS
-                checked -> DdStatusTone.NEUTRAL
-                else -> unknownTone
-            },
-            busy = checking && !checked,
-        )
+            DdStatusRow(
+                label = host.t("运行环境", "Runtime"),
+                value = when {
+                    !checked && checking -> unknown
+                    linuxAvailable -> host.t("已就绪", "Ready")
+                    else -> host.t("不可用", "Unavailable")
+                },
+                tone = when {
+                    !checked && checking -> DdStatusTone.NEUTRAL
+                    linuxAvailable -> DdStatusTone.SUCCESS
+                    else -> DdStatusTone.DANGER
+                },
+                busy = !checked && checking,
+            )
+            DdHairline()
+            DdStatusRow(
+                label = host.t("飞书组件", "Feishu component"),
+                value = when {
+                    !checked && checking -> unknown
+                    !checked -> checkFailed
+                    !linuxAvailable -> host.t("不可用", "Unavailable")
+                    !installed -> host.t("未安装", "Not installed")
+                    outdated -> host.t("待更新", "Update available")
+                    else -> host.t("已就绪", "Ready")
+                },
+                tone = when {
+                    !checked && checking -> DdStatusTone.NEUTRAL
+                    !checked -> DdStatusTone.WARNING
+                    !linuxAvailable -> DdStatusTone.NEUTRAL
+                    !installed -> DdStatusTone.NEUTRAL
+                    outdated -> DdStatusTone.WARNING
+                    else -> DdStatusTone.SUCCESS
+                },
+                busy = !checked && checking,
+            )
+            DdHairline()
+            DdStatusRow(
+                label = host.t("账号", "Account"),
+                value = when {
+                    !checked && checking -> unknown
+                    !checked -> checkFailed
+                    !linuxAvailable -> host.t("不可用", "Unavailable")
+                    connected -> snapshot.account?.takeIf { it.isNotBlank() } ?: host.t("已连接", "Connected")
+                    else -> host.t("未登录", "Not signed in")
+                },
+                tone = when {
+                    !checked && checking -> DdStatusTone.NEUTRAL
+                    !checked -> DdStatusTone.WARNING
+                    !linuxAvailable -> DdStatusTone.NEUTRAL
+                    connected -> DdStatusTone.SUCCESS
+                    installed -> DdStatusTone.WARNING
+                    else -> DdStatusTone.NEUTRAL
+                },
+                busy = !checked && checking,
+            )
         }
     }
 }
 
 @Composable
-private fun IdleContent(
+private fun OperationCard(host: PluginHost, runtime: FeishuRuntime, state: FeishuPageState) {
+    val colors = deepDeepColors()
+    val cancelling = state.cancelling
+    DdGroupCard {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = DdSpacing.Card, vertical = DdSpacing.Lg),
+            verticalArrangement = Arrangement.spacedBy(DdSpacing.Md),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                DdText(
+                    text = state.stage?.let { host.text(it) } ?: host.t("正在处理…", "Working…"),
+                    modifier = Modifier.weight(1f),
+                    style = DdType.body,
+                    color = colors.ink,
+                )
+                state.progress?.takeIf { !cancelling }?.let { progress ->
+                    DdText(
+                        text = "$progress%",
+                        style = DdType.bodySmall,
+                        color = colors.inkSecondary,
+                    )
+                }
+            }
+            DdProgressBar(progress = if (cancelling) null else state.progress?.let { it / 100f })
+            if (state.operation == FeishuOperation.CONNECT) {
+                AuthLink(host = host, runtime = runtime, state = state)
+            }
+            if (!cancelling) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    DdTextAction(
+                        text = host.t("取消", "Cancel"),
+                        onClick = { runtime.cancelOperation(host) },
+                        color = colors.inkSecondary,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AuthLink(host: PluginHost, runtime: FeishuRuntime, state: FeishuPageState) {
+    val colors = deepDeepColors()
+    if (state.authUrl == null) return
+    val creatingApp = state.stage == STAGE_CREATE_APP
+    Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Sm)) {
+        DdText(
+            text = if (creatingApp) {
+                host.t(
+                    "在浏览器中创建飞书应用并完成授权，完成后这里会自动继续。",
+                    "Create and authorize the Feishu app in the browser; this page continues automatically.",
+                )
+            } else {
+                host.t(
+                    "在浏览器中完成授权，完成后这里会自动继续。",
+                    "Authorize in the browser; this page continues automatically.",
+                )
+            },
+            style = DdType.bodySmall,
+            color = colors.inkSecondary,
+        )
+        Row {
+            DdTextAction(
+                text = host.t("打开浏览器", "Open in browser"),
+                onClick = { runtime.openAuthUrl(host) },
+            )
+            DdTextAction(
+                text = host.t("复制链接", "Copy link"),
+                onClick = { runtime.copyAuthUrl(host) },
+                color = colors.inkSecondary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AccountActions(
     host: PluginHost,
     runtime: FeishuRuntime,
-    state: FeishuPageState,
-    linuxAvailable: Boolean,
-    motionEnabled: Boolean,
+    scope: CoroutineScope,
+    enabled: Boolean,
 ) {
-    val snapshot = state.snapshot
-    val version = snapshot?.installedVersion
-    val connected = snapshot?.connected == true
-    val problem = state.error ?: snapshot?.message
-    val problemTone = if (state.error != null) DdNoticeTone.DANGER else DdNoticeTone.WARNING
-    Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Lg)) {
-        MotionReveal(visible = problem != null, motionEnabled = motionEnabled) {
-            problem?.let { message ->
-                DdNoticeBar(
-                    text = message,
-                    tone = problemTone,
-                    actionLabel = host.t("重试", "Retry"),
-                    onAction = { runtime.retry(host) },
-                )
-            }
-        }
-        when {
-            !linuxAvailable -> DdNoticeBar(
-                text = host.text(UNAVAILABLE_LINUX),
-                tone = DdNoticeTone.WARNING,
-                actionLabel = host.t("重新检查", "Check again"),
-                onAction = { runtime.check(host) },
-            )
-
-            snapshot == null -> Unit
-            version == null -> InstallAction(host = host, runtime = runtime)
-            else -> {
-                if (version != FEISHU_VERSION) {
-                    DdNoticeBar(
-                        text = host.tf("有新版本 v%s 可用。", "Version v%s is available.", FEISHU_VERSION),
-                        tone = DdNoticeTone.INFO,
-                        actionLabel = host.t("更新", "Update"),
-                        onAction = { runtime.startInstall(host) },
-                    )
-                }
-                if (connected) {
-                    AccountSection(host = host, runtime = runtime, snapshot = snapshot)
-                } else {
-                    ConnectAction(host = host, runtime = runtime)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun InstallAction(host: PluginHost, runtime: FeishuRuntime) {
     val colors = deepDeepColors()
-    Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Md)) {
-        DdPrimaryButton(
-            text = host.t("安装飞书 CLI", "Install Feishu CLI"),
-            onClick = { runtime.startInstall(host) },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        DdText(
-            text = host.t("安装后即可连接飞书账号。", "Install it, then connect your Feishu account."),
-            style = DdType.bodySmall,
-            color = colors.inkSecondary,
-        )
-    }
-}
-
-@Composable
-private fun ConnectAction(host: PluginHost, runtime: FeishuRuntime) {
-    val colors = deepDeepColors()
-    Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Md)) {
-        DdPrimaryButton(
-            text = host.t("连接飞书", "Connect Feishu"),
-            onClick = { runtime.startConnect(host) },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        DdText(
-            text = host.t(
-                "连接后即可在对话中读写飞书消息、日历和云文档。",
-                "Connect to read and write Feishu messages, calendar and docs in chat.",
-            ),
-            style = DdType.bodySmall,
-            color = colors.inkSecondary,
-        )
-    }
-}
-
-@Composable
-private fun AccountSection(host: PluginHost, runtime: FeishuRuntime, snapshot: FeishuSnapshot) {
-    val colors = deepDeepColors()
-    val scope = rememberCoroutineScope()
-    val missing = snapshot.missingScopes
-    if (missing.isNotEmpty()) {
-        Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Sm)) {
-            DdSectionLabel(host.t("未开通的权限", "Permissions to grant"))
-            DdGroupCard {
-                missing.take(ShownScopeLimit).forEach { name ->
-                    DdListRow(
-                        title = name,
-                        value = host.t("未开通", "Not granted"),
-                    )
-                }
-                if (missing.size > ShownScopeLimit) {
-                    DdListRow(
-                        title = host.tf("还有 %d 项未开通", "%d more not granted", missing.size - ShownScopeLimit),
-                    )
-                }
-            }
-        }
-    }
-    if (snapshot.appConfigured) {
-        DdGroupCard {
-            DdListRow(
-                title = host.t("应用权限", "App permissions"),
-                subtitle = if (missing.isEmpty()) {
-                    host.t("在飞书开放平台管理", "Manage in the Feishu developer console")
-                } else {
-                    host.t("开通后重新登录即可生效", "They apply after signing in again")
-                },
-                value = snapshot.scopeCount.takeIf { it > 0 }?.let {
-                    host.tf("已授权 %d 项", "%d granted", it)
-                },
-                showChevron = true,
-                onClick = { runtime.openAppScopes(host) },
-            )
-        }
-    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Center,
@@ -295,6 +359,7 @@ private fun AccountSection(host: PluginHost, runtime: FeishuRuntime, snapshot: F
     ) {
         DdTextAction(
             text = host.t("重新登录", "Sign in again"),
+            enabled = enabled,
             onClick = {
                 scope.launch {
                     val confirmed = host.ui().confirm(
@@ -311,6 +376,7 @@ private fun AccountSection(host: PluginHost, runtime: FeishuRuntime, snapshot: F
         )
         DdTextAction(
             text = host.t("退出登录", "Sign out"),
+            enabled = enabled,
             color = colors.danger,
             onClick = {
                 scope.launch {
@@ -332,160 +398,3 @@ private fun AccountSection(host: PluginHost, runtime: FeishuRuntime, snapshot: F
         )
     }
 }
-
-@Composable
-private fun InstallProgress(host: PluginHost, runtime: FeishuRuntime, state: FeishuPageState) {
-    OperationCard(
-        host = host,
-        stage = state.stage?.let { host.text(it) },
-        progress = state.progress,
-        cancelling = state.cancelling,
-        onCancel = { runtime.cancelOperation(host) },
-    )
-}
-
-@Composable
-private fun ConnectProgress(
-    host: PluginHost,
-    runtime: FeishuRuntime,
-    state: FeishuPageState,
-    motionEnabled: Boolean,
-) {
-    OperationCard(
-        host = host,
-        stage = state.stage?.let { host.text(it) },
-        progress = state.progress,
-        cancelling = state.cancelling,
-        onCancel = { runtime.cancelOperation(host) },
-    ) {
-        AuthLink(host = host, runtime = runtime, state = state, motionEnabled = motionEnabled)
-    }
-}
-
-@Composable
-private fun SignOutProgress(host: PluginHost, state: FeishuPageState) {
-    OperationCard(
-        host = host,
-        stage = state.stage?.let { host.text(it) },
-        progress = null,
-        cancelling = false,
-        onCancel = null,
-    )
-}
-
-@Composable
-private fun OperationCard(
-    host: PluginHost,
-    stage: String?,
-    progress: Int?,
-    cancelling: Boolean,
-    onCancel: (() -> Unit)?,
-    content: (@Composable () -> Unit)? = null,
-) {
-    val colors = deepDeepColors()
-    DdGroupCard {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = DdSpacing.Card, vertical = DdSpacing.Lg),
-            verticalArrangement = Arrangement.spacedBy(DdSpacing.Md),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                DdText(
-                    text = stage ?: host.t("正在处理…", "Working…"),
-                    modifier = Modifier.weight(1f),
-                    style = DdType.body,
-                    color = colors.ink,
-                )
-                if (progress != null && !cancelling) {
-                    DdText(
-                        text = "$progress%",
-                        style = DdType.bodySmall,
-                        color = colors.inkSecondary,
-                    )
-                }
-            }
-            DdProgressBar(progress = if (cancelling) null else progress?.let { it / 100f })
-            content?.invoke()
-            if (onCancel != null && !cancelling) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    DdTextAction(
-                        text = host.t("取消", "Cancel"),
-                        onClick = onCancel,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AuthLink(
-    host: PluginHost,
-    runtime: FeishuRuntime,
-    state: FeishuPageState,
-    motionEnabled: Boolean,
-) {
-    val colors = deepDeepColors()
-    val url = state.authUrl
-    val creatingApp = state.stage == STAGE_CREATE_APP
-    MotionReveal(visible = url != null, motionEnabled = motionEnabled) {
-        url?.let { value ->
-            Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Sm)) {
-                DdText(
-                    text = host.t(
-                        if (creatingApp) {
-                            "在浏览器中创建应用并完成授权，完成后这里会自动继续。"
-                        } else {
-                            "在浏览器中完成授权，完成后这里会自动继续。"
-                        },
-                        if (creatingApp) {
-                            "Create and authorize the app in the browser; this page continues automatically."
-                        } else {
-                            "Authorize in the browser; this page continues automatically."
-                        },
-                    ),
-                    style = DdType.bodySmall,
-                    color = colors.inkSecondary,
-                )
-                DdText(
-                    text = value,
-                    style = DdType.bodySmall,
-                    color = colors.inkTertiary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Row {
-                    DdTextAction(
-                        text = host.t("打开浏览器", "Open in browser"),
-                        onClick = { runtime.openAuthUrl(host) },
-                    )
-                    DdTextAction(
-                        text = host.t("复制链接", "Copy link"),
-                        onClick = { runtime.copyAuthUrl(host) },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MotionReveal(visible: Boolean, motionEnabled: Boolean, content: @Composable () -> Unit) {
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(motionFadeSpec(motionEnabled)) + expandVertically(animationSpec = motionSizeSpec(motionEnabled)),
-        exit = fadeOut(motionFadeSpec(motionEnabled)) + shrinkVertically(animationSpec = motionSizeSpec(motionEnabled)),
-    ) {
-        content()
-    }
-}
-
-private fun motionFadeSpec(motionEnabled: Boolean): FiniteAnimationSpec<Float> =
-    if (motionEnabled) tween(DdMotion.FAST, easing = DdMotion.EaseOut) else snap()
-
-private fun motionSizeSpec(motionEnabled: Boolean): FiniteAnimationSpec<IntSize> =
-    if (motionEnabled) tween(DdMotion.FAST, easing = DdMotion.EaseOut) else snap()

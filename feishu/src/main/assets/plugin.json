@@ -1,6 +1,6 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.feishu",
-  "version": "2.2.3",
+  "version": "2.2.4",
   "publisher": {
     "name": "milous"
   },
@@ -33,9 +33,9 @@
     "en": "Messages, calendar, docs and mail"
   },
   "description": {
-    "default": "通过官方 lark-cli 读写飞书消息、日历、云文档、云空间、邮箱与任务；在插件页面安装 CLI、连接账号并管理应用权限。",
-    "zh": "通过官方 lark-cli 读写飞书消息、日历、云文档、云空间、邮箱与任务；在插件页面安装 CLI、连接账号并管理应用权限。",
-    "en": "Read and write Feishu messages, calendar, docs, drive, mail and tasks through the official lark-cli; install the CLI, connect your account and manage app permissions from the plugin page."
+    "default": "连接飞书账号后，可以在对话里读写消息、日历、云文档、云空间、邮箱与任务；在插件页完成安装、连接与权限管理。",
+    "zh": "连接飞书账号后，可以在对话里读写消息、日历、云文档、云空间、邮箱与任务；在插件页完成安装、连接与权限管理。",
+    "en": "Connect your Feishu account to read and write messages, calendar, docs, drive, mail and tasks in chat; install, connect and manage permissions from the plugin page."
   },
   "icon": "asset:icon.png",
   "provides": {

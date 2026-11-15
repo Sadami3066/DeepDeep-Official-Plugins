@@ -1,6 +1,6 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.wecom",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "publisher": {
     "name": "milous"
   },
@@ -29,9 +29,9 @@
     "en": "Messages, mail, docs, calendar and to-dos"
   },
   "description": {
-    "default": "安装官方 wecom-cli 后扫码授权，操作企业微信的消息、邮件、文档、日程与待办。",
-    "zh": "安装官方 wecom-cli 后扫码授权，操作企业微信的消息、邮件、文档、日程与待办。",
-    "en": "Install the official wecom-cli, scan to authorize, then operate WeCom messages, mail, docs, calendar and to-dos."
+    "default": "连接企业微信后，可以在对话里处理消息、邮件、文档、日程与待办；在插件页完成安装与扫码授权。",
+    "zh": "连接企业微信后，可以在对话里处理消息、邮件、文档、日程与待办；在插件页完成安装与扫码授权。",
+    "en": "Connect WeCom to handle messages, mail, docs, calendar and to-dos in chat; install and scan to authorize from the plugin page."
   },
   "icon": "asset:icon.png",
   "ui": {
