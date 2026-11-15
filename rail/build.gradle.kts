@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.rail"
         minSdk = 29
         targetSdk = 36
-        versionCode = 10001
-        versionName = "1.0.1"
+        versionCode = 10002
+        versionName = "1.0.2"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
