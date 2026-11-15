@@ -275,6 +275,10 @@ class MiCloudPlugin : DeepDeepPlugin {
                     id = "micloud-todo",
                     match = toolResultMatch(source = ToolResultSource.PLUGIN, tool = "mi_cloud_todo"),
                 ) { state -> MiCloudTodoToolCard(host, state) },
+                toolResultRenderer(
+                    id = "micloud-files",
+                    match = toolResultMatch(source = ToolResultSource.PLUGIN, tool = "mi_cloud_recordings"),
+                ) { state -> MiCloudFilesToolCard(host, state) },
             )
         }
     }

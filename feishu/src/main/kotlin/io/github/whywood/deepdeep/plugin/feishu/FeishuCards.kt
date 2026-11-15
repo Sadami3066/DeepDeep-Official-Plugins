@@ -1,41 +1,53 @@
 package io.github.whywood.deepdeep.plugin.feishu
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdHairline
+import androidx.compose.ui.unit.sp
 import io.github.whywood.deepdeep.design.DdIcon
 import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdPressable
-import io.github.whywood.deepdeep.design.DdRowDivider
+import io.github.whywood.deepdeep.design.DdMotion
 import io.github.whywood.deepdeep.design.DdShapes
 import io.github.whywood.deepdeep.design.DdSpacing
 import io.github.whywood.deepdeep.design.DdText
 import io.github.whywood.deepdeep.design.DdTextAction
 import io.github.whywood.deepdeep.design.DdType
+import io.github.whywood.deepdeep.design.LocalDdMotionEnabled
 import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.CustomMessageSlotState
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardCodec
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardItem
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
+import io.github.whywood.deepdeep.plugin.cli.card.CliCardState
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import kotlinx.serialization.json.JsonObject
 
 internal object FeishuCardTypes {
@@ -68,166 +80,187 @@ internal val SUPPORTED_CARD_KINDS = setOf(
 
 internal const val MAX_CARD_ROWS = CliCardCodec.MAX_ROWS
 
-@Composable
-internal fun FeishuChatCard(host: PluginHost, state: CustomMessageSlotState) {
-    val model = remember(state.payload) { decodeFeishuCardPayload(state.payload) }
-    if (model == null) {
-        FeishuCardSurface {
-            FeishuCardHeader(host = host, icon = DdIcons.Message, title = host.t("飞书", "Feishu"))
-            DdText(
-                text = host.t(
-                    "这张卡片暂时无法显示，可以直接查看对话里的结果。",
-                    "This card can't be shown here. Check the result in the conversation.",
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = DdSpacing.Lg, vertical = DdSpacing.Sm),
-                style = DdType.bodySmall,
-                color = deepDeepColors().inkSecondary,
-            )
-        }
-        return
-    }
-    FeishuCardSurface {
-        val context = model.context?.takeIf { it.isNotBlank() }
-        FeishuCardHeader(
-            host = host,
-            icon = cardIcon(model.kind),
-            title = cardTitle(host, model.kind),
-            trailing = cardCountLabel(host, model),
-            bottomPadding = if (context == null) DdSpacing.Md else DdSpacing.Xs,
-        )
-        if (context != null) {
-            DdText(
-                text = context,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = DdSpacing.Lg, end = DdSpacing.Lg, bottom = DdSpacing.Md),
-                style = DdType.chip,
-                color = deepDeepColors().inkTertiary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        DdHairline()
-        if (model.items.isEmpty()) {
-            DdText(
-                text = emptyLabel(host, model.kind),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = DdSpacing.Lg, vertical = DdSpacing.Lg),
-                style = DdType.bodySmall,
-                color = deepDeepColors().inkSecondary,
-            )
-        } else {
-            model.items.forEachIndexed { index, item ->
-                if (index > 0) DdRowDivider(leadingInset = DdSpacing.Lg)
-                FeishuCardRow(host = host, item = item)
-            }
-            DdHairline()
-        }
-        if (!model.note.isNullOrBlank() || !model.openUrl.isNullOrBlank()) {
-            FeishuCardFooter(host = host, note = model.note, openUrl = model.openUrl)
-        }
-    }
+internal const val FEISHU_CARD_CHAT_ROWS = 5
+internal const val FEISHU_CARD_MESSAGE_ROWS = 3
+internal const val FEISHU_CARD_AGENDA_ROWS = 4
+internal const val FEISHU_CARD_DOC_ROWS = 4
+internal const val FEISHU_CARD_TASK_ROWS = 5
+
+private val COMPLETED_BADGES = setOf("已完成", "完成", "Done", "Completed")
+private val QUERY_PREFIXES = listOf("搜索：", "搜索:", "search: ", "search:")
+private val RANGE_PREFIXES = listOf(
+    "时间范围：", "时间范围:", "起始：", "起始:", "截止：", "截止:",
+    "range: ", "range:", "from: ", "from:", "until: ", "until:",
+)
+private val TIME_PATTERN = Regex("""\d{1,2}:\d{2}""")
+
+internal fun CliCardItem.isCompleted(): Boolean = badge?.trim() in COMPLETED_BADGES
+
+internal fun CliCardItem.timePart(): String? {
+    val value = meta?.trim().orEmpty()
+    if (value.isEmpty()) return null
+    return if (value.contains(' ')) value.substringAfterLast(' ') else value
 }
 
+internal fun CliCardItem.datePart(): String? {
+    val value = meta?.trim().orEmpty()
+    if (!value.contains(' ')) return null
+    return value.substringBeforeLast(' ')
+}
+
+internal fun CliCardItem.messageSender(): String? =
+    subtitle?.split(" · ")?.firstOrNull()?.takeIf { it.isNotBlank() }
+
+internal fun CliCardItem.messageKindLabel(): String? {
+    val parts = subtitle?.split(" · ").orEmpty()
+    return parts.getOrNull(1)?.takeIf { it.isNotBlank() }
+}
+
+internal data class AgendaTimeParts(
+    val start: String?,
+    val end: String?,
+    val date: String?,
+    val allDay: Boolean,
+)
+
+internal fun CliCardItem.agendaTimeParts(): AgendaTimeParts {
+    val segment = subtitle?.substringBefore(" · ")?.trim().orEmpty()
+    val times = TIME_PATTERN.findAll(segment).map { it.value }.toList()
+    val allDay = segment.contains("全天") || segment.contains("All day", ignoreCase = true)
+    val start = if (allDay) null else timePart()?.takeIf { it.contains(':') } ?: times.firstOrNull()
+    val end = if (allDay) null else if (times.size >= 2) times[1] else null
+    return AgendaTimeParts(
+        start = start,
+        end = end,
+        date = datePart()?.takeIf { it.contains('-') },
+        allDay = allDay,
+    )
+}
+
+internal fun CliCardItem.agendaLocation(): String? {
+    val parts = subtitle?.split(" · ").orEmpty()
+    return parts.drop(1).joinToString(" · ").takeIf { it.isNotBlank() }
+}
+
+internal fun cardQueryText(context: String?): String? {
+    val value = context?.trim().orEmpty()
+    if (value.isEmpty()) return null
+    val prefix = QUERY_PREFIXES.firstOrNull { value.startsWith(it) } ?: return null
+    return value.removePrefix(prefix).trim().takeIf { it.isNotBlank() }
+}
+
+internal fun cardRangeText(context: String?): String? {
+    val value = context?.trim().orEmpty()
+    if (value.isEmpty()) return null
+    val segments = value.split('；', ';').map { it.trim() }.filter { it.isNotBlank() }
+    val range = segments.firstOrNull { segment ->
+        RANGE_PREFIXES.any { segment.startsWith(it) }
+    } ?: segments.firstOrNull() ?: return null
+    val prefix = RANGE_PREFIXES.firstOrNull { range.startsWith(it) } ?: return range.ifBlank { null }
+    return range.removePrefix(prefix).trim().takeIf { it.isNotBlank() }
+}
+
+internal fun todayLabel(datePrefix: String?, host: PluginHost): String? {
+    val value = datePrefix?.trim().orEmpty()
+    if (value.isEmpty()) return null
+    val today = LocalDate.now().format(DateTimeFormatter.ofPattern("MM-dd"))
+    return if (value == today) host.t("今天", "Today") else null
+}
+
+internal fun initialOf(text: String): String =
+    text.trim().firstOrNull()?.toString()?.uppercase().orEmpty()
+
 @Composable
-private fun FeishuCardSurface(content: @Composable ColumnScope.() -> Unit) {
+internal fun feishuItemTitleStyle(): TextStyle =
+    DdType.label.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp)
+
+@Composable
+internal fun feishuBigNumberStyle(): TextStyle = DdType.heading
+
+@Composable
+internal fun FeishuCardShell(content: @Composable () -> Unit) {
     val colors = deepDeepColors()
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(DdShapes.Card)
             .background(colors.raised),
-        content = content,
-    )
-}
-
-@Composable
-private fun FeishuCardHeader(
-    host: PluginHost,
-    icon: DdIcon,
-    title: String,
-    trailing: String? = null,
-    bottomPadding: Dp = DdSpacing.Md,
-) {
-    val colors = deepDeepColors()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = DdSpacing.Lg, end = DdSpacing.Lg, top = DdSpacing.Md, bottom = bottomPadding),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        DdIcon(icon = icon, tint = colors.accent, size = 15.dp)
-        Spacer(Modifier.width(DdSpacing.Sm))
-        DdText(
-            text = title,
-            modifier = Modifier.weight(1f),
-            style = DdType.label,
-            color = colors.ink,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (!trailing.isNullOrBlank()) {
-            Spacer(Modifier.width(DdSpacing.Sm))
-            DdText(
-                text = trailing,
-                modifier = Modifier.widthIn(max = 160.dp),
-                style = DdType.chip,
-                color = colors.inkTertiary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        content()
     }
 }
 
 @Composable
-private fun FeishuCardRow(host: PluginHost, item: FeishuCardItem) {
+private fun FeishuCardAppear(content: @Composable () -> Unit) {
+    val motionEnabled = LocalDdMotionEnabled.current
+    var visible by remember { mutableStateOf(!motionEnabled) }
+    LaunchedEffect(motionEnabled) {
+        if (motionEnabled) visible = true
+    }
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(DdMotion.FAST, easing = DdMotion.EaseOut),
+        label = "feishu-card-alpha",
+    )
+    Box(Modifier.fillMaxWidth().graphicsLayer { this.alpha = alpha }) { content() }
+}
+
+@Composable
+internal fun FeishuChip(
+    text: String,
+    tint: Color,
+    background: Color,
+    shape: RoundedCornerShape = RoundedCornerShape(DdSpacing.Sm),
+) {
+    Box(
+        modifier = Modifier
+            .clip(shape)
+            .background(background)
+            .padding(horizontal = DdSpacing.Sm, vertical = 3.dp),
+    ) {
+        DdText(text = text, style = DdType.chip, color = tint, maxLines = 1)
+    }
+}
+
+@Composable
+internal fun FeishuSectionKicker(host: PluginHost, label: String) {
     val colors = deepDeepColors()
-    val onOpen = item.url?.let { url -> { host.openFeishuLink(url) } }
-    val content: @Composable () -> Unit = {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 52.dp)
-                .padding(start = DdSpacing.Lg, end = DdSpacing.Md, top = DdSpacing.Sm, bottom = DdSpacing.Sm),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                DdText(
-                    text = item.title,
-                    style = DdType.body,
-                    color = colors.ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier
+                .width(3.dp)
+                .heightIn(min = 13.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(colors.accent),
+        )
+        Spacer(Modifier.width(DdSpacing.Sm))
+        DdText(text = label, style = feishuItemTitleStyle(), color = colors.ink, maxLines = 1)
+    }
+}
+
+@Composable
+internal fun FeishuCardHead(host: PluginHost, title: String, detail: String?, trailing: String?) {
+    val colors = deepDeepColors()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .width(3.dp)
+                        .heightIn(min = 13.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(colors.accent),
                 )
-                item.subtitle?.takeIf { it.isNotBlank() }?.let { subtitle ->
-                    Spacer(Modifier.height(DdSpacing.Xs))
-                    DdText(
-                        text = subtitle,
-                        style = DdType.chip,
-                        color = colors.inkTertiary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            item.badge?.takeIf { it.isNotBlank() }?.let { badge ->
                 Spacer(Modifier.width(DdSpacing.Sm))
-                DdText(
-                    text = badge,
-                    style = DdType.chip,
-                    color = colors.accent,
-                    maxLines = 1,
-                )
+                DdText(text = title, style = feishuItemTitleStyle(), color = colors.ink, maxLines = 1)
             }
-            item.meta?.takeIf { it.isNotBlank() }?.let { meta ->
-                Spacer(Modifier.width(DdSpacing.Sm))
+            detail?.takeIf { it.isNotBlank() }?.let { line ->
                 DdText(
-                    text = meta,
-                    modifier = Modifier.widthIn(max = 96.dp),
+                    text = line,
+                    modifier = Modifier.padding(start = DdSpacing.Md, top = DdSpacing.Xs),
                     style = DdType.chip,
                     color = colors.inkSecondary,
                     maxLines = 1,
@@ -235,29 +268,27 @@ private fun FeishuCardRow(host: PluginHost, item: FeishuCardItem) {
                 )
             }
         }
-    }
-    if (onOpen != null) {
-        DdPressable(
-            onClick = onOpen,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RectangleShape,
-            contentDescription = item.title,
-        ) {
-            content()
+        trailing?.takeIf { it.isNotBlank() }?.let { label ->
+            Spacer(Modifier.width(DdSpacing.Sm))
+            FeishuChip(
+                text = label,
+                tint = colors.inkSecondary,
+                background = colors.wash,
+                shape = RoundedCornerShape(percent = 50),
+            )
         }
-    } else {
-        content()
     }
 }
 
 @Composable
-private fun FeishuCardFooter(host: PluginHost, note: String?, openUrl: String?) {
+internal fun FeishuCardFoot(host: PluginHost, note: String?, actionLabel: String?, openUrl: String?) {
+    if (note.isNullOrBlank() && (actionLabel.isNullOrBlank() || openUrl.isNullOrBlank())) return
     val colors = deepDeepColors()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 44.dp)
-            .padding(start = DdSpacing.Lg, end = DdSpacing.Xs),
+            .padding(top = DdSpacing.Sm)
+            .heightIn(min = 44.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         DdText(
@@ -268,56 +299,142 @@ private fun FeishuCardFooter(host: PluginHost, note: String?, openUrl: String?) 
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        if (!openUrl.isNullOrBlank()) {
+        if (!actionLabel.isNullOrBlank() && !openUrl.isNullOrBlank()) {
             DdTextAction(
-                text = host.t("在飞书打开", "Open in Feishu"),
+                text = actionLabel,
                 onClick = { host.openFeishuLink(openUrl) },
             )
         }
     }
 }
 
-internal fun PluginHost.openFeishuLink(url: String) {
-    runCatching { ui().openUrl(url) }
-}
-
-private fun cardIcon(kind: String): DdIcon = when (kind) {
-    FeishuCardTypes.KIND_CHAT_LIST, FeishuCardTypes.KIND_MESSAGES -> DdIcons.Message
-    FeishuCardTypes.KIND_AGENDA -> DdIcons.Clock
-    FeishuCardTypes.KIND_DOCS_SEARCH -> DdIcons.Search
-    FeishuCardTypes.KIND_DOCS_READ -> DdIcons.Book
-    FeishuCardTypes.KIND_TASKS -> DdIcons.Target
-    else -> DdIcons.Message
-}
-
-private fun cardTitle(host: PluginHost, kind: String): String = when (kind) {
-    FeishuCardTypes.KIND_CHAT_LIST -> host.t("聊天", "Chats")
-    FeishuCardTypes.KIND_MESSAGES -> host.t("消息", "Messages")
-    FeishuCardTypes.KIND_AGENDA -> host.t("日程", "Agenda")
-    FeishuCardTypes.KIND_DOCS_SEARCH -> host.t("云文档", "Docs")
-    FeishuCardTypes.KIND_DOCS_READ -> host.t("文档摘要", "Document summary")
-    FeishuCardTypes.KIND_TASKS -> host.t("任务", "Tasks")
-    else -> host.t("飞书", "Feishu")
-}
-
-private fun cardCountLabel(host: PluginHost, model: FeishuCardModel): String? {
-    val total = model.total
-    if (total <= 0) return null
-    return when (model.kind) {
-        FeishuCardTypes.KIND_CHAT_LIST -> host.tf("共 %d 个", "%d chats", total)
-        FeishuCardTypes.KIND_AGENDA -> host.tf("共 %d 个", "%d events", total)
-        FeishuCardTypes.KIND_DOCS_SEARCH -> host.tf("共 %d 个", "%d docs", total)
-        FeishuCardTypes.KIND_DOCS_READ -> null
-        else -> host.tf("共 %d 条", "%d items", total)
+@Composable
+internal fun FeishuEmptyBody(title: String, message: String, visual: @Composable RowScope.() -> Unit) {
+    val colors = deepDeepColors()
+    Column(Modifier.padding(DdSpacing.Lg)) {
+        Row(verticalAlignment = Alignment.CenterVertically, content = visual)
+        Spacer(Modifier.height(DdSpacing.Md))
+        DdText(text = title, style = feishuItemTitleStyle(), color = colors.ink, maxLines = 2)
+        Spacer(Modifier.height(DdSpacing.Xxs))
+        DdText(
+            text = message,
+            style = DdType.chip,
+            color = colors.inkSecondary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
-private fun emptyLabel(host: PluginHost, kind: String): String = when (kind) {
-    FeishuCardTypes.KIND_CHAT_LIST -> host.t("没有找到聊天", "No chats found")
-    FeishuCardTypes.KIND_MESSAGES -> host.t("这个时间段没有消息", "No messages in this range")
-    FeishuCardTypes.KIND_AGENDA -> host.t("这段时间没有日程", "No events in this range")
-    FeishuCardTypes.KIND_DOCS_SEARCH -> host.t("没有找到文档", "No docs found")
-    FeishuCardTypes.KIND_DOCS_READ -> host.t("没有读取到内容", "Nothing to show")
-    FeishuCardTypes.KIND_TASKS -> host.t("没有待办任务", "No tasks")
-    else -> host.t("没有内容", "Nothing here")
+@Composable
+internal fun FeishuCardErrorBody(host: PluginHost, openUrl: String?) {
+    val colors = deepDeepColors()
+    Column(Modifier.padding(DdSpacing.Lg)) {
+        DdIcon(
+            icon = DdIcons.Info,
+            tint = colors.danger,
+            size = 22.dp,
+        )
+        Spacer(Modifier.height(DdSpacing.Sm))
+        DdText(
+            text = host.t("这项内容暂时无法显示", "This content can't be shown right now"),
+            style = feishuItemTitleStyle(),
+            color = colors.ink,
+            maxLines = 2,
+        )
+        Spacer(Modifier.height(DdSpacing.Xxs))
+        DdText(
+            text = host.t("可以在飞书里查看完整内容", "Open Feishu to view it"),
+            style = DdType.chip,
+            color = colors.inkSecondary,
+            maxLines = 2,
+        )
+        if (!openUrl.isNullOrBlank()) {
+            Spacer(Modifier.height(DdSpacing.Xs))
+            FeishuCardFoot(
+                host = host,
+                note = null,
+                actionLabel = host.t("在飞书打开", "Open in Feishu"),
+                openUrl = openUrl,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FeishuCardFallback(host: PluginHost) {
+    val colors = deepDeepColors()
+    FeishuCardShell {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(DdSpacing.Lg),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            DdIcon(
+                icon = DdIcons.Message,
+                tint = colors.inkTertiary,
+                size = 20.dp,
+            )
+            Spacer(Modifier.width(DdSpacing.Md))
+            Column {
+                DdText(
+                    text = host.t("内容暂时无法显示", "This content can't be shown right now"),
+                    style = DdType.bodySmall,
+                    color = colors.ink,
+                    maxLines = 2,
+                )
+                DdText(
+                    text = host.t("可以直接在对话里查看结果", "Check the result in the conversation"),
+                    style = DdType.chip,
+                    color = colors.inkSecondary,
+                    maxLines = 2,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun FeishuChatCard(host: PluginHost, state: CustomMessageSlotState) {
+    val model = remember(state.payload) { decodeFeishuCardPayload(state.payload) }
+    FeishuCardAppear {
+        if (model == null) {
+            FeishuCardFallback(host)
+        } else {
+            FeishuKindCard(host, model)
+        }
+    }
+}
+
+@Composable
+private fun FeishuKindCard(host: PluginHost, model: CliCardModel) {
+    when (model.kind) {
+        FeishuCardTypes.KIND_CHAT_LIST -> FeishuChatListCard(host, model)
+        FeishuCardTypes.KIND_MESSAGES -> FeishuMessagesCard(host, model)
+        FeishuCardTypes.KIND_AGENDA -> FeishuAgendaCard(host, model)
+        FeishuCardTypes.KIND_DOCS_SEARCH -> FeishuDocsSearchCard(host, model)
+        FeishuCardTypes.KIND_DOCS_READ -> FeishuDocsReadCard(host, model)
+        FeishuCardTypes.KIND_TASKS -> FeishuTasksCard(host, model)
+        else -> FeishuCardFallback(host)
+    }
+}
+
+@Composable
+internal fun FeishuKindState(host: PluginHost, model: CliCardModel): FeishuKindStateKind = when {
+    model.state == CliCardState.ERROR -> FeishuKindStateKind.ERROR
+    model.state == CliCardState.LOADING -> FeishuKindStateKind.LOADING
+    model.state == CliCardState.EMPTY || model.isEmpty -> FeishuKindStateKind.EMPTY
+    else -> FeishuKindStateKind.READY
+}
+
+internal enum class FeishuKindStateKind {
+    READY,
+    LOADING,
+    EMPTY,
+    ERROR,
+}
+
+internal fun PluginHost.openFeishuLink(url: String) {
+    runCatching { ui().openUrl(url) }
 }

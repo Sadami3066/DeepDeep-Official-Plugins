@@ -12,7 +12,7 @@ DeepDeep 官方 CLI 类插件共用的内部 Android library 模块：CLI bash �
 | `.../cli/CliJson.kt` | `JsonObject` 安全取值扩展：`stringValue`/`intValue`/`longValue`/`boolValue`/`objValue`/`arrayValue`/`objectList` |
 | `.../cli/CliText.kt` | 文本清理：ANSI、HTML 标签与实体、单行/多行截断、文档正文清洗 |
 | `.../cli/CliTime.kt` | 时间展示：ISO 时间 → `MM-dd HH:mm`/`yyyy-MM-dd HH:mm`，epoch 秒格式化 |
-| `.../cli/bridge/CliToolBridge.kt` | 通用 bash 工具桥：`beforeToolCall` 记录 callId→命令（有界 64）、`afterToolExecution` 关联/去重/失败隔离/输出上限 256 KiB/成功信封或通用 payload 提取/观测构造/`postCustomMessage` + `resultReplace`；卡片成功后追加模型提示，卡片失败仍替换文本；`isError` 观测按错误结果替换；`runFinished`/`sessionClosed` 清理；hook 内异常 fail-open、`CancellationException` 重抛 |
+| `.../cli/bridge/CliToolBridge.kt` | 通用 bash 工具桥：`beforeToolCall` 记录 callId→命令（有界 64）、`afterToolExecution` 关联/去重/失败隔离/输出上限 256 KiB/成功信封或通用 payload 提取/观测构造/卡片 details 编码 + 卡片 id 提示 + `resultReplace`；`isError` 观测按错误结果替换；`runFinished`/`sessionClosed` 清理；hook 内异常 fail-open、`CancellationException` 重抛 |
 | `.../cli/card/CliCard.kt` | 通用卡片模型与编解码：header（kind/title/trailing/context/total）、rows（items 或 sections 分组标签）、summary、footer（note/open_url）、READY/EMPTY/ERROR/LOADING；`MAX_ROWS=8` 是数据行上限、分组标题不计行 |
 | `.../cli/update/CliVersions.kt` | `major.minor.patch` 归一化、数值比较、取最新 |
 | `.../cli/update/CliChecksums.kt` | checksums 文本解析（sha256/sha512 长度可配）与摘要匹配 |
@@ -48,14 +48,14 @@ internal class MyToolBridge {
 }
 ```
 
-- 插件只提供 parser、observation builder、card encoder/customType；关联表、去重、输出上限、JSON 信封、卡片投递与结果替换都在共享层。
+- 插件只提供 parser、observation builder、card encoder/customType；关联表、去重、输出上限、JSON 信封、卡片 details 与结果替换都在共享层。
 - parser 只认单条无管道/重定向的 CLI 命令；`CliCommandLine.hasShellOperators`/`tokenize`/`envPrefixLength`/`isBinary`/`readFlags` 是公共词法件，命令白名单与 flag 策略留在插件。
 - `beforeToolCall` 命中后记录命令；`afterToolExecution` 只有在结果成功、输出非空且 ≤ 256 KiB、payload 可提取、观测可构造时才 `resultReplace`，其余一律 `resultKeep`。
 - 默认走严格信封（`requireSuccessEnvelope = true` 且 `envelope.successField = "ok"`）：要求 JSON 对象带 `ok: true` 并剥 `_notice`。裸对象/顶层数组等无 `ok` 的 CLI 用 `envelope = CliJsonEnvelope.LENIENT`（`successField = null`）或 `requireSuccessEnvelope = false`，由 `payloadFinder`/`CliJsonEnvelope.element` 取第一个平衡 JSON，业务失败由插件 observer 判定。
 - `CliObservationBuilder` 的 `JsonObject` 版本是 SAM 入口；需要处理顶层数组时实现 `JsonElement` 重载（默认重载会把对象转给 `JsonObject` 版本）。
-- 默认卡片投递 `postCustomMessage(customType, payload, summary)`；`CliObservation.customType` 非空时按观测覆盖（WeCom 一类按命令分槽位的插件用它）。观测 `card = null` 时只替换文本、不投卡片。
-- 卡片真正投递成功后，共享层会在模型观测文本末尾追加一句模型提示（`CliBridgeConfig.cardHint`，默认中英双语「以上结果已同时以卡片展示；不必逐条复述列表…」），让模型不必把列表逐条复述一遍；`card = null`、卡片投递失败或原始结果被保留时都不追加。模型观测仍保留全部事实，提示只在末尾。
-- 卡片投递失败时仍 `resultReplace(observation.text)`（不带提示、不暴露原始 JSON），只 warn；`CliObservation.isError = true` 时用 `textResult(text, isError = true)` 替换且不追加提示，卡片仍可投（失败文案由插件决定）。
+- 卡片不直接上屏：观测有 `card` 时共享层把 `cardEncoder(card)` 写进结果 details 的 `deepdeep.card`（`customType` + `title` + `payload`），并在模型可见文本末尾追加 `卡片 id：<callId>`；模型之后自行决定是否调用 `present` 展示。`CliObservation.customType` 非空时覆盖配置里的槽位类型（WeCom 一类按命令分槽位的插件用它）。观测 `card = null` 时只替换文本、不带卡片。
+- 卡片 id 提示只在卡片编码成功且观测不是错误时追加；`card = null` 或原始结果被保留时都没有提示。模型观测仍保留全部事实，提示只在末尾。
+- `CliObservation.isError = true` 时用 `textResult(text, isError = true)` 替换且不追加卡片 id 提示；错误卡片仍写 details，供后续展示错误态卡片（失败文案由插件决定）。
 - 需要改写错误结果（例如未授权错误映射成可操作提示）时用 `errorMapper`：
 
 ```kotlin
@@ -64,7 +64,7 @@ errorMapper = CliErrorMapper { host, request, command ->
 }
 ```
 
-- hook 内所有异常都 fail-open：`before` 继续调用，`after` 保留原结果；只有卡片投递失败属于「观测有效、卡片失败」，按上面的语义替换文本。`CancellationException` 不吞。
+- hook 内所有异常都 fail-open：`before` 继续调用，`after` 保留原结果；卡片编码失败只降级为无卡片文本，不影响结果替换。`CancellationException` 不吞。
 - 不在日志里打印命令参数值、JSON 或凭证：诊断摘要只保留 domain/shortcut/flag 名。
 
 ### 卡片模型
@@ -149,7 +149,7 @@ CliInstallRunner(
 
 ## 迁移方式（WeCom / SYSU）
 
-1. 插件 `build.gradle.kts` 加 `implementation(project(":cli-common"))`，删掉插件内重复的 pending/handled 关联表、JSON 信封、`postCustomMessage` 投递与 `resultReplace` 逻辑。
+1. 插件 `build.gradle.kts` 加 `implementation(project(":cli-common"))`，删掉插件内重复的 pending/handled 关联表、JSON 信封与 `resultReplace` 逻辑。
 2. 保留插件自己的命令解析器，用 `CliCommandLine` 替换私有 tokenizer/flag 读取（各插件额外的拒绝规则，如 WeCom 的 `&`、`--`、分页 flag，继续留在 parser）。
 3. 保留插件自己的输出解析与 observation 文案；把最终模型文本包成 `CliObservation(summary, text, card, isError = …)`，`card` 可以是插件自己的 payload 数据类（`CARD` 泛型），`cardEncoder` 负责编码成 `JsonObject`。裸对象/顶层数组命令配置 `envelope = CliJsonEnvelope.LENIENT`（或 `requireSuccessEnvelope = false`），需要处理数组时实现 `CliObservationBuilder` 的 `JsonElement` 重载，业务失败用 `isError = true` 交给桥按错误结果替换。
 4. `customType` 固定在配置里；按命令分槽位的插件（WeCom 的 7 个 `wecom.*` 槽位）在 `CliObservation.customType` 上按 command kind 覆盖。卡片用 `sections` 表达分组（课表按天、考试按日期、场馆按类型），`title`/`trailing`/`summary` 表达文档卡头部与摘要。
@@ -182,6 +182,6 @@ cd DeepDeep-Official-Plugins
 - 模块是内部共享层：不放插件清单、不做 UI、不引入 Compose，渲染由各插件用 `:design` 组件完成。
 - 不新增第三方依赖；`plugin-api`/协程/序列化必须保持 `compileOnly`，否则 `.ddp` 会把宿主库重复打包。
 - 卡片 wire 格式是已发布插件的历史消息格式，改字段要同时考虑旧会话解码，只能加字段不能改名。
-- 模型观测末尾的卡片提示只在卡片投递成功后出现，是面向模型的一句自然语言，不是给用户的开发提示；不要写进卡片 payload。
+- 卡片通过结果 details 的 `deepdeep.card` 交给宿主，模型只看到末尾的 `卡片 id：<callId>`；这句提示面向模型，不要写进卡片 payload。
 - CLI 只识别单条普通命令，接管道/重定向/多命令一律不接管；不打印参数值、JSON 正文或凭据。
 - 构建：`./scripts/gradlew-locked :cli-common:testDebugUnitTest`；依赖方（飞书）用 `:feishu:testDebugUnitTest :feishu:verifyPlugin` 验证类已进 `.ddp`。

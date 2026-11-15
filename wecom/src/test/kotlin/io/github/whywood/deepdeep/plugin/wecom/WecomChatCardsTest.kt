@@ -55,6 +55,36 @@ class WecomChatCardsTest {
     }
 
     @Test
+    fun messageScheduleAndTodoFieldsDriveTheirOwnLayouts() {
+        val messages = WecomChatCards.build(
+            host,
+            WecomCommand(WecomCommandKind.CHAT_MESSAGES, chatId = "wrOgQhDgAA001"),
+            parsedOf(WecomCommandKind.CHAT_MESSAGES, "chat-messages.json"),
+        )
+        assertEquals("2026-11-15 10:24:31", messages.items.first().meta)
+        assertEquals("[文件] 接口文档-v2.pdf", messages.items.last().subtitle)
+        assertEquals("text", messages.items.first().badge)
+
+        val schedules = WecomChatCards.build(
+            host,
+            WecomCommand(WecomCommandKind.CALENDAR_SCHEDULES),
+            parsedOf(WecomCommandKind.CALENDAR_SCHEDULES, "calendar-schedules.json"),
+        )
+        assertEquals("2026-11-16", schedules.items.first().badge)
+        assertEquals("10:00 - 11:00 · 3F 会议室 A", schedules.items.first().subtitle)
+        assertEquals("+2", schedules.items.first().meta)
+
+        val todos = WecomChatCards.build(
+            host,
+            WecomCommand(WecomCommandKind.TODO_LIST),
+            parsedOf(WecomCommandKind.TODO_LIST, "todo-list.json"),
+        )
+        assertEquals("2026-11-16 18:00:00", todos.items.first().badge)
+        assertEquals("李四", todos.items.first().subtitle)
+        assertEquals("进行中", todos.items.first().meta)
+    }
+
+    @Test
     fun emptyResultBecomesEmptyState() {
         val parsed = WecomParsedParser.parse(
             WecomCommandKind.TODO_LIST,

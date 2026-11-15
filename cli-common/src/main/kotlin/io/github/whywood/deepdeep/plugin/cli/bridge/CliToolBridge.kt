@@ -1,6 +1,5 @@
 package io.github.whywood.deepdeep.plugin.cli.bridge
 
-import io.github.whywood.deepdeep.plugin.api.LocalizedText
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.PluginHooks
 import io.github.whywood.deepdeep.plugin.api.RunFinishedEvent
@@ -12,7 +11,6 @@ import io.github.whywood.deepdeep.plugin.api.ToolResultDecision
 import io.github.whywood.deepdeep.plugin.api.resultKeep
 import io.github.whywood.deepdeep.plugin.api.resultReplace
 import io.github.whywood.deepdeep.plugin.api.textResult
-import io.github.whywood.deepdeep.plugin.api.localizedText
 import io.github.whywood.deepdeep.plugin.api.toolContinue
 import io.github.whywood.deepdeep.plugin.cli.CliCommandLine
 import io.github.whywood.deepdeep.plugin.cli.CliJsonEnvelope
@@ -20,7 +18,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
 
 class CliObservation<CARD : Any>(
     val summary: String,
@@ -58,7 +58,6 @@ class CliBridgeConfig<C : Any, CARD : Any>(
     val maxPending: Int = DEFAULT_MAX_PENDING,
     val envelope: CliJsonEnvelope = CliJsonEnvelope.DEFAULT,
     val errorMapper: CliErrorMapper<C>? = null,
-    val cardHint: LocalizedText = DEFAULT_CARD_HINT,
     val payloadFinder: ((String) -> JsonElement?)? = null,
     val requireSuccessEnvelope: Boolean = true,
 ) {
@@ -66,13 +65,6 @@ class CliBridgeConfig<C : Any, CARD : Any>(
         const val DEFAULT_MAX_OUTPUT_BYTES: Int = 256 * 1024
 
         const val DEFAULT_MAX_PENDING: Int = 64
-
-        val DEFAULT_CARD_HINT: LocalizedText = localizedText(
-            default = "以上结果已同时以卡片展示；不必逐条复述列表，回答可直接给结论、比较或下一步建议。",
-            zh = "以上结果已同时以卡片展示；不必逐条复述列表，回答可直接给结论、比较或下一步建议。",
-            en = "This result is also shown as a card; no need to repeat the list item by item. " +
-                "Answer with the conclusion, comparison or next step directly.",
-        )
     }
 }
 
@@ -197,54 +189,39 @@ class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, 
             warn(host, "after call=${request.callId} parse=observation-miss command=${invocation.command}")
             return resultKeep()
         }
-        val posted = observation.card?.let { postCard(host, request.sessionId, observation) } ?: false
-        if (observation.card != null && !posted) {
-            warn(host, "after call=${request.callId} card=false")
+        val cardPayload = observation.card?.let { card ->
+            runCatching { config.cardEncoder(card) }.getOrNull()
         }
-        val withHint = posted && !observation.isError
+        val details = cardPayload?.let { payload ->
+            buildJsonObject {
+                put(
+                    CARD_DETAILS_KEY,
+                    buildJsonObject {
+                        put("customType", observation.customType ?: config.customType)
+                        observation.summary.takeIf { it.isNotBlank() }?.let { put("title", it) }
+                        put("payload", payload)
+                    },
+                )
+            }
+        }
+        val withHint = cardPayload != null && !observation.isError
         log(
             host,
             "after call=${request.callId} observation=ok chars=${observation.text.length} " +
-                "card=$posted hint=$withHint error=${observation.isError}",
+                "card=${cardPayload != null} hint=$withHint error=${observation.isError}",
         )
-        val text = if (withHint) modelText(host, observation) else observation.text
-        return resultReplace(textResult(text, isError = observation.isError))
+        val text = if (withHint) {
+            val base = observation.text.trimEnd()
+            if (base.isEmpty()) "$CARD_ID_LABEL${request.callId}" else "$base\n\n$CARD_ID_LABEL${request.callId}"
+        } else {
+            observation.text
+        }
+        return resultReplace(textResult(text, details = details, isError = observation.isError))
     }
 
-    private fun modelText(host: PluginHost, observation: CliObservation<CARD>): String {
-        val text = observation.text.trimEnd()
-        val hint = runCatching { host.text(config.cardHint) }.getOrDefault("").trim()
-        if (hint.isEmpty()) return text
-        return if (text.isEmpty()) hint else "$text\n\n$hint"
-    }
-
-    private suspend fun postCard(host: PluginHost, sessionId: String, observation: CliObservation<CARD>): Boolean {
-        if (sessionId.isBlank()) {
-            log(host, "card skip=blank-session")
-            return false
-        }
-        val chat = try {
-            host.chat()
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } catch (error: Throwable) {
-            warn(host, "card chat-unavailable=${error.javaClass.simpleName} ${error.message?.take(120).orEmpty()}")
-            return false
-        }
-        val payload = config.cardEncoder(observation.card!!)
-        return try {
-            chat.postCustomMessage(
-                sessionId = sessionId,
-                customType = observation.customType ?: config.customType,
-                payload = payload,
-                text = observation.summary,
-            )
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } catch (error: Throwable) {
-            warn(host, "card post-error=${error.javaClass.simpleName} ${error.message?.take(160).orEmpty()}")
-            false
-        }
+    private companion object {
+        const val CARD_DETAILS_KEY: String = "deepdeep.card"
+        const val CARD_ID_LABEL: String = "卡片 id："
     }
 
     private fun clearSession(host: PluginHost, sessionId: String) {

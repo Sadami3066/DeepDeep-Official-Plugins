@@ -39,6 +39,28 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 
 private const val CardResultLimit = 5
+private const val CARD_DETAILS_KEY = "deepdeep.card"
+
+private data class MailCard(
+    val customType: String,
+    val title: String,
+    val payload: JsonObject,
+)
+
+private fun PluginToolCall.withCard(text: String, card: MailCard): PluginToolResult {
+    val visibleText = if (callId.isBlank()) text else text.trimEnd() + "\n\n卡片 id：" + callId
+    val details = buildJsonObject {
+        put(
+            CARD_DETAILS_KEY,
+            buildJsonObject {
+                put("customType", card.customType)
+                put("title", card.title)
+                put("payload", card.payload)
+            },
+        )
+    }
+    return textResult(visibleText, details = details)
+}
 
 private fun guardedExecute(
     host: PluginHost,
@@ -182,17 +204,16 @@ private suspend fun search(
     val items = repository.search(query, account?.id)
         .filter { !unreadOnly || it.unread }
         .take((call.args.int("limit") ?: 20).coerceIn(1, 50))
-    postSearchCard(
+    val card = searchCard(
         host = host,
-        call = call,
         query = query,
         account = account,
         unreadOnly = unreadOnly,
         items = items,
         accounts = repository.accounts().associateBy { it.id },
     )
-    if (items.isEmpty()) return textResult("没有找到匹配的邮件。")
-    return textResult(mailSearchResultText(items))
+    if (items.isEmpty()) return call.withCard("没有找到匹配的邮件。", card)
+    return call.withCard(mailSearchResultText(items), card)
 }
 
 internal const val MAIL_TOOL_TIME_PATTERN = "yyyy-MM-dd HH:mm"
@@ -244,15 +265,14 @@ internal fun mailReadResultText(detail: MailMessageDetail): String {
     }
 }
 
-private suspend fun postSearchCard(
+private fun searchCard(
     host: PluginHost,
-    call: PluginToolCall,
     query: String,
     account: MailAccount?,
     unreadOnly: Boolean,
     items: List<MailMessageSummary>,
     accounts: Map<String, MailAccount>,
-) {
+): MailCard {
     val payload = MailSearchCardPayload(
         query = query,
         account = account?.email.orEmpty(),
@@ -283,7 +303,7 @@ private suspend fun postSearchCard(
             displaySubject(payload.items.first().subject, emptySubject),
         )
     }
-    postCard(host, call, MailChatCardTypes.SEARCH, payload.encodeCardPayload(), text)
+    return MailCard(customType = MailChatCardTypes.SEARCH, title = text, payload = payload.encodeCardPayload())
 }
 
 private suspend fun read(
@@ -296,9 +316,9 @@ private suspend fun read(
         ?: return textResult("找不到这封邮件，请先 mail_search 获取最新 id。", isError = true)
     val detail = repository.message(resolved.first.id, resolved.second)
         ?: return textResult("读取邮件失败，可能已被删除或移动。", isError = true)
-    postReadCard(host, call, detail)
+    val card = readCard(host, detail)
     shareAttachmentsToChat(host, repository, call, detail)
-    return textResult(mailReadResultText(detail))
+    return call.withCard(mailReadResultText(detail), card)
 }
 
 private suspend fun shareAttachmentsToChat(
@@ -382,7 +402,7 @@ private suspend fun saveAttachment(
     }
 }
 
-private suspend fun postReadCard(host: PluginHost, call: PluginToolCall, detail: MailMessageDetail) {
+private fun readCard(host: PluginHost, detail: MailMessageDetail): MailCard {
     val summary = detail.summary
     val plainBody = detail.textBody.ifBlank {
         detail.htmlBody?.let(HtmlText::toPlainText).orEmpty()
@@ -407,7 +427,7 @@ private suspend fun postReadCard(host: PluginHost, call: PluginToolCall, detail:
         subject,
         from,
     )
-    postCard(host, call, MailChatCardTypes.READ, payload.encodeCardPayload(), text)
+    return MailCard(customType = MailChatCardTypes.READ, title = text, payload = payload.encodeCardPayload())
 }
 
 private suspend fun draft(
@@ -471,14 +491,15 @@ private suspend fun draft(
             isError = true,
         )
     }
-    postDraftCard(host, call, account, saved)
+    val card = draftCard(host, account, saved)
     val attachmentNote = if (saved.attachments.isEmpty()) {
         ""
     } else {
         "，附件 ${saved.attachments.size} 个"
     }
-    return textResult(
+    return call.withCard(
         "已生成草稿（id=${saved.id}）：收件人 ${saved.to.joinToString(", ")}，主题「${saved.subject.ifBlank { "（无主题）" }}」$attachmentNote。用户要求发送时调用 mail_send。",
+        card,
     )
 }
 
@@ -584,12 +605,11 @@ private suspend fun discardImportedAttachments(
 private fun PluginHost.toolText(zh: String, en: String, vararg args: Any): String =
     text(localizedText(default = zh, zh = zh, en = en), *args)
 
-private suspend fun postDraftCard(
+private fun draftCard(
     host: PluginHost,
-    call: PluginToolCall,
     account: MailAccount,
     draft: MailDraft,
-) {
+): MailCard {
     val payload = MailDraftCardPayload(
         draftId = draft.id,
         account = account.email,
@@ -616,21 +636,7 @@ private suspend fun postDraftCard(
             draft.attachments.size,
         )
     }
-    postCard(host, call, MailChatCardTypes.DRAFT, payload.encodeCardPayload(), text)
-}
-
-private suspend fun postCard(
-    host: PluginHost,
-    call: PluginToolCall,
-    customType: String,
-    payload: JsonObject,
-    text: String,
-) {
-    val sessionId = call.sessionId
-    if (sessionId.isBlank() || text.isBlank()) return
-    runCatching {
-        host.chat().postCustomMessage(sessionId, customType, payload, text, display = true)
-    }
+    return MailCard(customType = MailChatCardTypes.DRAFT, title = text, payload = payload.encodeCardPayload())
 }
 
 private fun PluginHost.cardText(zh: String, en: String, vararg args: Any): String =

@@ -35,6 +35,10 @@ internal const val TODO_ACTION_DELETE = "delete"
 
 internal const val MAX_CARD_ROWS = 8
 
+internal const val FILES_MODE_LIST = "list"
+
+internal const val FILES_MODE_DOWNLOAD = "download"
+
 internal data class MiCloudQuotaEntry(
     val label: String = "",
     val totalBytes: Long? = null,
@@ -176,6 +180,76 @@ internal data class MiCloudTodoItem(
             modifyTime = obj.longOrNull("modifyTime") ?: 0L,
         )
     }
+}
+
+internal data class MiCloudFileItem(
+    val fileId: String = "",
+    val name: String = "",
+    val sizeBytes: Long = 0L,
+    val timeMs: Long = 0L,
+    val durationSeconds: Long = 0L,
+) {
+    fun toJson(): JsonObject = buildJsonObject {
+        putIfNotBlank("fileId", fileId)
+        putIfNotBlank("name", name)
+        if (sizeBytes > 0L) put("sizeBytes", sizeBytes)
+        if (timeMs > 0L) put("timeMs", timeMs)
+        if (durationSeconds > 0L) put("durationSeconds", durationSeconds)
+    }
+
+    companion object {
+        fun fromJson(obj: JsonObject): MiCloudFileItem = MiCloudFileItem(
+            fileId = obj.stringOrNull("fileId").orEmpty(),
+            name = obj.stringOrNull("name").orEmpty(),
+            sizeBytes = obj.longOrNull("sizeBytes") ?: 0L,
+            timeMs = obj.longOrNull("timeMs") ?: 0L,
+            durationSeconds = obj.longOrNull("durationSeconds") ?: 0L,
+        )
+    }
+}
+
+internal data class MiCloudFileCardData(
+    val mode: String = FILES_MODE_LIST,
+    val files: List<MiCloudFileItem> = emptyList(),
+) {
+    fun toJson(): JsonObject = buildJsonObject {
+        put("mode", mode)
+        putJsonArray("files") { files.forEach { add(it.toJson()) } }
+    }
+
+    companion object {
+        fun fromJson(obj: JsonObject): MiCloudFileCardData = MiCloudFileCardData(
+            mode = obj.stringOrNull("mode") ?: FILES_MODE_LIST,
+            files = obj.arrayOrNull("files").orEmpty()
+                .mapNotNull { it as? JsonObject }
+                .map(MiCloudFileItem::fromJson),
+        )
+    }
+}
+
+internal data class MiCloudQuotaSummary(
+    val totalBytes: Long?,
+    val usedBytes: Long?,
+    val freeBytes: Long?,
+) {
+    val percent: Int?
+        get() {
+            val total = totalBytes ?: return null
+            val used = usedBytes ?: return null
+            if (total <= 0L) return null
+            return ((used.toDouble() / total.toDouble()) * 100.0).toInt().coerceIn(0, 100)
+        }
+}
+
+internal fun quotaSummary(entries: List<MiCloudQuotaEntry>): MiCloudQuotaSummary? {
+    if (entries.isEmpty()) return null
+    val totals = entries.mapNotNull { it.totalBytes }
+    val usedValues = entries.mapNotNull { it.usedBytes }
+    val total = if (totals.isEmpty()) null else totals.sum()
+    val used = if (usedValues.isEmpty()) null else usedValues.sum()
+    if (total == null && used == null) return null
+    val free = if (total != null && used != null) (total - used).coerceAtLeast(0L) else null
+    return MiCloudQuotaSummary(totalBytes = total, usedBytes = used, freeBytes = free)
 }
 
 internal data class MiCloudTodoCardData(
@@ -330,6 +404,14 @@ private fun JsonObject.capacity(vararg keys: String): Long? {
 private val CAPACITY_CONTAINER_KEYS = listOf("quota", "storage", "capacity", "space", "usage")
 
 private const val QUOTA_MAX_DEPTH = 6
+
+internal fun recordingDurationSeconds(raw: Long?): Long = when {
+    raw == null || raw <= 0L -> 0L
+    raw > MAX_PLAUSIBLE_RECORDING_SECONDS -> raw / 1000L
+    else -> raw
+}
+
+private const val MAX_PLAUSIBLE_RECORDING_SECONDS = 24L * 60L * 60L
 
 internal fun noteItems(entries: JsonArray): List<MiCloudNoteItem> = entries
     .mapNotNull { it as? JsonObject }

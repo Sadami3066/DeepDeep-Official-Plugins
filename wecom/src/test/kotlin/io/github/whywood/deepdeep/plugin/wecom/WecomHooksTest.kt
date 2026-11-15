@@ -6,8 +6,10 @@ import io.github.whywood.deepdeep.plugin.api.ToolCallAction
 import io.github.whywood.deepdeep.plugin.api.ToolCallRequest
 import io.github.whywood.deepdeep.plugin.api.ToolExecutionResult
 import io.github.whywood.deepdeep.plugin.api.ToolResultAction
+import io.github.whywood.deepdeep.plugin.api.ToolResultDecision
 import io.github.whywood.deepdeep.plugin.api.textResult
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardCodec
+import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -32,12 +34,10 @@ class WecomHooksTest {
         assertTrue(text.contains("产品讨论群"))
         assertTrue(text.contains("wrOgQhDgAAmockchatid001"))
         assertTrue(text.contains("2026-11-15 10:24:31"))
-        assertTrue(text.contains("以卡片展示"))
+        assertTrue(text.endsWith("卡片 id：call-1"))
         assertFalse(text.contains("\"chats\""))
-        assertEquals(1, host.posted.size)
-        val posted = host.posted.single()
-        assertEquals("wecom.chat.groups", posted.customType)
-        val card = decode(posted.payload)
+        assertEquals("wecom.chat.groups", cardType(decision))
+        val card = cardOf(decision)
         assertNotNull(card)
         assertEquals("wecom.chat.groups", card!!.kind)
         assertEquals(2, card.total)
@@ -61,11 +61,11 @@ class WecomHooksTest {
         cases.forEachIndexed { index, (command, kind, fixture) ->
             val callId = "slot-$index"
             assertEquals(ToolCallAction.CONTINUE, hooks.beforeToolCall(request(callId, command)).action)
-            assertEquals(ToolResultAction.REPLACE, hooks.afterToolExecution(result(callId, wecomFixture(fixture))).action)
-            assertEquals(kind.customType, host.posted.last().customType)
-            assertEquals(kind.customType, decode(host.posted.last().payload)?.kind)
+            val decision = hooks.afterToolExecution(result(callId, wecomFixture(fixture)))
+            assertEquals(ToolResultAction.REPLACE, decision.action)
+            assertEquals(kind.customType, cardType(decision))
+            assertEquals(kind.customType, cardOf(decision)?.kind)
         }
-        assertEquals(cases.size, host.posted.size)
     }
 
     @Test
@@ -73,8 +73,8 @@ class WecomHooksTest {
         val host = FakeWecomHost()
         val hooks = bridge.hooks(host)
         hooks.beforeToolCall(request("call-1", "wecom-cli doc contents get --docid DOC_MOCK_001"))
-        hooks.afterToolExecution(result("call-1", wecomFixture("doc-content.json")))
-        val card = decode(host.posted.single().payload)!!
+        val decision = hooks.afterToolExecution(result("call-1", wecomFixture("doc-content.json")))
+        val card = cardOf(decision)!!
         assertEquals("企业微信接入方案", card.title)
         assertEquals("版本 12", card.trailing)
         assertEquals("DOC_MOCK_001", card.context)
@@ -87,12 +87,12 @@ class WecomHooksTest {
         val host = FakeWecomHost()
         val hooks = bridge.hooks(host)
         hooks.beforeToolCall(request("call-1", "wecom-cli todo list"))
-        hooks.afterToolExecution(result("call-1", wecomFixture("todo-list.json")))
-        val todoCard = decode(host.posted.single().payload)!!
+        val todoDecision = hooks.afterToolExecution(result("call-1", wecomFixture("todo-list.json")))
+        val todoCard = cardOf(todoDecision)!!
         assertEquals("进行中", todoCard.items.first().meta)
         hooks.beforeToolCall(request("call-2", "wecom-cli doc search --keywords 方案"))
-        hooks.afterToolExecution(result("call-2", wecomFixture("doc-search.json")))
-        val docsCard = decode(host.posted.last().payload)!!
+        val docsDecision = hooks.afterToolExecution(result("call-2", wecomFixture("doc-search.json")))
+        val docsCard = cardOf(docsDecision)!!
         assertEquals("文档", docsCard.items.first().meta)
     }
 
@@ -103,7 +103,7 @@ class WecomHooksTest {
         hooks.beforeToolCall(request("call-1", "wecom-cli chat groups list | head -20"))
         val decision = hooks.afterToolExecution(result("call-1", wecomFixture("chat-groups.json")))
         assertEquals(ToolResultAction.KEEP, decision.action)
-        assertTrue(host.posted.isEmpty())
+        assertNull(decision.result?.details?.get("deepdeep.card"))
     }
 
     @Test
@@ -118,8 +118,9 @@ class WecomHooksTest {
                 args = buildJsonObject { put("path", "/tmp/a.txt") },
             ),
         )
-        assertEquals(ToolResultAction.KEEP, hooks.afterToolExecution(result("call-1", wecomFixture("chat-groups.json"))).action)
-        assertTrue(host.posted.isEmpty())
+        val decision = hooks.afterToolExecution(result("call-1", wecomFixture("chat-groups.json")))
+        assertEquals(ToolResultAction.KEEP, decision.action)
+        assertNull(decision.result?.details?.get("deepdeep.card"))
     }
 
     @Test
@@ -131,7 +132,7 @@ class WecomHooksTest {
         val second = hooks.afterToolExecution(result("call-1", wecomFixture("todo-list.json")))
         assertEquals(ToolResultAction.REPLACE, first.action)
         assertEquals(ToolResultAction.KEEP, second.action)
-        assertEquals(1, host.posted.size)
+        assertNotNull(cardOf(first))
     }
 
     @Test
@@ -145,7 +146,7 @@ class WecomHooksTest {
         assertEquals(ToolResultAction.REPLACE, decision.action)
         assertEquals(UNAUTHORIZED_OBSERVATION, decision.result!!.text)
         assertTrue(decision.result!!.isError)
-        assertTrue(host.posted.isEmpty())
+        assertNull(decision.result?.details?.get("deepdeep.card"))
     }
 
     @Test
@@ -156,7 +157,7 @@ class WecomHooksTest {
         val networkError = """{"error":{"type":"NetworkError","code":893101,"message":"Request failed"}}"""
         val decision = hooks.afterToolExecution(result("call-1", networkError, isError = true))
         assertEquals(ToolResultAction.KEEP, decision.action)
-        assertTrue(host.posted.isEmpty())
+        assertNull(decision.result?.details?.get("deepdeep.card"))
     }
 
     @Test
@@ -167,7 +168,7 @@ class WecomHooksTest {
         val decision = hooks.afterToolExecution(result("call-1", "not json at all"))
         assertEquals(ToolResultAction.KEEP, decision.action)
         assertNull(decision.result)
-        assertTrue(host.posted.isEmpty())
+        assertNull(decision.result?.details?.get("deepdeep.card"))
     }
 
     @Test
@@ -177,7 +178,7 @@ class WecomHooksTest {
         hooks.beforeToolCall(request("call-1", "wecom-cli todo list"))
         val decision = hooks.afterToolExecution(result("call-1", wecomFixture("chat-groups.json")))
         assertEquals(ToolResultAction.KEEP, decision.action)
-        assertTrue(host.posted.isEmpty())
+        assertNull(decision.result?.details?.get("deepdeep.card"))
     }
 
     @Test
@@ -189,7 +190,7 @@ class WecomHooksTest {
         val decision = hooks.afterToolExecution(result("call-1", output))
         assertEquals(ToolResultAction.REPLACE, decision.action)
         assertTrue(decision.result!!.text!!.contains("整理接口文档"))
-        assertEquals(1, host.posted.size)
+        assertNotNull(cardOf(decision))
     }
 
     @Test
@@ -202,7 +203,7 @@ class WecomHooksTest {
         )
         assertEquals(ToolResultAction.REPLACE, decision.action)
         assertTrue(decision.result!!.text!!.contains("没有符合条件的群聊会话"))
-        val card = decode(host.posted.single().payload)!!
+        val card = cardOf(decision)!!
         assertEquals("empty", card.state.wire)
         assertEquals(0, card.total)
     }
@@ -243,22 +244,23 @@ class WecomHooksTest {
                 override val sessionId: String = SESSION
             },
         )
-        assertEquals(ToolResultAction.KEEP, hooks.afterToolExecution(result("call-2", wecomFixture("todo-list.json"))).action)
-        assertTrue(host.posted.isEmpty())
+        val decision = hooks.afterToolExecution(result("call-2", wecomFixture("todo-list.json")))
+        assertEquals(ToolResultAction.KEEP, decision.action)
+        assertNull(decision.result?.details?.get("deepdeep.card"))
     }
 
     @Test
-    fun cardPostFailureStillReplacesObservationWithoutHint() = runBlocking {
-        val host = FakeWecomHost(postSucceeds = false)
+    fun cardIdHintFollowsObservationText() = runBlocking {
+        val host = FakeWecomHost()
         val hooks = bridge.hooks(host)
         hooks.beforeToolCall(request("call-1", "wecom-cli todo list"))
         val decision = hooks.afterToolExecution(result("call-1", wecomFixture("todo-list.json")))
         assertEquals(ToolResultAction.REPLACE, decision.action)
         val text = decision.result!!.text!!
         assertTrue(text.contains("整理接口文档"))
-        assertFalse(text.contains("以卡片展示"))
+        assertTrue(text.endsWith("卡片 id：call-1"))
         assertFalse(text.contains("\"items\""))
-        assertEquals(1, host.posted.size)
+        assertNotNull(cardOf(decision))
     }
 
     @Test
@@ -267,8 +269,9 @@ class WecomHooksTest {
         val hooks = bridge.hooks(host)
         hooks.beforeToolCall(request("call-1", "wecom-cli chat groups list"))
         val huge = wecomFixture("chat-groups.json") + "x".repeat(300 * 1024)
-        assertEquals(ToolResultAction.KEEP, hooks.afterToolExecution(result("call-1", huge)).action)
-        assertTrue(host.posted.isEmpty())
+        val decision = hooks.afterToolExecution(result("call-1", huge))
+        assertEquals(ToolResultAction.KEEP, decision.action)
+        assertNull(decision.result?.details?.get("deepdeep.card"))
     }
 
     private fun request(callId: String, command: String): ToolCallRequest = ToolCallRequest(
@@ -285,6 +288,17 @@ class WecomHooksTest {
             toolName = "bash",
             result = textResult(text, isError = isError),
         )
+
+    private fun cardOf(decision: ToolResultDecision): CliCardModel? =
+        cardPayload(decision)?.let(::decode)
+
+    private fun cardPayload(decision: ToolResultDecision): kotlinx.serialization.json.JsonObject? =
+        (decision.result?.details?.get("deepdeep.card") as? kotlinx.serialization.json.JsonObject)
+            ?.get("payload") as? kotlinx.serialization.json.JsonObject
+
+    private fun cardType(decision: ToolResultDecision): String? =
+        ((decision.result?.details?.get("deepdeep.card") as? kotlinx.serialization.json.JsonObject)
+            ?.get("customType") as? kotlinx.serialization.json.JsonPrimitive)?.content
 
     private fun decode(payload: kotlinx.serialization.json.JsonObject) =
         CliCardCodec.decode(payload, WecomCommandKind.entries.map { it.customType }.toSet())

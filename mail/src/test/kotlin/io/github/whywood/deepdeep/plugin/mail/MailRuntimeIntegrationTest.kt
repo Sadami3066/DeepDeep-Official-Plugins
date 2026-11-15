@@ -32,8 +32,10 @@ import java.net.ServerSocket
 import java.util.Base64
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
@@ -406,7 +408,14 @@ class MailRuntimeIntegrationTest {
             assertFalse(draftResult.text.orEmpty(), draftResult.isError)
             val draft = rig.runtime.state.value.drafts.single()
             assertTrue(draftResult.text.orEmpty().contains(draft.id))
-            assertTrue(rig.host.chatCustomMessages.contains(MailChatCardTypes.DRAFT))
+            assertTrue(draftResult.text.orEmpty().contains("卡片 id：call-draft"))
+            val draftCard = draftResult.details?.get("deepdeep.card")?.jsonObject
+            assertNotNull(draftCard)
+            assertEquals(MailChatCardTypes.DRAFT, (draftCard!!["customType"] as JsonPrimitive).contentOrNull)
+            assertTrue((draftCard["title"] as JsonPrimitive).contentOrNull.orEmpty().isNotBlank())
+            val draftPayload = draftCard["payload"] as JsonObject
+            assertEquals(draft.id, (draftPayload["draftId"] as JsonPrimitive).contentOrNull)
+            assertFalse(rig.host.chatCustomMessages.contains(MailChatCardTypes.DRAFT))
 
             val sendResult = tools.getValue("mail_send").execute(
                 FakeToolCall(
@@ -1021,7 +1030,10 @@ class MailRuntimeIntegrationTest {
             assertTrue(text, text.contains(summary.fromName))
             assertTrue(text, Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}").containsMatchIn(text))
             assertTrue(text, text.contains("含附件"))
-            assertFalse(text, text.contains("卡片"))
+            assertTrue(text, text.contains("卡片 id：call-search"))
+            val card = result.details?.get("deepdeep.card")?.jsonObject
+            assertNotNull(card)
+            assertEquals(MailChatCardTypes.SEARCH, (card!!["customType"] as JsonPrimitive).contentOrNull)
         } finally {
             closeRig(rig)
         }
@@ -1055,7 +1067,10 @@ class MailRuntimeIntegrationTest {
             assertTrue(text, text.contains("时间："))
             assertTrue(text, Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}").containsMatchIn(text))
             assertTrue(text, text.contains("附件：1 个"))
-            assertFalse(text, text.contains("卡片"))
+            assertTrue(text, text.contains("卡片 id：call-read"))
+            val card = result.details?.get("deepdeep.card")?.jsonObject
+            assertNotNull(card)
+            assertEquals(MailChatCardTypes.READ, (card!!["customType"] as JsonPrimitive).contentOrNull)
         } finally {
             closeRig(rig)
         }

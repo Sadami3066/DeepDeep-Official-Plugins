@@ -73,6 +73,26 @@ internal fun formatEpochValue(value: Long): String =
         else -> formatTime(value)
     }
 
+internal fun byteValueAndUnit(bytes: Long): Pair<String, String> {
+    if (bytes < 1024L) return bytes.toString() to "B"
+    val units = listOf("KB", "MB", "GB", "TB", "PB")
+    var value = bytes.toDouble()
+    var unit = -1
+    while (value >= 1024.0 && unit < units.lastIndex) {
+        value /= 1024.0
+        unit++
+    }
+    val text = String.format(Locale.ROOT, "%.1f", value).removeSuffix(".0")
+    return text to units[unit]
+}
+
+internal fun formatShortTime(millis: Long, zone: ZoneId = ZoneId.systemDefault()): String {
+    if (millis <= 0L) return ""
+    return DateTimeFormatter.ofPattern("MM-dd HH:mm", Locale.ROOT)
+        .withZone(zone)
+        .format(Instant.ofEpochMilli(millis))
+}
+
 internal fun formatBytes(bytes: Long): String {
     if (bytes < 0L) return ""
     if (bytes < 1024L) return "$bytes B"
@@ -424,7 +444,7 @@ private fun recordingLine(item: JsonObject, t: MiCloudText): String {
     item.stringOrNull("id")?.let { parts += t.fmt("id=%s", "id=%s", it) }
     val name = item.stringOrNull("name") ?: item.stringOrNull("fileName")
     if (!name.isNullOrBlank()) parts += name
-    item.longOrNull("duration")?.let { parts += t.fmt("时长 %d 秒", "%d s", it) }
+    recordingDurationSeconds(item.longOrNull("duration")).takeIf { it > 0L }?.let { parts += t.fmt("时长 %d 秒", "%d s", it) }
     item.longOrNull("size")?.let { parts += formatBytes(it) }
     val epoch = item.firstEpoch("createTime", "date", "time")
     if (epoch > 0L) parts += formatEpochValue(epoch)

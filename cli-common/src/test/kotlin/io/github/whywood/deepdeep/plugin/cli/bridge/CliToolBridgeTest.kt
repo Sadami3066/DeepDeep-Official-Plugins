@@ -5,9 +5,6 @@ import io.github.whywood.deepdeep.plugin.api.AccessibilityServicePlugin
 import io.github.whywood.deepdeep.plugin.api.AppInfoService
 import io.github.whywood.deepdeep.plugin.api.BackgroundService
 import io.github.whywood.deepdeep.plugin.api.CalendarService
-import io.github.whywood.deepdeep.plugin.api.ChatAttachment
-import io.github.whywood.deepdeep.plugin.api.ChatMessageOptions
-import io.github.whywood.deepdeep.plugin.api.ChatSendResult
 import io.github.whywood.deepdeep.plugin.api.ChatService
 import io.github.whywood.deepdeep.plugin.api.ClipboardService
 import io.github.whywood.deepdeep.plugin.api.ComponentService
@@ -31,8 +28,8 @@ import io.github.whywood.deepdeep.plugin.api.PackageService
 import io.github.whywood.deepdeep.plugin.api.PermissionService
 import io.github.whywood.deepdeep.plugin.api.PluginBus
 import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginManifest
 import io.github.whywood.deepdeep.plugin.api.PluginServiceUnavailable
+import io.github.whywood.deepdeep.plugin.api.PluginManifest
 import io.github.whywood.deepdeep.plugin.api.PluginSettingsService
 import io.github.whywood.deepdeep.plugin.api.PrivilegeService
 import io.github.whywood.deepdeep.plugin.api.ScreenService
@@ -47,7 +44,7 @@ import io.github.whywood.deepdeep.plugin.api.ToolExecutionResult
 import io.github.whywood.deepdeep.plugin.api.ToolResultAction
 import io.github.whywood.deepdeep.plugin.api.UiService
 import io.github.whywood.deepdeep.plugin.api.WebService
-import io.github.whywood.deepdeep.plugin.api.localizedText
+import io.github.whywood.deepdeep.plugin.api.resultReplace
 import io.github.whywood.deepdeep.plugin.api.textResult
 import io.github.whywood.deepdeep.plugin.cli.CliJsonEnvelope
 import io.github.whywood.deepdeep.plugin.cli.objectList
@@ -62,6 +59,8 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -71,42 +70,7 @@ import org.junit.Test
 class CliToolBridgeTest {
     private val sessionId = "session-1"
 
-    private class FakeHost(private val cardSucceeds: Boolean) : PluginHost {
-        data class Posted(
-            val sessionId: String,
-            val customType: String,
-            val payload: JsonObject,
-            val text: String,
-        )
-
-        val posted = mutableListOf<Posted>()
-
-        private val chatService = object : ChatService {
-            override suspend fun postCustomMessage(
-                sessionId: String,
-                customType: String,
-                payload: JsonObject,
-                text: String,
-                display: Boolean,
-            ): Boolean {
-                posted += Posted(sessionId, customType, payload, text)
-                return cardSucceeds
-            }
-
-            override suspend fun sendMessage(
-                sessionId: String,
-                text: String,
-                options: ChatMessageOptions,
-            ): ChatSendResult = throw PluginServiceUnavailable("chat.sendMessage")
-
-            override suspend fun sendMessageWithAttachments(
-                sessionId: String,
-                text: String,
-                attachments: List<ChatAttachment>,
-                options: ChatMessageOptions,
-            ): ChatSendResult = throw PluginServiceUnavailable("chat.sendMessageWithAttachments")
-        }
-
+    private class FakeHost : PluginHost {
         override val manifest: PluginManifest get() = unavailable("manifest")
         override val context: Context get() = unavailable("context")
         override val dataDir: File = File(System.getProperty("java.io.tmpdir") ?: "/tmp")
@@ -118,7 +82,7 @@ class CliToolBridgeTest {
             return if (args.isEmpty()) resolved else String.format(Locale.getDefault(), resolved, *args)
         }
 
-        override fun chat(): ChatService = chatService
+        override fun chat(): ChatService = unavailable("chat")
         override fun linux(): LinuxService = unavailable("linux")
         override fun screen(): ScreenService = unavailable("screen")
         override fun notifications(): NotificationService = unavailable("notifications")
@@ -202,32 +166,20 @@ class CliToolBridgeTest {
     )
 
     @Test
-    fun appendsHintOnlyAfterCardIsPosted() = runTest {
-        val host = FakeHost(cardSucceeds = true)
-        val hooks = CliToolBridge(config).hooks(host)
+    fun cardBecomesDetailsWithIdHint() = runTest {
+        val hooks = CliToolBridge(config).hooks(FakeHost())
         assertEquals(ToolCallAction.CONTINUE, hooks.beforeToolCall(call("call-1")).action)
         val decision = hooks.afterToolExecution(result("call-1"))
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        val text = decision.result?.text.orEmpty()
-        assertTrue(text.startsWith("第一行\n第二行"))
-        assertTrue(text.endsWith(CliBridgeConfig.DEFAULT_CARD_HINT.resolve("zh")!!))
-        assertEquals(1, host.posted.size)
-        assertEquals("fake.card", host.posted.single().customType)
+        assertEquals("第一行\n第二行\n\n卡片 id：call-1", decision.result?.text)
+        val card = decision.result?.details?.get("deepdeep.card") as JsonObject
+        assertEquals("fake.card", card.getValue("customType").jsonPrimitive.content)
+        assertEquals("摘要", card.getValue("title").jsonPrimitive.content)
+        assertEquals("payload", card.getValue("payload").jsonObject.getValue("value").jsonPrimitive.content)
     }
 
     @Test
-    fun replacesTextWithoutHintWhenCardPostFails() = runTest {
-        val host = FakeHost(cardSucceeds = false)
-        val hooks = CliToolBridge(config).hooks(host)
-        hooks.beforeToolCall(call("call-1"))
-        val decision = hooks.afterToolExecution(result("call-1"))
-        assertEquals(ToolResultAction.REPLACE, decision.action)
-        assertEquals("第一行\n第二行", decision.result?.text)
-        assertEquals(1, host.posted.size)
-    }
-
-    @Test
-    fun errorObservationIsReplacedAsErrorWithoutHint() = runTest {
+    fun errorObservationKeepsCardWithoutIdHint() = runTest {
         val errorConfig = CliBridgeConfig(
             binaryName = "fake-cli",
             customType = "fake.card",
@@ -238,14 +190,44 @@ class CliToolBridgeTest {
             },
             cardEncoder = { card -> buildJsonObject { put("value", card) } },
         )
-        val host = FakeHost(cardSucceeds = true)
-        val hooks = CliToolBridge(errorConfig).hooks(host)
+        val hooks = CliToolBridge(errorConfig).hooks(FakeHost())
         hooks.beforeToolCall(call("call-1"))
         val decision = hooks.afterToolExecution(result("call-1"))
         assertEquals(ToolResultAction.REPLACE, decision.action)
         assertEquals(true, decision.result?.isError)
         assertEquals("未登录，请重新授权", decision.result?.text)
-        assertEquals(1, host.posted.size)
+        val card = decision.result?.details?.get("deepdeep.card") as JsonObject
+        assertEquals("fake.card", card.getValue("customType").jsonPrimitive.content)
+    }
+
+    @Test
+    fun textOnlyObservationHasNoCardOrHint() = runTest {
+        val hooks = CliToolBridge(textOnlyConfig).hooks(FakeHost())
+        hooks.beforeToolCall(call("call-1"))
+        val decision = hooks.afterToolExecution(result("call-1"))
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        assertEquals("第一行\n第二行", decision.result?.text)
+        assertEquals(null, decision.result?.details)
+    }
+
+    @Test
+    fun errorMappedResultIsKeptWithoutCard() = runTest {
+        val mapped = CliBridgeConfig(
+            binaryName = "fake-cli",
+            customType = "fake.card",
+            logTag = "fake.bridge",
+            parser = CliCommandParser { raw -> if (raw.trim() == "fake-cli read") "read" else null },
+            observer = CliObservationBuilder { _, _, _ -> CliObservation(summary = "摘要", text = "结果", card = "payload") },
+            cardEncoder = { card -> buildJsonObject { put("value", card) } },
+            errorMapper = CliErrorMapper { _, _, _ -> resultReplace(textResult("已处理错误")) },
+        )
+        val hooks = CliToolBridge(mapped).hooks(FakeHost())
+        hooks.beforeToolCall(call("call-1"))
+        val errorResult = ToolExecutionResult(sessionId, "call-1", "bash", textResult("boom", isError = true))
+        val decision = hooks.afterToolExecution(errorResult)
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        assertEquals("已处理错误", decision.result?.text)
+        assertEquals(null, decision.result?.details)
     }
 
     @Test
@@ -265,13 +247,13 @@ class CliToolBridgeTest {
             cardEncoder = { card -> buildJsonObject { put("value", card) } },
             envelope = CliJsonEnvelope.LENIENT,
         )
-        val host = FakeHost(cardSucceeds = true)
-        val hooks = CliToolBridge(lenient).hooks(host)
+        val hooks = CliToolBridge(lenient).hooks(FakeHost())
         hooks.beforeToolCall(call("call-1"))
         val decision = hooks.afterToolExecution(result("call-1", """{"items":[{"id":1}]}"""))
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        assertTrue(decision.result?.text.orEmpty().startsWith("条目数 1"))
-        assertEquals(1, host.posted.size)
+        val text = decision.result?.text.orEmpty()
+        assertTrue(text.startsWith("条目数 1"))
+        assertTrue(text.endsWith("卡片 id：call-1"))
     }
 
     @Test
@@ -295,15 +277,15 @@ class CliToolBridgeTest {
             cardEncoder = { card -> buildJsonObject { put("value", card) } },
             requireSuccessEnvelope = false,
         )
-        val host = FakeHost(cardSucceeds = true)
-        val hooks = CliToolBridge(arrayConfig).hooks(host)
+        val hooks = CliToolBridge(arrayConfig).hooks(FakeHost())
         hooks.beforeToolCall(call("call-1"))
         val decision = hooks.afterToolExecution(
             result("call-1", "日志行\n[{\"id\":1},{\"id\":2}]\n[exit: 0]"),
         )
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        assertTrue(decision.result?.text.orEmpty().startsWith("数组条目 2"))
-        assertEquals(1, host.posted.size)
+        val text = decision.result?.text.orEmpty()
+        assertTrue(text.startsWith("数组条目 2"))
+        assertTrue(text.endsWith("卡片 id：call-1"))
     }
 
     @Test
@@ -324,8 +306,7 @@ class CliToolBridgeTest {
             payloadFinder = { buildJsonObject { put("custom", "found") } },
             requireSuccessEnvelope = false,
         )
-        val host = FakeHost(cardSucceeds = true)
-        val hooks = CliToolBridge(custom).hooks(host)
+        val hooks = CliToolBridge(custom).hooks(FakeHost())
         hooks.beforeToolCall(call("call-1"))
         val decision = hooks.afterToolExecution(result("call-1", "not json at all"))
         assertEquals(ToolResultAction.REPLACE, decision.action)
@@ -333,33 +314,21 @@ class CliToolBridgeTest {
     }
 
     @Test
-    fun textOnlyObservationIsReplacedWithoutHint() = runTest {
-        val host = FakeHost(cardSucceeds = true)
-        val hooks = CliToolBridge(textOnlyConfig).hooks(host)
-        hooks.beforeToolCall(call("call-1"))
-        val decision = hooks.afterToolExecution(result("call-1"))
-        assertEquals(ToolResultAction.REPLACE, decision.action)
-        assertEquals("第一行\n第二行", decision.result?.text)
-        assertTrue(host.posted.isEmpty())
-    }
-
-    @Test
-    fun customCardHintIsUsed() = runTest {
-        val custom = CliBridgeConfig(
+    fun observationCustomTypeOverridesConfigType() = runTest {
+        val override = CliBridgeConfig(
             binaryName = "fake-cli",
             customType = "fake.card",
             logTag = "fake.bridge",
             parser = CliCommandParser { raw -> if (raw.trim() == "fake-cli read") "read" else null },
             observer = CliObservationBuilder { _, _, _ ->
-                CliObservation(summary = "摘要", text = "结果", card = "payload")
+                CliObservation(summary = "摘要", text = "结果", card = "payload", customType = "fake.other")
             },
             cardEncoder = { card -> buildJsonObject { put("value", card) } },
-            cardHint = localizedText(default = "自定义提示", en = "custom hint"),
         )
-        val hooks = CliToolBridge(custom).hooks(FakeHost(cardSucceeds = true))
+        val hooks = CliToolBridge(override).hooks(FakeHost())
         hooks.beforeToolCall(call("call-1"))
-        val text = hooks.afterToolExecution(result("call-1")).result?.text.orEmpty()
-        assertEquals("结果\n\n自定义提示", text)
-        assertFalse(text.contains("卡片"))
+        val card = hooks.afterToolExecution(result("call-1")).result?.details
+            ?.get("deepdeep.card") as JsonObject
+        assertEquals("fake.other", card.getValue("customType").jsonPrimitive.content)
     }
 }

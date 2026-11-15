@@ -12,14 +12,25 @@ fi
 
 ./scripts/gradlew-locked \
   :cli-common:testDebugUnitTest \
+  :feishu:testDebugUnitTest \
   :feishu:verifyPlugin \
+  :wecom:testDebugUnitTest \
   :wecom:verifyPlugin \
+  :sysu:testDebugUnitTest \
   :sysu:verifyPlugin \
+  :wechat:testDebugUnitTest \
   :wechat:verifyPlugin \
+  :micloud:testDebugUnitTest \
   :micloud:verifyPlugin \
+  :mail:testDebugUnitTest \
   :mail:verifyPlugin \
+  :themes:testDebugUnitTest \
   :themes:verifyPlugin \
+  :rail:testDebugUnitTest \
   :rail:verifyPlugin \
+  :hotel:testDebugUnitTest \
   :hotel:verifyPlugin \
+  :ride:testDebugUnitTest \
   :ride:verifyPlugin \
+  :amap:testDebugUnitTest \
   :amap:verifyPlugin

@@ -10,8 +10,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.amap"
         minSdk = 29
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.1.1"
+        versionCode = 4
+        versionName = "1.2.0"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

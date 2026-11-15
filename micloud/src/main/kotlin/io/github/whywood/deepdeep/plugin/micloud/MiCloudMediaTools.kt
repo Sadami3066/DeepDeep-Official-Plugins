@@ -69,8 +69,18 @@ internal fun recordingsTool(
                     .payloadArray("list")
                     .mapNotNull { it as? JsonObject }
                     .map(::recordingItem)
+                val files = items.map { item ->
+                    MiCloudFileItem(
+                        fileId = item.stringOrNull("id").orEmpty(),
+                        name = item.stringOrNull("name").orEmpty(),
+                        sizeBytes = item.longOrNull("size") ?: 0L,
+                        timeMs = item.longOrNull("createTime") ?: 0L,
+                        durationSeconds = recordingDurationSeconds(item.longOrNull("duration")),
+                    )
+                }
                 textResult(
                     recordingsObservation(items.take(MAX_OBSERVATION_ITEMS), offset + items.size, text),
+                    details = MiCloudFileCardData(mode = FILES_MODE_LIST, files = files).toJson(),
                 )
             }
 
@@ -81,6 +91,12 @@ internal fun recordingsTool(
                 downloadDir.mkdirs()
                 val target = uniqueFile(downloadDir, safeFileName(name))
                 val downloaded = client.download(recordingDownloadPath(userId, fileId), target)
+                val file = MiCloudFileItem(
+                    fileId = fileId,
+                    name = downloaded.name,
+                    sizeBytes = downloaded.length(),
+                    timeMs = now(),
+                )
                 textResult(
                     recordingDownloadObservation(
                         fileId = fileId,
@@ -89,6 +105,7 @@ internal fun recordingsTool(
                         path = downloaded.absolutePath,
                         t = text,
                     ),
+                    details = MiCloudFileCardData(mode = FILES_MODE_DOWNLOAD, files = listOf(file)).toJson(),
                 )
             }
 

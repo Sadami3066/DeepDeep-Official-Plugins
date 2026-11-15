@@ -70,7 +70,7 @@ class SysuObservationTest {
         assertEquals("3 门", card.trailing)
         assertEquals(1, card.sections.size)
         assertTrue(card.sections.first().label.orEmpty().contains("加权绩点 2.433"))
-        assertEquals("B · 绩点 3.3", card.sections.first().items.first().meta)
+        assertEquals("B · 3 学分 · 绩点 3.3", card.sections.first().items.first().meta)
     }
 
     @Test

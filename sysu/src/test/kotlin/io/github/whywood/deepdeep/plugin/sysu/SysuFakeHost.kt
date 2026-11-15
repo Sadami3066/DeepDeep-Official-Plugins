@@ -50,16 +50,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.JsonObject
 
-internal class SysuFakeHost(private val cardSucceeds: Boolean = true) : PluginHost {
-    data class Posted(
-        val sessionId: String,
-        val customType: String,
-        val payload: JsonObject,
-        val text: String,
-    )
-
-    val posted = mutableListOf<Posted>()
-
+internal class SysuFakeHost : PluginHost {
     val logLines = mutableListOf<String>()
 
     private val chatService = object : ChatService {
@@ -69,10 +60,7 @@ internal class SysuFakeHost(private val cardSucceeds: Boolean = true) : PluginHo
             payload: JsonObject,
             text: String,
             display: Boolean,
-        ): Boolean {
-            posted += Posted(sessionId, customType, payload, text)
-            return cardSucceeds
-        }
+        ): Boolean = true
 
         override suspend fun sendMessage(
             sessionId: String,

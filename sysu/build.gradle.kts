@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.sysu"
         minSdk = 29
         targetSdk = 36
-        versionCode = 13
-        versionName = "2.3.1"
+        versionCode = 14
+        versionName = "2.4.0"
     }
 
     compileOptions {

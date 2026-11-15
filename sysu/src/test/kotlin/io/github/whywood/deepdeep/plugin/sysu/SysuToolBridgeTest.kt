@@ -5,12 +5,16 @@ import io.github.whywood.deepdeep.plugin.api.ToolCallAction
 import io.github.whywood.deepdeep.plugin.api.ToolCallRequest
 import io.github.whywood.deepdeep.plugin.api.ToolExecutionResult
 import io.github.whywood.deepdeep.plugin.api.ToolResultAction
+import io.github.whywood.deepdeep.plugin.api.ToolResultDecision
 import io.github.whywood.deepdeep.plugin.api.textResult
-import io.github.whywood.deepdeep.plugin.cli.bridge.CliBridgeConfig
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardCodec
+import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardState
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -39,10 +43,16 @@ class SysuToolBridgeTest {
 
     private fun hooks(host: SysuFakeHost) = SysuToolBridge().hooks(host)
 
-    private val hint: String = CliBridgeConfig.DEFAULT_CARD_HINT.resolve("zh")!!
+    private val hint: String = "卡片 id：call-1"
+
+    private fun cardDetails(decision: ToolResultDecision): JsonObject =
+        decision.result?.details?.get("deepdeep.card") as JsonObject
+
+    private fun card(decision: ToolResultDecision): CliCardModel? =
+        CliCardCodec.decode(cardDetails(decision).getValue("payload").jsonObject, SYSU_CARD_KINDS)
 
     @Test
-    fun replacesScheduleWithObservationAndCardAndHint() = runTest {
+    fun replacesScheduleWithObservationAndCardDetailsAndId() = runTest {
         val host = SysuFakeHost()
         val hooks = hooks(host)
         hooks.beforeToolCall(call("sysu jwxt schedule --json"))
@@ -52,11 +62,10 @@ class SysuToolBridgeTest {
         assertTrue(text.startsWith("课表 · 2026-1 · 第 10 周"))
         assertTrue(text.endsWith(hint))
         assertFalse(text.contains("TGC"))
-        assertEquals(1, host.posted.size)
-        val post = host.posted.single()
-        assertEquals("sysu.card", post.customType)
-        assertEquals(sessionId, post.sessionId)
-        val card = CliCardCodec.decode(post.payload, SYSU_CARD_KINDS)
+        val details = cardDetails(decision)
+        assertEquals(SYSU_CARD_TYPE, details.getValue("customType").jsonPrimitive.content)
+        assertEquals("课表 · 6 门 · 2026-1 · 第 10 周", details.getValue("title").jsonPrimitive.content)
+        val card = card(decision)
         assertNotNull(card)
         assertEquals(SysuCardKind.Schedule.wire, card!!.kind)
         assertEquals("课表", card.title)
@@ -66,21 +75,20 @@ class SysuToolBridgeTest {
     }
 
     @Test
-    fun replacesTextWithoutHintWhenCardPostFails() = runTest {
-        val host = SysuFakeHost(cardSucceeds = false)
+    fun creditsObservationHasNoCardDetailsOrIdHint() = runTest {
+        val host = SysuFakeHost()
         val hooks = hooks(host)
-        hooks.beforeToolCall(call("sysu jwxt scores --json"))
-        val decision = hooks.afterToolExecution(result(output = SysuFixtures.bashOutput("scores.json")))
+        hooks.beforeToolCall(call("sysu jwxt credits --json"))
+        val decision = hooks.afterToolExecution(result(output = SysuFixtures.bashOutput("credits.json")))
         assertEquals(ToolResultAction.REPLACE, decision.action)
         val text = decision.result?.text.orEmpty()
-        assertTrue(text.startsWith("成绩 · 2025-2"))
-        assertFalse(text.endsWith(hint))
-        assertFalse(text.contains("{\"semester\""))
-        assertEquals(1, host.posted.size)
+        assertTrue(text.startsWith("毕业学分"))
+        assertFalse(text.contains("卡片 id"))
+        assertNull(decision.result?.details)
     }
 
     @Test
-    fun netpayExpiredSessionIsErrorWithoutHintButWithErrorCard() = runTest {
+    fun netpayExpiredSessionIsErrorCardWithoutIdHint() = runTest {
         val host = SysuFakeHost()
         val hooks = hooks(host)
         hooks.beforeToolCall(call("sysu netpay --json"))
@@ -91,7 +99,8 @@ class SysuToolBridgeTest {
         assertTrue(text.contains("插件页重新登录"))
         assertFalse(text.contains("undefined"))
         assertFalse(text.endsWith(hint))
-        val card = CliCardCodec.decode(host.posted.single().payload, SYSU_CARD_KINDS)
+        assertFalse(text.contains("卡片 id"))
+        val card = card(decision)
         assertEquals(CliCardState.ERROR, card?.state)
     }
 
@@ -112,7 +121,7 @@ class SysuToolBridgeTest {
         assertTrue(text.contains("插件页重新登录"))
         assertFalse(text.contains("TGC"))
         assertFalse(text.contains("tgc"))
-        assertTrue(host.posted.isEmpty())
+        assertNull(decision.result?.details)
     }
 
     @Test
@@ -151,16 +160,13 @@ class SysuToolBridgeTest {
         val host = SysuFakeHost()
         val hooks = hooks(host)
         assertEquals(ToolCallAction.CONTINUE, hooks.beforeToolCall(call("sysu jwxt course LN3015 --json")).action)
-        assertEquals(
-            ToolResultAction.KEEP,
-            hooks.afterToolExecution(result(output = "课程信息：LN3015\n\n[exit: 0]")).action,
-        )
+        val unsupported = hooks.afterToolExecution(result(output = "课程信息：LN3015\n\n[exit: 0]"))
+        assertEquals(ToolResultAction.KEEP, unsupported.action)
+        assertNull(unsupported.result)
         assertEquals(ToolCallAction.CONTINUE, hooks.beforeToolCall(call("lark-cli im +chat-list", "call-2")).action)
-        assertEquals(
-            ToolResultAction.KEEP,
-            hooks.afterToolExecution(result("call-2", output = """{"ok":true,"data":[]}""")).action,
-        )
-        assertEquals(host.posted.size, 0)
+        val otherTool = hooks.afterToolExecution(result("call-2", output = """{"ok":true,"data":[]}"""))
+        assertEquals(ToolResultAction.KEEP, otherTool.action)
+        assertNull(otherTool.result)
     }
 
     @Test
@@ -170,7 +176,7 @@ class SysuToolBridgeTest {
         hooks.beforeToolCall(call("sysu jwxt scores --json"))
         val decision = hooks.afterToolExecution(result(output = "（无输出）\n\n[exit: 0]"))
         assertEquals(ToolResultAction.KEEP, decision.action)
-        assertTrue(host.posted.isEmpty())
+        assertNull(decision.result)
     }
 
     @Test
@@ -196,7 +202,7 @@ class SysuToolBridgeTest {
         )
         val decision = hooks.afterToolExecution(result(output = SysuFixtures.bashOutput("schedule.json")))
         assertEquals(ToolResultAction.KEEP, decision.action)
-        assertTrue(host.posted.isEmpty())
+        assertNull(decision.result)
     }
 
     @Test
@@ -255,7 +261,8 @@ class SysuToolBridgeTest {
             toolName = "read",
             result = textResult("sysu jwxt --json"),
         )
-        assertEquals(ToolResultAction.KEEP, hooks.afterToolExecution(nonBash).action)
-        assertTrue(host.posted.isEmpty())
+        val decision = hooks.afterToolExecution(nonBash)
+        assertEquals(ToolResultAction.KEEP, decision.action)
+        assertNull(decision.result)
     }
 }

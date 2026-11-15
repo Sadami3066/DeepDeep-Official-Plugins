@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -87,6 +88,7 @@ internal fun AmapMapPreview(
     openUrl: String?,
     contentDescription: String,
     modifier: Modifier = Modifier,
+    shape: Shape = DdShapes.Medium,
 ) {
     val colors = deepDeepColors()
     val loader = remember(host) {
@@ -116,7 +118,7 @@ internal fun AmapMapPreview(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(AMAP_MAP_ASPECT_RATIO)
-            .clip(DdShapes.Medium)
+            .clip(shape)
             .background(colors.wash),
     ) {
         when (val current = load) {
@@ -135,7 +137,7 @@ internal fun AmapMapPreview(
                     DdPressable(
                         onClick = ::openInMaps,
                         modifier = Modifier.fillMaxSize(),
-                        shape = DdShapes.Medium,
+                        shape = shape,
                         enabled = actions.imageTapOpensMaps,
                         contentDescription = contentDescription,
                     ) {
@@ -144,7 +146,7 @@ internal fun AmapMapPreview(
                             contentDescription = contentDescription,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop,
-                            shape = DdShapes.Medium,
+                            shape = shape,
                             failure = {
                                 LaunchedEffect(Unit) { imageFailed = true }
                             },

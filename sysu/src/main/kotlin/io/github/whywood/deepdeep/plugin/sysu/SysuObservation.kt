@@ -102,6 +102,11 @@ internal object SysuObservation {
                     item.teacher?.takeIf { it.isNotBlank() },
                     SysuFormat.place(item.place),
                 ).joinToString(" · ")
+                val cardDetail = if (exam) {
+                    listOf(strings.text("考试", "Exam"), detail).filter { it.isNotBlank() }.joinToString(" · ")
+                } else {
+                    detail
+                }
                 val time = item.time?.takeIf { it.isNotBlank() }
                 val sectionsLabel = SysuFormat.sections(item.sections)
                 lines += "  - ${if (exam) strings.text("考试 ", "Exam ") else ""}" +
@@ -110,7 +115,7 @@ internal object SysuObservation {
                     (if (time != null) "｜$time" else "")
                 rows += CliCardItem(
                     title = name,
-                    subtitle = detail.ifEmpty { null },
+                    subtitle = cardDetail.ifEmpty { null },
                     meta = sectionsLabel ?: time,
                 )
                 rowCount += 1
@@ -172,6 +177,7 @@ internal object SysuObservation {
                     subtitle = code,
                     meta = listOfNotNull(
                         score,
+                        courseCredit?.let { strings.text("$it 学分", "$it credits") },
                         point?.let { strings.text("绩点 $it", "GP $it") },
                     ).joinToString(" · ").ifEmpty { null },
                 )
@@ -502,7 +508,10 @@ internal object SysuObservation {
             rows += CliCardItem(
                 title = name,
                 subtitle = listOfNotNull(status, address).joinToString(" · ").ifEmpty { null },
-                meta = expire?.let { strings.text("到期 $it", "expires $it") },
+                meta = listOfNotNull(
+                    expire?.let { strings.text("到期 $it", "expires $it") },
+                    daysLeft?.let { strings.text("剩余 $it 天", "$it days left") },
+                ).joinToString(" · ").ifEmpty { null },
             )
         }
         val trailing = strings.text("${data.services.size} 个服务", "${data.services.size} services")

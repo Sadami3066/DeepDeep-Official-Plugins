@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.hotel"
         minSdk = 29
         targetSdk = 36
-        versionCode = 16
-        versionName = "1.0.10"
+        versionCode = 17
+        versionName = "1.1.0"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
