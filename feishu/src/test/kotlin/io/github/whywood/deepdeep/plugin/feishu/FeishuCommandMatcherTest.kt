@@ -59,6 +59,15 @@ class FeishuCommandMatcherTest {
     }
 
     @Test
+    fun matchesMailTriageForErrorMapping() {
+        assertEquals(
+            FeishuCommandKind.MAIL_TRIAGE,
+            parseLarkCliCommand("lark-cli mail +triage --page-size 20")?.kind,
+        )
+        assertNull(parseLarkCliCommand("lark-cli mail user_mailboxes profile --params '{\"user_mailbox_id\":\"me\"}'"))
+    }
+
+    @Test
     fun rejectsPipesRedirectionAndCommandChains() {
         assertNull(parseLarkCliCommand("lark-cli im +chat-list | head -20"))
         assertNull(parseLarkCliCommand("lark-cli im +chat-list > /tmp/out.json"))
@@ -70,7 +79,7 @@ class FeishuCommandMatcherTest {
 
     @Test
     fun rejectsUnsupportedOrUnsafeVariants() {
-        assertNull(parseLarkCliCommand("lark-cli im +messages-send --chat-id oc_1 --text hi"))
+        assertNull(parseLarkCliCommand("lark-cli im +chat-search --query 大创"))
         assertNull(parseLarkCliCommand("lark-cli im +chat-list --dry-run"))
         assertNull(parseLarkCliCommand("lark-cli im +chat-list --jq .data"))
         assertNull(parseLarkCliCommand("lark-cli im +chat-list --format table"))
@@ -78,6 +87,76 @@ class FeishuCommandMatcherTest {
         assertNull(parseLarkCliCommand("lark-cli im +chat-messages-list --page-size 20"))
         assertNull(parseLarkCliCommand("lark-cli docs +fetch --doc-format markdown"))
         assertNull(parseLarkCliCommand("curl https://example.com"))
+    }
+
+    @Test
+    fun matchesSearchCommands() {
+        assertEquals(
+            FeishuCommandKind.MESSAGES_SEARCH,
+            parseLarkCliCommand("lark-cli im +messages-search --query \"设计稿\" --page-size 50")?.kind,
+        )
+        assertEquals(
+            FeishuCommandKind.DOCS_SEARCH,
+            parseLarkCliCommand("lark-cli docs +search --query 周报")?.kind,
+        )
+        assertEquals(
+            FeishuCommandKind.TASKS_RELATED,
+            parseLarkCliCommand("lark-cli task +get-related-tasks --include-complete=false")?.kind,
+        )
+        assertEquals(
+            FeishuCommandKind.TASKS_SEARCH,
+            parseLarkCliCommand("lark-cli task +search --query 周报")?.kind,
+        )
+    }
+
+    @Test
+    fun matchesMailCommands() {
+        val triage = parseLarkCliCommand("lark-cli mail +triage --max 20 --is-unread --format json")
+        assertEquals(FeishuCommandKind.MAIL_TRIAGE, triage?.kind)
+        assertTrue(triage?.unreadOnly == true)
+        assertEquals("inbox", parseLarkCliCommand("lark-cli mail +triage --folder inbox --format json")?.folder)
+        val message = parseLarkCliCommand("lark-cli mail +message --message-id m_1 --format json")
+        assertEquals(FeishuCommandKind.MAIL_MESSAGE, message?.kind)
+        assertEquals("m_1", message?.messageId)
+        val draft = parseLarkCliCommand("lark-cli mail +send --to a@b.com --subject hi --body 'hello <b>world</b>'")
+        assertEquals(FeishuCommandKind.MAIL_COMPOSE, draft?.kind)
+        assertEquals("a@b.com", draft?.recipients)
+        assertEquals("hello world", draft?.preview)
+        assertFalse(draft?.confirmedSend == true)
+        val sent = parseLarkCliCommand("lark-cli mail +reply --message-id m_1 --body hi --confirm-send")
+        assertEquals(FeishuCommandKind.MAIL_COMPOSE, sent?.kind)
+        assertTrue(sent?.confirmedSend == true)
+    }
+
+    @Test
+    fun matchesWriteCommands() {
+        val send = parseLarkCliCommand("lark-cli im +messages-send --chat-id oc_1 --text hello")
+        assertEquals(FeishuCommandKind.MESSAGE_SEND, send?.kind)
+        assertEquals("hello", send?.preview)
+        val task = parseLarkCliCommand("lark-cli task +create --summary 写周报 --due 2026-11-20")
+        assertEquals(FeishuCommandKind.TASK_CREATE, task?.kind)
+        val event = parseLarkCliCommand(
+            "lark-cli calendar +create --summary 评审 --start 2026-11-20T14:00+08:00 " +
+                "--end 2026-11-20T15:00+08:00 --attendee-ids ou_a,ou_b",
+        )
+        assertEquals(FeishuCommandKind.CALENDAR_CREATE, event?.kind)
+        assertEquals("ou_a,ou_b", event?.attendees)
+        val doc = parseLarkCliCommand("lark-cli docs +create --title 方案 --content '<title>方案</title>'")
+        assertEquals(FeishuCommandKind.DOCS_CREATE, doc?.kind)
+        assertEquals("方案", doc?.title)
+    }
+
+    @Test
+    fun matchesAuthStatus() {
+        assertEquals(FeishuCommandKind.AUTH_STATUS, parseLarkCliCommand("lark-cli auth status --json")?.kind)
+        assertNull(parseLarkCliCommand("lark-cli whoami"))
+    }
+
+    @Test
+    fun rejectsDryRunWrites() {
+        assertNull(parseLarkCliCommand("lark-cli im +messages-send --chat-id oc_1 --text hi --dry-run"))
+        assertNull(parseLarkCliCommand("lark-cli mail +send --to a@b.com --subject x --body y --dry-run"))
+        assertNull(parseLarkCliCommand("lark-cli task +create --summary x --dry-run"))
     }
 }
 

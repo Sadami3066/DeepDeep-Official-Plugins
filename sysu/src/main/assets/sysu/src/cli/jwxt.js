@@ -12,15 +12,10 @@ function main(argvIn = []) {
 
     const argv = argvIn.slice();
 
-  if (argv.includes('--help') || argv.includes('-h')) {
-    console.log(HELP);
-    process.exit(0);
-  }
+  if (argv.includes('--help') || argv.includes('-h')) return console.log(HELP);
 
   const fail = (msg) => {
-    console.error(`\x1b[31m${msg}\x1b[0m\n`);
-    console.log(HELP);
-    process.exit(1);
+    throw new Error(msg);
   };
 
   let cmd = 'schedule';
@@ -84,8 +79,7 @@ function main(argvIn = []) {
   if (day !== undefined && !(day >= 1 && day <= 7)) fail(`--day 要 1~7（周一~周日），收到：${rawDay}`);
   if (rawNum !== undefined && !(Number(rawNum) > 0)) fail(`--num 要是正数，收到：${rawNum}`);
 
-  run(cmd, {
-    json: argv.includes('--json'),
+  return run(cmd, {
     apply,
     name,
     id: cmd === 'notice' ? name : undefined,
@@ -112,9 +106,6 @@ function main(argvIn = []) {
     file: rawFile,
     code: rawCode,
     sendCode: argv.includes('--send-code'),
-  }).catch((err) => {
-    console.error(`\x1b[31m${err.message}\x1b[0m`);
-    process.exit(1);
   });
 
 }

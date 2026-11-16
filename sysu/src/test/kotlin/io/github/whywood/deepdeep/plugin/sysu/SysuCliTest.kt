@@ -6,6 +6,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SysuCliTest {
+    @Test
+    fun bundledCliVersionIsCurrent() {
+        assertEquals("3.5.0", SysuCli.VERSION)
+    }
+
     private val statusOutput = """
         @@node@@
         v24.16.0
@@ -88,12 +93,41 @@ class SysuCliTest {
     }
 
     @Test
-    fun detectsVerificationCodeRequests() {
-        assertTrue(SysuCli.needsCode("这个站点需要企业微信二次验证，验证码已推送。拿到后重跑，并加上 --code <4 位>"))
-        assertTrue(SysuCli.needsCode("验证码已发到企业微信，10 分钟内执行：sysu login --code <4 位>"))
+    fun parsesLoginJsonForMfaAndSuccess() {
+        val needCode = """
+            {
+              "ok": false,
+              "needMfa": true,
+              "hint": "验证码已发到企业微信，10 分钟内执行：sysu login --code <4 位>"
+            }
+
+            [exit: 0]
+        """.trimIndent()
+        assertTrue(SysuCli.needsCode(needCode))
+        assertFalse(SysuCli.loginSucceeded(needCode))
+
+        val success = "{\"ok\":true,\"needMfa\":false,\"already\":false,\"jwxt\":true,\"lms\":true,\"lmsNote\":null}\n\n[exit: 0]"
+        assertFalse(SysuCli.needsCode(success))
+        assertTrue(SysuCli.loginSucceeded(success))
+
+        val failure = "{\"ok\":false,\"error\":{\"message\":\"二次验证没过：验证码错误\",\"code\":null}}\n\n[exit: 1]"
+        assertFalse(SysuCli.needsCode(failure))
+        assertFalse(SysuCli.loginSucceeded(failure))
+        assertEquals("二次验证没过：验证码错误", SysuCli.loginErrorText(failure))
+    }
+
+    @Test
+    fun detectsSiteLoginMfaJson() {
+        val output = "{\"ok\":false,\"needMfa\":true,\"hint\":\"验证码已发到企业微信\",\"error\":{\"message\":\"这个站点需要企业微信二次验证\"}}\n\n[exit: 1]"
+        assertTrue(SysuCli.needsCode(output))
+        assertFalse(SysuCli.loginSucceeded(output))
+    }
+
+    @Test
+    fun ignoresHumanReadableLoginText() {
         assertFalse(SysuCli.needsCode("✓ 登录态正常"))
         assertFalse(SysuCli.needsCode("✓ 不需要验证码"))
-        assertFalse(SysuCli.needsCode("✓ 场馆 token 已刷新（58 分钟）"))
+        assertFalse(SysuCli.loginSucceeded("✓ 登录态正常"))
     }
 
     @Test

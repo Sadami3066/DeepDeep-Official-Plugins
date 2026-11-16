@@ -1,0 +1,36 @@
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "messages": [
+      {
+        "message_id": "m_1",
+        "mailbox_id": "me",
+        "date": "Sat, 21 Mar 2026 11:40:00 +0800",
+        "from": "Alice <alice@example.com>",
+        "subject": "周会改到周四",
+        "labels": "INBOX,UNREAD"
+      },
+      {
+        "message_id": "m_2",
+        "mailbox_id": "me",
+        "date": "Fri, 20 Mar 2026 09:05:00 +0800",
+        "from": "GitHub <notifications@github.com>",
+        "subject": "[DeepDeep] PR #42 已合并",
+        "labels": "INBOX"
+      },
+      {
+        "message_id": "m_3",
+        "mailbox_id": "me",
+        "date": "Thu, 19 Mar 2026 18:30:00 +0800",
+        "from": "boss@example.com",
+        "subject": "季度预算",
+        "labels": "INBOX,UNREAD,IMPORTANT"
+      }
+    ],
+    "mailbox_id": "me",
+    "count": 3,
+    "has_more": true,
+    "page_token": "list:FfccvoqPd_loLhtcRx8cx"
+  }
+}

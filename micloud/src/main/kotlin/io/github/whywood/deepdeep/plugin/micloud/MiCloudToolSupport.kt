@@ -25,16 +25,18 @@ internal const val MAX_LIST_LIMIT = 200
 
 internal const val DEEPDEEP_RAW_KEY = "deepdeep.raw"
 
+internal const val DEEPDEEP_GUIDANCE_KEY = "deepdeep.guidance"
+
 internal const val DEEPDEEP_CARD_KEY = "deepdeep.card"
-
-internal const val TOOL_AUTH_ERROR =
-    "Mi Cloud login expired; open the Mi Cloud plugin page in DeepDeep and sign in again"
-
-internal const val TOOL_REQUEST_FAILED = "Mi Cloud request failed: "
 
 internal data class MiCloudResponse(
     val body: String,
     val json: JsonElement,
+)
+
+internal data class MiCloudCard(
+    val title: String,
+    val payload: JsonObject,
 )
 
 internal interface MiCloudReadApi {
@@ -58,18 +60,63 @@ internal fun requireWrite(settings: MiCloudSettings, feature: MiCloudFeature, me
     }
 }
 
-internal suspend fun miCloudToolResult(block: suspend () -> PluginToolResult): PluginToolResult = try {
+internal suspend fun miCloudToolResult(
+    feature: MiCloudFeature,
+    text: MiCloudText,
+    block: suspend () -> PluginToolResult,
+): PluginToolResult = try {
     block()
 } catch (error: CancellationException) {
     throw error
 } catch (error: MiCloudAuthException) {
-    textResult(TOOL_AUTH_ERROR, isError = true)
+    toolErrorResult(feature, error, text)
 } catch (error: IllegalArgumentException) {
-    textResult(error.message ?: "Invalid argument", isError = true)
+    toolErrorResult(feature, error, text)
 } catch (error: IOException) {
-    textResult(TOOL_REQUEST_FAILED + error.message.orEmpty(), isError = true)
+    toolErrorResult(feature, error, text)
 } catch (error: Exception) {
-    textResult(TOOL_REQUEST_FAILED + (error.message ?: error.javaClass.simpleName), isError = true)
+    toolErrorResult(feature, error, text)
+}
+
+private fun toolErrorResult(
+    feature: MiCloudFeature,
+    error: Exception,
+    text: MiCloudText,
+): PluginToolResult {
+    val raw = when (error) {
+        is MiCloudHttpException -> error.body.ifBlank { error.message.orEmpty() }
+        is IllegalArgumentException -> ""
+        else -> error.message.orEmpty()
+    }
+    return textResult(
+        text = "",
+        details = toolResultDetails(
+            raw = raw,
+            guidance = requestFailureGuidance(feature, error, text),
+        ),
+        isError = true,
+    )
+}
+
+internal fun toolResultDetails(
+    raw: String = "",
+    guidance: String = "",
+    card: MiCloudCard? = null,
+): JsonObject = buildJsonObject {
+    if (raw.isNotBlank()) put(DEEPDEEP_RAW_KEY, raw)
+    if (guidance.isNotBlank()) put(DEEPDEEP_GUIDANCE_KEY, guidance)
+    card?.let { value ->
+        putJsonObject(DEEPDEEP_CARD_KEY) {
+            put("title", value.title)
+            put("payload", value.payload)
+        }
+    }
+}
+
+internal fun cardPayload(details: JsonObject?): JsonObject? {
+    val descriptor = details?.get(DEEPDEEP_CARD_KEY) as? JsonObject
+    val payload = descriptor?.get("payload") as? JsonObject
+    return payload ?: details
 }
 
 internal fun now(): Long = System.currentTimeMillis()
@@ -153,25 +200,14 @@ internal fun responseId(response: JsonObject?): String {
     return ""
 }
 
-internal fun rawResultDetails(raw: String): JsonObject = buildJsonObject {
-    if (raw.isNotBlank()) put(DEEPDEEP_RAW_KEY, raw)
-}
-
-internal fun cardResultDetails(card: JsonObject, raw: String, title: String): JsonObject {
-    val extras = buildMap<String, JsonElement> {
-        if (raw.isNotBlank()) put(DEEPDEEP_RAW_KEY, JsonPrimitive(raw))
-        if (title.isNotBlank()) {
-            put(
-                DEEPDEEP_CARD_KEY,
-                buildJsonObject { put("title", title) },
-            )
-        }
-    }
-    return JsonObject(card + extras)
-}
-
 internal fun cursorValue(raw: String?): String =
     raw?.trim()?.takeUnless { it.isEmpty() || it == "0" }.orEmpty()
+
+internal fun cursorValue(element: JsonElement?): String = when (element) {
+    null -> ""
+    is JsonPrimitive -> cursorValue(element.contentOrNull)
+    is JsonObject, is JsonArray -> element.toString().takeUnless { it == "null" || it == "{}" }.orEmpty()
+}
 
 internal fun encodeComponent(value: String): String = URLEncoder.encode(value, "UTF-8")
 

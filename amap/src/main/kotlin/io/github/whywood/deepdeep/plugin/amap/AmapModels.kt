@@ -49,11 +49,26 @@ internal fun formatCoordinate(value: Double): String {
 }
 
 internal fun readablePlaceType(value: String?): String? {
+    val raw = value?.trim()?.substringBefore(';')?.trim().orEmpty()
+    if (raw.isEmpty()) return null
+    if (raw.any { !it.isDigit() }) return raw
+    for (length in intArrayOf(6, 4, 2)) {
+        if (raw.length < length) continue
+        AmapPlaceTypes[raw.take(length)]?.let { return it }
+    }
+    return null
+}
+
+internal fun httpsPhotoUrl(value: String?): String? {
     val raw = value?.trim().orEmpty()
     if (raw.isEmpty()) return null
-    if (raw.all { it.isDigit() }) return null
-    return raw
+    return when {
+        raw.startsWith("http://", ignoreCase = true) -> "https://" + raw.substring("http://".length)
+        raw.startsWith("//") -> "https:$raw"
+        else -> raw
+    }
 }
+
 
 internal fun parsePolyline(value: String?): List<LatLng> {
     val raw = value?.trim().orEmpty()
@@ -178,20 +193,18 @@ internal fun JsonObject.textOrJoined(vararg keys: String): String? {
 }
 
 internal data class AmapPlace(
+    val id: String?,
     val name: String,
     val address: String?,
+    val typecode: String?,
     val typeName: String?,
-    val distanceMeters: Int?,
     val location: LatLng?,
-    val cityName: String?,
-    val tel: String?,
-    val rating: Double? = null,
-    val businessArea: String? = null,
     val photos: List<String> = emptyList(),
 )
 
 internal data class AmapRegeo(
     val formattedAddress: String,
+    val country: String?,
     val province: String?,
     val city: String?,
     val district: String?,
@@ -245,10 +258,7 @@ internal data class AmapRoutePath(
     val steps: List<AmapRouteStep> = emptyList(),
     val transitLines: List<AmapTransitLine> = emptyList(),
     val walkingDistanceMeters: Int? = null,
-) {
-    val segmentCount: Int
-        get() = if (transitLines.isNotEmpty()) transitLines.size else steps.size
-}
+)
 
 internal data class AmapRoute(
     val mode: AmapRouteMode,
@@ -274,6 +284,7 @@ internal data class AmapRoute(
 
 internal data class AmapWeatherDay(
     val date: String?,
+    val week: String? = null,
     val dayWeather: String?,
     val nightWeather: String?,
     val dayTemp: Int?,
@@ -282,6 +293,8 @@ internal data class AmapWeatherDay(
     val nightWind: String?,
     val dayPower: String?,
     val nightPower: String?,
+    val dayTempFloat: Double? = null,
+    val nightTempFloat: Double? = null,
 )
 
 internal data class AmapWeather(
@@ -305,47 +318,34 @@ internal fun parsePlaces(payload: JsonElement?): List<AmapPlace> {
     return array.mapNotNull { it.asObjectOrNull()?.toPlace() }
 }
 
-internal fun parsePlaceCount(payload: JsonElement?): Int? {
-    val root = payload.asObjectOrNull() ?: return null
-    return listOfNotNull(
-        root,
-        root.objectValue("data"),
-        root.objectValue("result"),
-        root.objectValue("data")?.objectValue("result"),
-    ).firstNotNullOfOrNull { it.intValue("count", "total") }
-}
-
 private fun JsonObject.toPlace(): AmapPlace? {
     val name = textValue("name", "title", "formatted_address", "formattedAddress")
         ?: listOfNotNull(textValue("province"), textValue("city"), textValue("district"))
             .joinToString("")
             .takeIf { it.isNotBlank() }
         ?: return null
-    val business = objectValue("biz_ext")
+    val typecode = textValue("typecode", "type_code")
     return AmapPlace(
+        id = textValue("id", "poiid"),
         name = name,
         address = textValue("address", "formatted_address", "formattedAddress"),
-        typeName = readablePlaceType(textValue("type", "typecode", "level")),
-        distanceMeters = intValue("distance", "distanceMeters", "distance_meters"),
+        typecode = typecode,
+        typeName = readablePlaceType(textValue("type", "level") ?: typecode),
         location = LatLng.parse(textValue("location")),
-        cityName = textOrJoined("cityname", "city"),
-        tel = textOrJoined("tel", "phone"),
-        rating = numberValue("rating", "biz_rating") ?: business?.numberValue("rating", "biz_rating"),
-        businessArea = textOrJoined("business_area", "businessArea"),
         photos = photoUrls(),
     )
 }
 
-private fun JsonObject.photoUrls(): List<String> {
-    val photos = arrayValue("photos") ?: return emptyList()
-    return photos.mapNotNull { element ->
+private fun JsonObject.photoUrls(): List<String> = buildList {
+    textValue("photo", "photo_url", "image")?.let(::add)
+    arrayValue("photos")?.forEach { element ->
         when (element) {
-            is JsonPrimitive -> if (element is JsonNull) null else element.contentOrNull
-            is JsonObject -> element.textValue("url", "URL", "photo_url")
-            else -> null
-        }?.trim()?.takeIf { it.isNotEmpty() }
+            is JsonPrimitive -> if (element !is JsonNull) element.contentOrNull?.let(::add)
+            is JsonObject -> element.textValue("url", "URL", "photo_url")?.let(::add)
+            else -> Unit
+        }
     }
-}
+}.mapNotNull(::httpsPhotoUrl).distinct()
 
 internal fun parseRegeo(payload: JsonElement?): AmapRegeo? {
     val root = payload.asObjectOrNull() ?: return null
@@ -356,10 +356,11 @@ internal fun parseRegeo(payload: JsonElement?): AmapRegeo? {
         val component = regeo.objectValue("addressComponent", "address_component")
         val street = component?.textOrJoined("street", "streetName")
         val number = component?.textOrJoined("number", "streetNumber", "street_number")
+        val componentProvince = component?.textValue("province")
         val formatted = regeo.textValue("formatted_address", "formattedAddress")
             ?: listOfNotNull(
-                component?.textValue("province"),
-                component?.textValue("city"),
+                componentProvince,
+                component?.textValue("city")?.takeIf { it != componentProvince },
                 component?.textValue("district"),
                 component?.textValue("township"),
                 street,
@@ -369,6 +370,7 @@ internal fun parseRegeo(payload: JsonElement?): AmapRegeo? {
         if (formatted.isBlank() && component == null) return null
         return AmapRegeo(
             formattedAddress = formatted,
+            country = regeo.textValue("country") ?: root.textValue("country"),
             province = component?.textValue("province"),
             city = component?.textValue("city"),
             district = component?.textValue("district"),
@@ -383,10 +385,11 @@ internal fun parseRegeo(payload: JsonElement?): AmapRegeo? {
     val district = root.textValue("district")
     val street = root.textOrJoined("street", "streetName")
     val number = root.textOrJoined("number", "streetNumber")
-    val formatted = listOfNotNull(province, city, district).joinToString("")
+    val formatted = listOfNotNull(province, city?.takeIf { it != province }, district).joinToString("")
     if (formatted.isBlank()) return null
     return AmapRegeo(
         formattedAddress = formatted,
+        country = root.textValue("country"),
         province = province,
         city = city,
         district = district,
@@ -444,19 +447,23 @@ private fun parseRoadPaths(paths: List<JsonElement>): List<AmapRoutePath> = path
     AmapRoutePath(distance, duration, steps)
 }
 
-private fun parseTransitPaths(transits: List<JsonElement>, route: JsonObject): List<AmapRoutePath> =
-    transits.mapNotNull { element ->
+private fun parseTransitPaths(transits: List<JsonElement>, route: JsonObject): List<AmapRoutePath> {
+    val paths = transits.mapNotNull { element ->
         val transit = element.asObjectOrNull() ?: return@mapNotNull null
         val lines = transit.arrayValue("segments")?.mapNotNull { segment ->
             parseTransitSegment(segment.asObjectOrNull() ?: return@mapNotNull null)
         }.orEmpty()
         val distance = transit.intValue("distance", "distanceMeters")
-            ?: route.intValue("distance", "distanceMeters")
         val duration = transit.intValue("duration", "durationSeconds")
         val walkingDistance = transit.intValue("walking_distance", "walkingDistance")
         if (distance == null && duration == null && lines.isEmpty()) return@mapNotNull null
         AmapRoutePath(distance, duration, emptyList(), lines, walkingDistance)
     }
+    val routeDistance = route.intValue("distance", "distanceMeters") ?: return paths
+    return paths.mapIndexed { index, path ->
+        if (index == 0 && path.distanceMeters == null) path.copy(distanceMeters = routeDistance) else path
+    }
+}
 
 private data class TransitOption(
     val name: String,
@@ -665,6 +672,7 @@ private fun JsonObject.toWeatherDay(): AmapWeatherDay? {
     if (dayWeather == null && dayTemp == null && date == null) return null
     return AmapWeatherDay(
         date = date,
+        week = textValue("week", "weekday"),
         dayWeather = dayWeather,
         nightWeather = nightWeather,
         dayTemp = dayTemp,
@@ -673,10 +681,12 @@ private fun JsonObject.toWeatherDay(): AmapWeatherDay? {
         nightWind = textValue("nightwind", "nightWind"),
         dayPower = textValue("daypower", "dayPower"),
         nightPower = textValue("nightpower", "nightPower"),
+        dayTempFloat = numberValue("daytemp_float", "dayTempFloat"),
+        nightTempFloat = numberValue("nighttemp_float", "nightTempFloat"),
     )
 }
 
-internal enum class AmapFailure { INVALID_KEY, QUOTA, SERVICE, NETWORK, UNKNOWN }
+internal enum class AmapFailure { INVALID_KEY, QUOTA, PARAMETER, SERVICE, NETWORK, PROTOCOL, INTERNAL, UNKNOWN }
 
 internal fun classifyAmapFailure(statusCode: Int, body: String?): AmapFailure {
     val text = body.orEmpty()
@@ -686,14 +696,28 @@ internal fun classifyAmapFailure(statusCode: Int, body: String?): AmapFailure {
             text.contains("USER_KEY_RECYCLED", ignoreCase = true) ||
             text.contains("USERKEY_PLAT_NOMATCH", ignoreCase = true) ||
             text.contains("INVALID_USER_SCODE", ignoreCase = true) ||
+            text.contains("INVALID_USER_IP", ignoreCase = true) ||
+            text.contains("INVALID_USER_DOMAIN", ignoreCase = true) ||
+            text.contains("INVALID_USER_SIGNATURE", ignoreCase = true) ||
             text.contains("SERVICE_NOT_AVAILABLE_FOR_USER", ignoreCase = true) -> AmapFailure.INVALID_KEY
         text.contains("DAILY_QUERY_OVER_LIMIT", ignoreCase = true) ||
             text.contains("ACCESS_TOO_FREQUENT", ignoreCase = true) ||
             text.contains("QPS_HAS_EXCEEDED_THE_LIMIT", ignoreCase = true) ||
-            text.contains("CUQPS_HAS_EXCEEDED_THE_LIMIT", ignoreCase = true) -> AmapFailure.QUOTA
+            text.contains("CUQPS_HAS_EXCEEDED_THE_LIMIT", ignoreCase = true) ||
+            text.contains("QUOTA_PLAN_RUN_OUT", ignoreCase = true) -> AmapFailure.QUOTA
+        statusCode == 429 -> AmapFailure.QUOTA
         statusCode >= 500 ||
             text.contains("SERVICE_NOT_AVAILABLE", ignoreCase = true) ||
-            text.contains("UNKNOWN_ERROR", ignoreCase = true) -> AmapFailure.SERVICE
+            text.contains("UNKNOWN_ERROR", ignoreCase = true) ||
+            text.contains("INTERNAL_ERROR", ignoreCase = true) ||
+            text.contains("SERVER_ERROR", ignoreCase = true) -> AmapFailure.SERVICE
+        text.contains("INVALID_PARAMS", ignoreCase = true) ||
+            text.contains("MISSING_REQUIRED_PARAMS", ignoreCase = true) ||
+            text.contains("INVALID_PARAMETER", ignoreCase = true) ||
+            text.contains("INVALID_REQUEST", ignoreCase = true) ||
+            text.contains("参数", ignoreCase = false) -> AmapFailure.PARAMETER
+        statusCode == 400 || statusCode == 422 -> AmapFailure.PARAMETER
+        statusCode == 404 || statusCode == 405 -> AmapFailure.PROTOCOL
         else -> AmapFailure.UNKNOWN
     }
 }
@@ -736,15 +760,12 @@ internal object AmapUri {
 }
 
 internal data class AmapPlaceItem(
+    val id: String?,
     val name: String,
     val address: String?,
+    val typecode: String?,
     val typeName: String?,
-    val distanceMeters: Int?,
     val location: LatLng?,
-    val cityName: String? = null,
-    val tel: String? = null,
-    val rating: Double? = null,
-    val businessArea: String? = null,
     val photos: List<String> = emptyList(),
 )
 
@@ -752,7 +773,6 @@ internal data class AmapPlacesDetails(
     val query: String?,
     val city: String?,
     val items: List<AmapPlaceItem>,
-    val totalCount: Int? = null,
 )
 
 internal data class AmapRegeoDetails(
@@ -764,6 +784,7 @@ internal data class AmapRegeoDetails(
     val location: LatLng?,
     val street: String? = null,
     val streetNumber: String? = null,
+    val country: String? = null,
 )
 
 internal data class AmapRouteDetails(
@@ -796,22 +817,22 @@ internal fun decodePlacesDetails(details: JsonObject?): AmapPlacesDetails {
     val items = root.arrayValue("items")?.mapNotNull { element ->
         val item = element.asObjectOrNull() ?: return@mapNotNull null
         val name = item.textValue("name") ?: return@mapNotNull null
+        val typecode = item.textValue("typecode")
         AmapPlaceItem(
+            id = item.textValue("id"),
             name = name,
             address = item.textValue("address"),
-            typeName = readablePlaceType(item.textValue("typeName")),
-            distanceMeters = item.intValue("distanceMeters"),
+            typecode = typecode,
+            typeName = readablePlaceType(item.textValue("typeName") ?: typecode),
             location = latLngFrom(item),
-            cityName = item.textValue("cityName"),
-            tel = item.textValue("tel"),
-            rating = item.numberValue("rating"),
-            businessArea = item.textValue("businessArea"),
-            photos = item.arrayValue("photos")?.mapNotNull { photo ->
-                (photo as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
-            }.orEmpty(),
+            photos = (item.arrayValue("photos")?.mapNotNull { photo ->
+                (photo as? JsonPrimitive)?.contentOrNull
+            }.orEmpty() + listOfNotNull(item.textValue("photo")))
+                .mapNotNull(::httpsPhotoUrl)
+                .distinct(),
         )
     }.orEmpty()
-    return AmapPlacesDetails(root.textValue("query"), root.textValue("city"), items, root.intValue("count"))
+    return AmapPlacesDetails(root.textValue("query"), root.textValue("city"), items)
 }
 
 internal fun decodeRegeoDetails(details: JsonObject?): AmapRegeoDetails? {
@@ -826,6 +847,7 @@ internal fun decodeRegeoDetails(details: JsonObject?): AmapRegeoDetails? {
         location = latLngFrom(root),
         street = root.textValue("street"),
         streetNumber = root.textValue("streetNumber"),
+        country = root.textValue("country"),
     )
 }
 
@@ -918,6 +940,7 @@ internal fun decodeWeatherDetails(details: JsonObject?): AmapWeatherDetails? {
         val day = element.asObjectOrNull() ?: return@mapNotNull null
         AmapWeatherDay(
             date = day.textValue("date"),
+            week = day.textValue("week"),
             dayWeather = day.textValue("dayWeather"),
             nightWeather = day.textValue("nightWeather"),
             dayTemp = day.intValue("dayTemp"),
@@ -926,6 +949,8 @@ internal fun decodeWeatherDetails(details: JsonObject?): AmapWeatherDetails? {
             nightWind = day.textValue("nightWind"),
             dayPower = day.textValue("dayPower"),
             nightPower = day.textValue("nightPower"),
+            dayTempFloat = day.numberValue("dayTempFloat"),
+            nightTempFloat = day.numberValue("nightTempFloat"),
         )
     }.orEmpty()
     return AmapWeatherDetails(root.textValue("city"), days)
@@ -936,3 +961,5 @@ internal fun latLngFrom(obj: JsonObject): LatLng? {
     val latitude = obj.numberValue("latitude") ?: return null
     return LatLng(longitude, latitude)
 }
+
+

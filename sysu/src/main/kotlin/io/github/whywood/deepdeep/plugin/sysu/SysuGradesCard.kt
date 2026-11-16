@@ -23,14 +23,22 @@ import io.github.whywood.deepdeep.design.DdText
 import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
+import io.github.whywood.deepdeep.plugin.cli.card.CliCardState
 
 private const val GRADES_PREVIEW = 4
 
 @Composable
 internal fun SysuGradesCard(host: PluginHost, model: CliCardModel) {
     val plan = remember(model.sections, model.items) { SysuCardFormat.gradesPlan(model) }
-    if (plan == null) {
-        SysuFallbackListCard(host, model)
+    if (plan == null || plan.rows.isEmpty()) {
+        SysuEmptyCard(
+            host,
+            CliCardModel(
+                kind = SysuCardKind.Grades.wire,
+                state = CliCardState.EMPTY,
+                context = model.context,
+            ),
+        )
         return
     }
     var expanded by remember { mutableStateOf(false) }

@@ -84,7 +84,6 @@ internal object SysuCommandParser {
             }
             index += 1
         }
-        if (JSON_FLAG !in flags) return null
         return when (positionals.firstOrNull()) {
             null -> null
             "jwxt" -> jwxt(positionals.drop(1), flags, values)
@@ -150,7 +149,7 @@ internal object SysuCommandParser {
         if (positionals.size > 2) return null
         if (!isAllowed(flags, setOf(JSON_FLAG, "--all"))) return null
         if (!isAllowed(values.keys, setOf("--days", "--date", "--campus"))) return null
-        return supported(SysuCommandKind.GymSlots, listOf(type), values)
+        return supported(SysuCommandKind.GymSlots, listOf("slots", type), values)
     }
 
     private fun netpay(
@@ -180,7 +179,6 @@ internal object SysuCommandParser {
             append(' ').append(site)
             positionals.forEach { append(' ').append(it) }
             values.forEach { (key, value) -> append(' ').append(key).append(' ').append(value) }
-            append(' ').append(JSON_FLAG)
         }
         return SysuInvocation.Supported(line, kind)
     }

@@ -10,8 +10,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.ride"
         minSdk = 29
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.2.0"
+        versionCode = 8
+        versionName = "1.3.0"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -28,9 +28,9 @@ kotlin {
 }
 
 dependencies {
-    compileOnly("io.github.sadami3066.deepdeep:plugin-api:1.3.0")
-    compileOnly("io.github.sadami3066.deepdeep:design:0.10.0")
-    testImplementation("io.github.sadami3066.deepdeep:plugin-api:1.3.0")
+    compileOnly("io.github.sadami3066.deepdeep:plugin-api:1.3.1")
+    compileOnly("io.github.sadami3066.deepdeep:design:0.11.0")
+    testImplementation("io.github.sadami3066.deepdeep:plugin-api:1.3.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")

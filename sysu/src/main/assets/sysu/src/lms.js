@@ -82,10 +82,10 @@ class Lms {
   }
 }
 
-async function connect({ renew = false, code, interactive = true } = {}) {
+async function connect({ renew = false, code } = {}) {
   let cached = renew ? null : sso.loadSession(NAME);
   if (!cached) {
-    const fresh = await sso.login(SERVICE, { label: 'LMS', code, interactive });
+    const fresh = await sso.login(SERVICE, { label: 'LMS', code });
     cached = { jar: fresh.jar, finalUrl: fresh.finalUrl };
     sso.saveSession(NAME, cached);
   }
@@ -95,7 +95,7 @@ async function connect({ renew = false, code, interactive = true } = {}) {
   } catch (err) {
     if (err.code !== 'RELOGIN' || renew) throw err;
     // 静默重登一次
-    const fresh = await sso.login(SERVICE, { label: 'LMS', code, interactive });
+    const fresh = await sso.login(SERVICE, { label: 'LMS', code });
     sso.saveSession(NAME, fresh);
     return new Lms({ jar: fresh.jar }).refreshConfig();
   }
@@ -114,6 +114,8 @@ const strip = (html) =>
     .replace(/&#39;/g, "'")
     .replace(/&ndash;/g, '–')
     .replace(/&mdash;/g, '—')
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, num) => String.fromCodePoint(Number(num)))
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -200,7 +202,7 @@ async function contents(lms, courseid) {
     seen.add(key);
     modules.push({ mod, name: strip(inner) || id, url: url.startsWith('http') ? url : BASE + url, after: '' });
   }
-  return [{ section: '(页面解析)', modules }];
+  return [{ section: '课程内容', modules }];
 }
 
 // ── 文件 ────────────────────────────────────────────────────────
@@ -319,13 +321,20 @@ async function coursesOf(lms) {
 function parseGradeRows(html) {
   const rows = [];
   for (const chunk of html.split('<tr').slice(1)) {
-    const idm = chunk.match(/id='(cat|row)_(\d+)_\d+'/);
+    const idm = chunk.match(/id=["'](cat|row)_(\d+)_\d+["']/);
     if (!idm) continue;
-    const titleAttr = (chunk.match(/gradeitemheader"\s+title="([^"]+)"/) || [])[1];
-    const name = titleAttr ? strip(titleAttr) : strip((chunk.match(/column-itemname[^>]*>([\s\S]*?)<\/th>/) || [])[1] || '');
+    const titleAttr = (chunk.match(/class=["'][^"']*gradeitemheader[^"']*["'][^>]*title="([^"]*)"/i) ||
+      chunk.match(/title="([^"]*)"[^>]*class=["'][^"']*gradeitemheader/i) || [])[1];
+    const nameCell = (chunk.match(/column-itemname[^>]*>([\s\S]*?)<\/t[dh]>/i) || [])[1] || '';
+    const name = strip(titleAttr || nameCell);
     if (!name) continue;
     const cell = (cls) => {
-      const m = chunk.match(new RegExp(`column-${cls}'[^>]*>([\\s\\S]*?)<\\/t[dh]>`));
+      const m = chunk.match(
+        new RegExp(
+          `<t[dh][^>]*class=(?:"[^"]*\\bcolumn-${cls}\\b[^"]*"|'[^']*\\bcolumn-${cls}\\b[^']*')[^>]*>([\\s\\S]*?)<\\/t[dh]>`,
+          'i',
+        ),
+      );
       return m ? strip(m[1]) : '';
     };
     const level = Number((chunk.match(/level(\d)/) || [])[1] || 1);

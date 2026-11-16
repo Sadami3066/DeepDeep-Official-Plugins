@@ -50,6 +50,12 @@ internal fun trainErrorMessage(error: Throwable, translate: RailTranslate): Stri
                 "No \"${error.detail}\" among the trains for that date. Check the train number or another date.",
             )
 
+        TrainErrorKind.PRICE_LEG_NOT_FOUND ->
+            translate(
+                "没有匹配「${error.detail}」的到站组合，请先查车次，或去掉 train_no/站序号再查票价。",
+                "No station pair matches \"${error.detail}\". Look up the train first, or drop train_no/station indexes.",
+            )
+
         TrainErrorKind.SERVICE_UNAVAILABLE -> {
             val detail = error.detail.takeIf { it.isNotBlank() }?.let { "（$it）" }.orEmpty()
             translate(
@@ -65,12 +71,68 @@ internal fun trainErrorMessage(error: Throwable, translate: RailTranslate): Stri
     else -> translate("车次查询失败，请稍后重试。", "Train lookup failed. Try again later.")
 }
 
-internal fun trainSummary(host: PluginHost, details: TrainSearchDetails): String {
+internal fun trainErrorGuidance(host: PluginHost, error: Throwable): String {
     val translate: RailTranslate = { zh, en -> host.t(zh, en) }
-    return trainSummary(details, translate)
+    return trainErrorGuidance(error, translate)
 }
 
-internal fun trainSummary(details: TrainSearchDetails, translate: RailTranslate): String = buildString {
+internal fun trainErrorGuidance(error: Throwable, translate: RailTranslate): String = when (error) {
+    is TrainPriceUnavailableException -> translate(
+        "不要估算票价；让用户在 12306 查看，或换一天、换一趟车再查。",
+        "Never estimate the fare; send the user to 12306, or try another date or train.",
+    )
+
+    is TrainQueryException -> when (error.kind) {
+        TrainErrorKind.UNKNOWN_STATION -> translate(
+            "请用户给出城市名或完整车站名后重试。",
+            "Ask the user for a city or a full station name, then retry.",
+        )
+
+        TrainErrorKind.AMBIGUOUS_STATION -> translate(
+            "把候选车站列给用户，选定一个后再查。",
+            "List the candidate stations and ask the user to pick one before retrying.",
+        )
+
+        TrainErrorKind.INVALID_DATE -> translate(
+            "改成今天起 $RAIL_DATE_WINDOW_DAYS 天内的日期再查。",
+            "Use a date within $RAIL_DATE_WINDOW_DAYS days from today and retry.",
+        )
+
+        TrainErrorKind.INVALID_ROUTE -> translate(
+            "请用户换一个到达城市或车站。",
+            "Ask the user for a different arrival city or station.",
+        )
+
+        TrainErrorKind.TRAIN_NOT_FOUND -> translate(
+            "先用 train_search 查这天的车次，或请用户确认车次号。",
+            "Call train_search for that date first, or ask the user to confirm the train code.",
+        )
+
+        TrainErrorKind.PRICE_LEG_NOT_FOUND -> translate(
+            "去掉 train_no/站序号参数，或按车次结果里的到站组合重试。",
+            "Drop the train_no/station index arguments, or retry with a station pair from the train results.",
+        )
+
+        TrainErrorKind.SERVICE_UNAVAILABLE -> translate(
+            "稍后重试一次；仍然失败就告诉用户 12306 暂不可用。",
+            "Retry once later; if it still fails, tell the user 12306 is unavailable.",
+        )
+
+        TrainErrorKind.PARSE_FAILED -> translate(
+            "稍后重试；连续失败就告诉用户 12306 返回异常。",
+            "Retry later; if it keeps failing, tell the user 12306 returned an unexpected response.",
+        )
+    }
+
+    else -> translate("稍后重试。", "Try again later.")
+}
+
+internal fun trainSearchText(host: PluginHost, details: TrainSearchDetails): String {
+    val translate: RailTranslate = { zh, en -> host.t(zh, en) }
+    return trainSearchText(details, translate)
+}
+
+internal fun trainSearchText(details: TrainSearchDetails, translate: RailTranslate): String = buildString {
     append(stationPair(details.from, details.fromCode, translate))
     append(" → ")
     append(stationPair(details.to, details.toCode, translate))
@@ -78,48 +140,87 @@ internal fun trainSummary(details: TrainSearchDetails, translate: RailTranslate)
     if (details.trains.isEmpty()) {
         append("\n").append(translate("这一天没有查到车次。", "No trains found for this date."))
     } else {
-        append(" · ").append(translate("共 ${details.trains.size} 趟", "${details.trains.size} trains"))
-        details.trains.forEach { train ->
-            append("\n").append(train.code).append(' ')
-            append(train.depart).append("→").append(arrivalLabel(train.depart, train.arrive, train.duration))
-            append(" ").append(train.duration)
-            append(" ").append(train.fromStation)
-            append("→").append(train.toStation)
-            val seats = trainSeatLine(train.seats, translate)
-            if (seats.isNotBlank()) append(" · ").append(seats)
-        }
-        append("\n").append(
+        val groups = groupTrains(details.trains)
+        append(" · ").append(
             translate(
-                "数据时间 ${dataClock(details.fetchedAt)}，余票以 12306 实时数据为准。",
-                "Data fetched at ${dataClock(details.fetchedAt)}; availability follows live 12306 data.",
+                "${groups.size} 趟 / ${details.trains.size} 个到站组合",
+                "${groups.size} trains / ${details.trains.size} station pairs",
             ),
         )
+        groups.forEach { group ->
+            append("\n").append(groupHeaderText(group, translate))
+            group.trains.forEach { train ->
+                append("\n  ")
+                append(departureLabel(train, details, translate))
+                append(" / ")
+                append(arrivalStationLabel(train, details, translate))
+                append(" ").append(arrivalLabel(train.depart, train.arrive, train.duration))
+                append("（").append(train.duration).append("）")
+                append("：").append(trainSeatLine(train.seats, translate))
+                upstreamDateLabel(train, details.date, translate)?.let { append(" · ").append(it) }
+            }
+            val missing = group.notOfferedSeats
+            if (missing.isNotEmpty()) {
+                append("\n  ").append(
+                    translate(
+                        "无此席别：${missing.joinToString("、") { seatLabel(translate, it) }}",
+                        "Not offered: ${missing.joinToString(", ") { seatLabel(translate, it) }}",
+                    ),
+                )
+            }
+        }
     }
+    append("\n").append(
+        translate(
+            "数据时间 ${dataClock(details.fetchedAt)}，余票以 12306 实时数据为准。",
+            "Data fetched at ${dataClock(details.fetchedAt)}; availability follows live 12306 data.",
+        ),
+    )
     if (details.bookingUrl.isNotBlank()) {
-        append("\n").append(translate("去 12306 登录并预订：", "Sign in and book on 12306: ")).append(details.bookingUrl)
+        append("\n").append(translate("去 12306 预订：", "Book on 12306: ")).append(details.bookingUrl)
     }
 }
 
+internal fun groupHeaderText(group: TrainGroup, translate: RailTranslate): String = buildString {
+    append(group.code)
+    if (group.depart.isNotBlank()) append(" ").append(group.depart).append(translate(" 发车", " departs"))
+    if (group.durationLabel.isNotBlank()) {
+        append(" · ").append(translate("历时 ", "duration ")).append(group.durationLabel)
+    }
+}
+
+internal fun departureLabel(train: TrainOption, details: TrainSearchDetails, translate: RailTranslate): String =
+    if (train.fromStation != details.from) {
+        translate("${train.fromStation}出发", "from ${train.fromStation}")
+    } else {
+        train.fromStation
+    }
+
+internal fun arrivalStationLabel(train: TrainOption, details: TrainSearchDetails, translate: RailTranslate): String =
+    if (train.toStation != details.to) {
+        translate("到${train.toStation}", "to ${train.toStation}")
+    } else {
+        train.toStation
+    }
+
 internal fun trainSeatLine(seats: List<SeatAvailability>, translate: RailTranslate): String {
-    if (seats.isEmpty()) return ""
-    val offered = seats.filter { it.status != SeatStatus.NOT_OFFERED }
-    val missing = seats.filter { it.status == SeatStatus.NOT_OFFERED }
-    val listed = offered.joinToString(" · ") { seat ->
+    val listed = seats.filter { it.status != SeatStatus.NOT_OFFERED }
+    if (listed.isEmpty()) return translate("席别状态未返回", "no seat data")
+    return listed.joinToString(" · ") { seat ->
         "${seatLabel(translate, seat)} ${seatStatusText(translate, seat)}"
     }
-    val absent = if (missing.isEmpty()) {
-        ""
-    } else {
-        translate(
-            "无此席别：${missing.joinToString("、") { seatLabel(translate, it) }}",
-            "Not offered: ${missing.joinToString(", ") { seatLabel(translate, it) }}",
-        )
-    }
-    return listOf(listed, absent).filter { it.isNotBlank() }.joinToString(" · ")
 }
 
 internal fun seatStatusText(translate: RailTranslate, seat: SeatAvailability): String = when (seat.status) {
-    SeatStatus.AVAILABLE -> seat.count.ifBlank { translate("有", "available") }
+    SeatStatus.AVAILABLE -> {
+        val count = seat.count.trim().toIntOrNull()
+        when {
+            count == null -> translate("有票", "available")
+            count == 1 -> translate("1 张", "1 seat")
+            else -> translate("$count 张", "$count seats")
+        }
+    }
+
     SeatStatus.SOLD_OUT -> translate("无票", "sold out")
     SeatStatus.NOT_ON_SALE -> translate("未开售", "not on sale")
     SeatStatus.NOT_RETURNED -> translate("未返回", "not returned")
@@ -133,9 +234,9 @@ internal fun trainPriceText(host: PluginHost, details: TrainPriceDetails): Strin
 
 internal fun trainPriceText(details: TrainPriceDetails, translate: RailTranslate): String = buildString {
     append(details.code).append(' ')
-    append(stationPair(details.from, details.fromCode, translate))
+    append(stationPair(details.fromPlace, details.fromCode, translate))
     append(" → ")
-    append(stationPair(details.to, details.toCode, translate))
+    append(stationPair(details.toPlace, details.toCode, translate))
     append(" · ").append(details.date)
     append("\n").append(
         details.prices.joinToString(" · ") { "${seatLabel(translate, it.name)} ${it.priceText}" },
@@ -149,6 +250,20 @@ internal fun trainPriceText(details: TrainPriceDetails, translate: RailTranslate
     if (details.bookingUrl.isNotBlank()) {
         append("\n").append(translate("去 12306 预订：", "Book on 12306: ")).append(details.bookingUrl)
     }
+}
+
+internal fun formatWireDate(raw: String): String? {
+    val digits = raw.trim()
+    if (digits.length != 8 || digits.any { it !in '0'..'9' }) return null
+    return "${digits.substring(0, 4)}-${digits.substring(4, 6)}-${digits.substring(6, 8)}"
+}
+
+internal fun upstreamDateLabel(train: TrainOption, queryDate: String, translate: RailTranslate): String? {
+    val raw = train.date.trim()
+    if (raw.isEmpty()) return null
+    val shown = formatWireDate(raw) ?: raw
+    if (shown == queryDate.trim()) return null
+    return translate("上游日期 $shown", "upstream date $shown")
 }
 
 internal fun seatLabel(translate: RailTranslate, seat: SeatAvailability): String = when {

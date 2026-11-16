@@ -95,6 +95,8 @@ internal fun RideRouteStrip(
     to: String?,
     translate: RideTranslate,
     modifier: Modifier = Modifier,
+    fromLabel: String? = null,
+    toLabel: String? = null,
 ) {
     val colors = deepDeepColors()
     val fromName = from?.takeIf { it.isNotBlank() } ?: translate("出发地", "Pickup")
@@ -129,9 +131,13 @@ internal fun RideRouteStrip(
         }
         Spacer(Modifier.width(DdSpacing.Md))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(gap)) {
-            RouteStop(label = translate("出发", "From"), name = fromName, nameStyle = DdType.body)
             RouteStop(
-                label = translate("到达", "To"),
+                label = fromLabel ?: translate("出发", "From"),
+                name = fromName,
+                nameStyle = DdType.body,
+            )
+            RouteStop(
+                label = toLabel ?: translate("到达", "To"),
                 name = toName,
                 nameStyle = DdType.body.copy(fontWeight = FontWeight.SemiBold),
             )
@@ -156,7 +162,7 @@ internal fun RideFactStrip(facts: List<String>) {
         text = facts.joinToString(" · "),
         style = DdType.chip,
         color = colors.inkSecondary,
-        maxLines = 1,
+        maxLines = 2,
         overflow = TextOverflow.Ellipsis,
     )
 }
@@ -197,27 +203,45 @@ internal fun RidePlate(text: String) {
 }
 
 @Composable
-internal fun RidePriceBlock(price: String?, listPrice: String?, highlighted: Boolean) {
+internal fun RidePriceBlock(
+    price: String?,
+    listPrice: String?,
+    highlighted: Boolean,
+    priceLabel: String? = null,
+    listLabel: String? = null,
+) {
     val colors = deepDeepColors()
     Column(horizontalAlignment = Alignment.End) {
         listPrice?.let {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                listLabel?.let { label ->
+                    DdText(label, style = DdType.micro, color = colors.inkTertiary, maxLines = 1)
+                    Spacer(Modifier.width(3.dp))
+                }
+                DdText(
+                    text = it,
+                    style = DdType.chip.copy(textDecoration = TextDecoration.LineThrough),
+                    color = colors.inkTertiary,
+                    maxLines = 1,
+                )
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            priceLabel?.let { label ->
+                DdText(label, style = DdType.chip, color = colors.inkTertiary, maxLines = 1)
+                Spacer(Modifier.width(3.dp))
+            }
             DdText(
-                text = it,
-                style = DdType.chip.copy(textDecoration = TextDecoration.LineThrough),
-                color = colors.inkTertiary,
+                text = price ?: "—",
+                style = DdType.heading,
+                color = when {
+                    price == null -> colors.inkTertiary
+                    highlighted -> colors.accent
+                    else -> colors.ink
+                },
                 maxLines = 1,
             )
         }
-        DdText(
-            text = price ?: "—",
-            style = DdType.heading,
-            color = when {
-                price == null -> colors.inkTertiary
-                highlighted -> colors.accent
-                else -> colors.ink
-            },
-            maxLines = 1,
-        )
     }
 }
 

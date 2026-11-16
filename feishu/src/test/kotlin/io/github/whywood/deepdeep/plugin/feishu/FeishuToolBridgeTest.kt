@@ -21,10 +21,16 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 class FeishuToolBridgeTest {
     private val sessionId = "session-1"
+
+    @Before
+    fun clearLinks() {
+        FeishuLinks.clear()
+    }
 
     private fun request(callId: String, command: String) = ToolCallRequest(
         sessionId = sessionId,
@@ -73,8 +79,8 @@ class FeishuToolBridgeTest {
         val decision = hooks.afterToolExecution(result("call-1", loadFixture("chats.json")))
         assertEquals(ToolResultAction.REPLACE, decision.action)
         val text = decision.text()
-        assertTrue(text.contains("飞书聊天列表（共 3 个）"))
-        assertTrue(text.contains("产品研发群"))
+        assertTrue(guidanceOf(decision).contains("lark-cli im +chat-messages-list"))
+        assertFalse(text.contains("产品研发群"))
         assertFalse(text.contains("卡片 id"))
         assertFalse(text.contains("{\"ok\":true}"))
         val raw = rawText(decision)
@@ -96,7 +102,7 @@ class FeishuToolBridgeTest {
     fun unsupportedCommandLeavesResultUntouched() = runTest {
         val host = FakeFeishuHost()
         val hooks = FeishuToolBridge().hooks(host)
-        hooks.beforeToolCall(request("call-2", "lark-cli im +messages-send --chat-id oc_1 --text hi"))
+        hooks.beforeToolCall(request("call-2", "lark-cli im +chat-search --query 大创"))
         val decision = hooks.afterToolExecution(result("call-2", loadFixture("chats.json")))
         assertEquals(ToolResultAction.KEEP, decision.action)
         assertNull(cardOf(decision))
@@ -217,7 +223,7 @@ class FeishuToolBridgeTest {
         val payload = cardPayload(decision)
         assertNotNull(payload)
         assertTrue(payload.toString().contains("\"agenda\""))
-        assertTrue(decision.text().contains("飞书日程"))
+        assertTrue(guidanceOf(decision).contains("--start/--end"))
     }
 
     @Test
@@ -238,16 +244,139 @@ class FeishuToolBridgeTest {
     }
 
     @Test
-    fun authenticationErrorKeepsOriginalTextAndAddsHint() = runTest {
+    fun authenticationErrorKeepsRawAndAddsGuidance() = runTest {
         val host = FakeFeishuHost()
         val hooks = FeishuToolBridge().hooks(host)
         hooks.beforeToolCall(request("call-18", "lark-cli im +chat-list"))
         val output = """{"ok":false,"error":{"type":"authentication","message":"invalid token"}}"""
         val decision = hooks.afterToolExecution(result("call-18", output, isError = true))
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        assertTrue(decision.text().contains("invalid token"))
-        assertTrue(decision.text().contains("重新登录"))
+        assertEquals("", decision.text())
+        assertTrue(guidanceOf(decision).contains("重新登录"))
+        assertTrue(rawText(decision)!!.contains("invalid token"))
+        assertNull(cardOf(decision))
+    }
+
+    @Test
+    fun mailTriageMissingMailboxMapsToGuidanceWithoutRetry() = runTest {
+        val host = FakeFeishuHost()
+        val hooks = FeishuToolBridge().hooks(host)
+        hooks.beforeToolCall(request("call-19", "lark-cli mail +triage"))
+        val decision = hooks.afterToolExecution(
+            result("call-19", loadFixture("mail-triage-error.json"), isError = true),
+        )
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        val guidance = guidanceOf(decision)
+        assertTrue(guidance.contains("没有开通邮箱"))
+        assertTrue(guidance.contains("不要重试"))
+        assertTrue(guidance.contains("不是权限或登录问题"))
+        assertFalse(guidance.contains("重新登录"))
+        assertTrue(decision.result!!.isError)
+        assertTrue(rawText(decision)!!.contains("15180001"))
+        assertNull(cardOf(decision))
+    }
+
+    @Test
+    fun mailTriageAttachesMailListCard() = runTest {
+        val host = FakeFeishuHost()
+        val hooks = FeishuToolBridge().hooks(host)
+        hooks.beforeToolCall(request("call-20", "lark-cli mail +triage --max 20 --format json"))
+        val decision = hooks.afterToolExecution(result("call-20", loadFixture("mail-triage.json")))
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        assertTrue(guidanceOf(decision).contains("mail +message"))
+        assertTrue(guidanceOf(decision).contains("--page-token list:FfccvoqPd_loLhtcRx8cx"))
         assertNotNull(rawText(decision))
+        val card = cardOf(decision)
+        assertEquals("邮箱（3 封，2 未读）", card?.get("title")?.jsonPrimitive?.content)
+        val decoded = decodeFeishuCardPayload(cardPayload(decision)!!)!!
+        assertEquals(FeishuCardTypes.KIND_MAIL_LIST, decoded.kind)
+        assertEquals(3, decoded.items.size)
+        assertEquals("周会改到周四", decoded.items.first().title)
+        assertEquals("Alice", decoded.items.first().subtitle)
+    }
+
+    @Test
+    fun mailMessageAttachesMailReadCard() = runTest {
+        val host = FakeFeishuHost()
+        val hooks = FeishuToolBridge().hooks(host)
+        hooks.beforeToolCall(request("call-22", "lark-cli mail +message --message-id m_1 --format json"))
+        val decision = hooks.afterToolExecution(result("call-22", loadFixture("mail-message.json")))
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        assertTrue(guidanceOf(decision).contains("不可信的外部输入"))
+        val decoded = decodeFeishuCardPayload(cardPayload(decision)!!)!!
+        assertEquals(FeishuCardTypes.KIND_MAIL_READ, decoded.kind)
+        assertEquals("周会改到周四", decoded.context)
+        assertEquals("Alice <alice@example.com>", decoded.items.first().title)
+        assertTrue(decoded.items.first().subtitle.orEmpty().contains("收件人：黄宇鹏"))
+        assertTrue(decoded.items.first().body.orEmpty().contains("周四下午三点"))
+        assertTrue(decoded.note.orEmpty().contains("进度.docx"))
+    }
+
+    @Test
+    fun messagesSearchAttachesSearchCard() = runTest {
+        val host = FakeFeishuHost()
+        val hooks = FeishuToolBridge().hooks(host)
+        hooks.beforeToolCall(request("call-24", "lark-cli im +messages-search --query 设计稿 --page-size 50"))
+        val decision = hooks.afterToolExecution(result("call-24", loadFixture("messages-search.json")))
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        assertTrue(guidanceOf(decision).contains("im +chat-messages-list"))
+        val decoded = decodeFeishuCardPayload(cardPayload(decision)!!)!!
+        assertEquals(FeishuCardTypes.KIND_MESSAGES_SEARCH, decoded.kind)
+        assertEquals(2, decoded.items.size)
+        assertEquals("大创小组", decoded.items.first().title)
+        assertTrue(decoded.context.orEmpty().contains("搜索：设计稿"))
+    }
+
+    @Test
+    fun messageSendAttachesActionCard() = runTest {
+        val host = FakeFeishuHost()
+        val hooks = FeishuToolBridge().hooks(host)
+        hooks.beforeToolCall(request("call-25", "lark-cli im +messages-send --chat-id oc_1 --text hello"))
+        val decision = hooks.afterToolExecution(result("call-25", loadFixture("messages-send-result.json")))
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        assertTrue(guidanceOf(decision).contains("消息已发送"))
+        val decoded = decodeFeishuCardPayload(cardPayload(decision)!!)!!
+        assertEquals(FeishuCardTypes.KIND_ACTION, decoded.kind)
+        assertEquals("消息已发送", decoded.title)
+        assertEquals("hello", decoded.items.first().body)
+        assertTrue(decoded.openUrl.orEmpty().contains("openChatId=oc_1"))
+    }
+
+    @Test
+    fun authStatusReplacesTextWithoutCard() = runTest {
+        val host = FakeFeishuHost()
+        val hooks = FeishuToolBridge().hooks(host)
+        hooks.beforeToolCall(request("call-26", "lark-cli auth status --json"))
+        val decision = hooks.afterToolExecution(result("call-26", loadFixture("auth-status.json")))
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        assertNull(cardOf(decision))
+        assertTrue(guidanceOf(decision).contains("黄宇鹏"))
+        assertTrue(guidanceOf(decision).contains("5 项权限"))
+        assertFalse(guidanceOf(decision).contains("calendar:calendar:read"))
+        assertNotNull(rawText(decision))
+    }
+
+    @Test
+    fun docsSearchCommandReusesDocsCard() = runTest {
+        val host = FakeFeishuHost()
+        val hooks = FeishuToolBridge().hooks(host)
+        hooks.beforeToolCall(request("call-27", "lark-cli docs +search --query 大创"))
+        val decision = hooks.afterToolExecution(result("call-27", loadFixture("docs-search.json")))
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        val decoded = decodeFeishuCardPayload(cardPayload(decision)!!)!!
+        assertEquals(FeishuCardTypes.KIND_DOCS_SEARCH, decoded.kind)
+    }
+
+    @Test
+    fun mailProfileCommandPassesThroughUnchanged() = runTest {
+        val host = FakeFeishuHost()
+        val hooks = FeishuToolBridge().hooks(host)
+        val command = "lark-cli mail user_mailboxes profile --params '{\"user_mailbox_id\":\"me\"}'"
+        assertEquals(ToolCallAction.CONTINUE, hooks.beforeToolCall(request("call-21", command)).action)
+        val output = """{"ok":true,"identity":"user","data":{"not_found_reason":"mailbox address not found","primary_email_address":""}}"""
+        val decision = hooks.afterToolExecution(result("call-21", output))
+        assertEquals(ToolResultAction.KEEP, decision.action)
+        assertNull(cardOf(decision))
     }
 
     @Test
@@ -283,10 +412,8 @@ class FeishuNoticeStrippingTest {
             ),
         )
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        val text = decision.result?.text.orEmpty()
-        assertTrue(text.contains("飞书聊天列表"))
-        assertFalse(text.contains("lark-cli update"))
-        assertFalse(text.contains("_notice"))
+        assertFalse(decision.result?.text.orEmpty().contains("lark-cli update"))
+        assertFalse(guidanceOf(decision).contains("_notice"))
         val card = decision.result?.details?.get("deepdeep.card") as? JsonObject
         val payload = card?.get("payload")?.jsonObject
         assertNotNull(payload)
@@ -294,3 +421,6 @@ class FeishuNoticeStrippingTest {
         assertEquals(FeishuCardTypes.KIND_CHAT_LIST, decoded?.kind)
     }
 }
+
+private fun guidanceOf(decision: ToolResultDecision): String =
+    (decision.result?.details?.get("deepdeep.guidance") as? JsonPrimitive)?.contentOrNull.orEmpty()

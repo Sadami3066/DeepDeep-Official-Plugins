@@ -14,6 +14,10 @@ internal data class HotelSearchDetails(
     val nextPageToken: String? = null,
     val filter: List<String> = emptyList(),
     val noMatchingRates: Boolean = false,
+    val maxPrice: Double? = null,
+    val overBudgetCount: Int = 0,
+    val lowestOverBudgetPrice: String? = null,
+    val sortedBy: String? = null,
 )
 
 @Serializable
@@ -22,10 +26,13 @@ internal data class HotelSummary(
     val nameEn: String? = null,
     val starRating: String? = null,
     val priceText: String? = null,
+    val lowestPrice: Double? = null,
+    val currency: String? = null,
     val address: String? = null,
     val tags: List<String> = emptyList(),
     val amenities: List<String> = emptyList(),
     val bookingUrl: String? = null,
+    val imageUrl: String? = null,
     val distance: String? = null,
     val distanceMeters: Int? = null,
     val hotelId: Long? = null,
@@ -80,6 +87,14 @@ internal data class HotelRoomPlan(
     val totalDerived: Boolean = false,
 )
 
+internal data class HotelPlanVariant(
+    val plan: HotelRoomPlan,
+    val count: Int,
+    val policies: List<String>,
+    val hasOnRequest: Boolean,
+    val mixedOnRequest: Boolean,
+)
+
 @Serializable
 internal data class HotelRoomGroup(
     val name: String,
@@ -87,6 +102,12 @@ internal data class HotelRoomGroup(
     val lowestPriceText: String? = null,
     val planCount: Int = 0,
     val cheapestCancellation: String? = null,
+    val roomSize: String? = null,
+    val floor: String? = null,
+    val maxOccupancy: Int? = null,
+    val hasWindow: Boolean? = null,
+    val hasWifi: Boolean? = null,
+    val images: List<String> = emptyList(),
     val plans: List<HotelRoomPlan> = emptyList(),
 )
 
@@ -172,7 +193,9 @@ internal data class HotelPriceConfirmation(
 internal data class HotelBookingDetails(
     val orderNo: String,
     val hotelName: String,
+    val hotelId: Long? = null,
     val roomName: String? = null,
+    val ratePlanId: String? = null,
     val ratePlanName: String? = null,
     val bed: String? = null,
     val meal: String? = null,
@@ -187,11 +210,57 @@ internal data class HotelBookingDetails(
     val cancellation: String? = null,
     val contactName: String? = null,
     val contactEmail: String? = null,
+    val guestNames: List<String> = emptyList(),
+    val customerRequest: String? = null,
     val paymentType: String? = null,
     val paymentUrl: String? = null,
     val message: String? = null,
     val fetchedAt: Long,
 )
+
+internal data class HotelSearchTag(val name: String, val category: String)
+
+@Serializable
+internal data class HotelSearchTags(
+    val categories: List<HotelTagCategory> = emptyList(),
+    val fetchedAt: Long,
+) {
+    val count: Int get() = categories.sumOf { it.names.size }
+}
+
+@Serializable
+internal data class HotelTagCategory(
+    val category: String,
+    val names: List<String> = emptyList(),
+)
+
+@Serializable
+internal data class HotelCancelQuote(
+    val orderNo: String,
+    val hotelName: String? = null,
+    val canCancel: Boolean = true,
+    val feeText: String? = null,
+    val currency: String? = null,
+    val policy: String? = null,
+    val message: String? = null,
+    val bookingId: String? = null,
+    val confirmId: String? = null,
+    val expiresAt: String? = null,
+    val alreadyCancelled: Boolean = false,
+    val fetchedAt: Long,
+)
+
+@Serializable
+internal data class HotelCancelResult(
+    val orderNo: String,
+    val cancelled: Boolean,
+    val hotelName: String? = null,
+    val orderStatus: String? = null,
+    val message: String? = null,
+    val fetchedAt: Long,
+)
+
+internal data class HotelGuest(val roomNum: Int, val firstName: String, val lastName: String, val isAdult: Boolean = true)
 
 internal sealed interface HotelPlanSelection {
     data class Selected(val plan: HotelRoomPlan) : HotelPlanSelection

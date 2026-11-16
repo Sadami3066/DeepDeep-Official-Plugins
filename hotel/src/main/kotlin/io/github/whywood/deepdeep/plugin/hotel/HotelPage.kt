@@ -39,6 +39,8 @@ internal fun HotelPage(host: PluginHost, runtime: HotelRuntime) {
     val busy = state.operation != HotelOperation.NONE
     val linuxAvailable = snapshot?.linuxAvailable != false
     val installed = snapshot?.installedVersion
+    val latestVersion = state.latestVersion?.takeIf { it.isNotBlank() }
+    val updateAvailable = installed != null && HotelCli.versionNewer(latestVersion, installed)
 
     LaunchedEffect(Unit) { runtime.check(host) }
 
@@ -76,14 +78,18 @@ internal fun HotelPage(host: PluginHost, runtime: HotelRuntime) {
                     label = host.t("酒店服务", "Hotel service"),
                     value = when {
                         state.checking -> host.t("正在检查…", "Checking…")
-                        installed != null -> "v$installed"
-                        else -> host.t("未安装", "Not installed")
+                        installed == null -> host.t("未安装", "Not installed")
+                        updateAvailable -> host.t("v$installed · 可更新", "v$installed · update available")
+                        state.updateChecking -> host.t("v$installed · 检查更新中…", "v$installed · checking for updates…")
+                        else -> "v$installed"
                     },
                     tone = when {
                         state.checking -> DdStatusTone.NEUTRAL
-                        installed != null -> DdStatusTone.SUCCESS
-                        else -> DdStatusTone.WARNING
+                        installed == null -> DdStatusTone.WARNING
+                        updateAvailable -> DdStatusTone.WARNING
+                        else -> DdStatusTone.SUCCESS
                     },
+                    busy = state.updateChecking,
                 )
                 DdStatusRow(
                     label = host.t("RollingGo 账号", "RollingGo account"),
@@ -134,6 +140,18 @@ internal fun HotelPage(host: PluginHost, runtime: HotelRuntime) {
             )
         }
 
+        if (updateAvailable && !busy && !state.checking) {
+            DdNoticeBar(
+                text = host.t(
+                    "发现新版本 v$latestVersion，更新不会退出登录。",
+                    "Version v$latestVersion is available; updating keeps you signed in.",
+                ),
+                tone = DdNoticeTone.INFO,
+                actionLabel = host.t("更新", "Update"),
+                onAction = { runtime.startUpdate(host) },
+            )
+        }
+
         if (busy) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -177,9 +195,9 @@ internal fun HotelPage(host: PluginHost, runtime: HotelRuntime) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 DdTextAction(
-                    text = host.t("更新酒店服务", "Update hotel service"),
-                    onClick = { runtime.startInstall(host) },
-                    enabled = !busy && !state.checking && linuxAvailable,
+                    text = host.t("检查更新", "Check for updates"),
+                    onClick = { runtime.requestUpdateCheck(host) },
+                    enabled = !busy && !state.checking && !state.updateChecking && linuxAvailable,
                     color = colors.inkSecondary,
                 )
                 if (snapshot.loggedIn) {

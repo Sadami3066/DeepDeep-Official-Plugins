@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "document": {
+      "document_id": "docx_created_1",
+      "revision_id": 1,
+      "url": "https://example.feishu.cn/docx/docx_created_1"
+    },
+    "warnings": [],
+    "tips": ""
+  }
+}

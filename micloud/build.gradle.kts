@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.micloud"
         minSdk = 29
         targetSdk = 36
-        versionCode = 11
-        versionName = "2.5.0"
+        versionCode = 16
+        versionName = "2.7.3"
     }
 
     compileOptions {
@@ -38,8 +38,8 @@ kotlin {
 }
 
 dependencies {
-    compileOnly("io.github.sadami3066.deepdeep:plugin-api:1.3.0")
-    compileOnly("io.github.sadami3066.deepdeep:design:0.10.0")
+    compileOnly("io.github.sadami3066.deepdeep:plugin-api:1.3.1")
+    compileOnly("io.github.sadami3066.deepdeep:design:0.11.0")
     compileOnly("androidx.activity:activity-compose:1.12.4")
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
@@ -48,7 +48,7 @@ dependencies {
     compileOnly("androidx.compose.foundation:foundation")
     compileOnly("androidx.compose.animation:animation")
     compileOnly("androidx.compose.material3:material3")
-    testImplementation("io.github.sadami3066.deepdeep:plugin-api:1.3.0")
+    testImplementation("io.github.sadami3066.deepdeep:plugin-api:1.3.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")

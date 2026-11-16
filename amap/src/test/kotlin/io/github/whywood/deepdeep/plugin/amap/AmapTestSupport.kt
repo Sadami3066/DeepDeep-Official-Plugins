@@ -34,6 +34,9 @@ internal val zhLocalizer = AmapLocalizer { zh, _, args ->
 internal val knownMcpTools = setOf(
     "maps_text_search",
     "maps_around_search",
+    "maps_geocode",
+    "maps_search_detail",
+    "maps_ip_location",
     "maps_regeocode",
     "maps_direction_driving",
     "maps_direction_transit_integrated",
@@ -161,25 +164,20 @@ internal fun transitRouteSample(): AmapRoute = AmapRoute(
 )
 
 internal fun placeSample(
+    id: String? = "B000A8UIN8",
     name: String = "西湖风景名胜区",
     address: String? = "龙井路1号",
+    typecode: String? = "110000",
     typeName: String? = "风景名胜",
-    distanceMeters: Int? = 850,
-    cityName: String? = null,
-    tel: String? = null,
-    rating: Double? = null,
-    businessArea: String? = null,
+    location: LatLng? = LatLng(120.145, 30.256),
     photos: List<String> = emptyList(),
 ): AmapPlace = AmapPlace(
+    id = id,
     name = name,
     address = address,
+    typecode = typecode,
     typeName = typeName,
-    distanceMeters = distanceMeters,
-    location = LatLng(120.145, 30.256),
-    cityName = cityName,
-    tel = tel,
-    rating = rating,
-    businessArea = businessArea,
+    location = location,
     photos = photos,
 )
 
@@ -275,8 +273,8 @@ internal class FakeAmapHost(
 internal class FakeMcpNetwork(
     private val payload: (String) -> String = { """{"pois":[]}""" },
     private val tools: Set<String> = knownMcpTools,
-    private val searchProperties: Set<String> = setOf("keywords", "city", "types"),
     private val failure: NetworkResponse? = null,
+    private val includeStructuredContent: Boolean = false,
 ) : NetworkService {
     val toolCalls = mutableListOf<Pair<String, JsonObject>>()
 
@@ -300,7 +298,10 @@ internal class FakeMcpNetwork(
                 val params = request.objectValue("params")
                 val name = params?.textValue("name").orEmpty()
                 toolCalls += name to (params?.objectValue("arguments") ?: JsonObject(emptyMap()))
-                failure ?: NetworkResponse(statusCode = 200, body = callEnvelope(payload(name)))
+                failure ?: NetworkResponse(
+                    statusCode = 200,
+                    body = callEnvelope(payload(name), includeStructuredContent),
+                )
             }
             else -> NetworkResponse(statusCode = 400, body = """{"error":"unsupported"}""")
         }
@@ -319,32 +320,25 @@ internal class FakeMcpNetwork(
         put("result", buildJsonObject {
             put("tools", buildJsonArray {
                 tools.forEach { name ->
-                    add(buildJsonObject {
-                        put("name", name)
-                        put("inputSchema", buildJsonObject {
-                            put("type", "object")
-                            put("properties", buildJsonObject {
-                                val properties = if (name == "maps_text_search" || name == "maps_around_search") {
-                                    searchProperties
-                                } else {
-                                    emptySet()
-                                }
-                                properties.forEach { property ->
-                                    put(property, buildJsonObject { put("type", "string") })
-                                }
-                            })
-                        })
-                    })
+                    add(buildJsonObject { put("name", name) })
                 }
             })
         })
     }.toString()
 
-    private fun callEnvelope(payload: String): String = buildJsonObject {
+    private fun callEnvelope(payload: String, includeStructuredContent: Boolean): String = buildJsonObject {
         put("jsonrpc", "2.0")
         put("id", 3)
         put("result", buildJsonObject {
-            put("structuredContent", AmapJson.parseToJsonElement(payload))
+            put("content", buildJsonArray {
+                add(buildJsonObject {
+                    put("type", "text")
+                    put("text", payload)
+                })
+            })
+            if (includeStructuredContent) {
+                put("structuredContent", AmapJson.parseToJsonElement(payload))
+            }
         })
     }.toString()
 }

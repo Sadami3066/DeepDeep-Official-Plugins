@@ -3,7 +3,7 @@ package io.github.whywood.deepdeep.plugin.hotel
 internal object HotelCli {
     const val BINARY = "rgh"
     const val CONFIG_DIR = "/root/.hotel-cli"
-    private const val ENV = "HOME=/root"
+    private const val ENV = "HOME=/root DOTENV_CONFIG_QUIET=true"
 
     fun versionCommand(): String = "$ENV $BINARY --version 2>&1"
 
@@ -26,6 +26,10 @@ internal object HotelCli {
         adults: Int,
         size: Int,
         starRatings: String?,
+        distanceInMeter: Int? = null,
+        requiredTags: List<String> = emptyList(),
+        preferredBrands: List<String> = emptyList(),
+        maxPricePerNight: Double? = null,
     ): String = buildList {
         add(ENV)
         add(BINARY)
@@ -50,6 +54,22 @@ internal object HotelCli {
             add("--star-ratings")
             add(quote(it))
         }
+        distanceInMeter?.takeIf { it > 0 }?.let {
+            add("--distance-in-meter")
+            add(it.toString())
+        }
+        requiredTags.map(String::trim).filter(String::isNotEmpty).forEach {
+            add("--required-tag")
+            add(quote(it))
+        }
+        preferredBrands.map(String::trim).filter(String::isNotEmpty).forEach {
+            add("--preferred-brand")
+            add(quote(it))
+        }
+        maxPricePerNight?.takeIf { it > 0 }?.let {
+            add("--max-price-per-night")
+            add(moneyArg(it))
+        }
         add("2>&1")
     }.joinToString(" ")
 
@@ -60,6 +80,10 @@ internal object HotelCli {
         checkOut: String?,
         rooms: Int,
         adults: Int,
+        cancelPolicy: String? = null,
+        mealType: String? = null,
+        childCount: Int? = null,
+        childAges: String? = null,
     ): String = buildList {
         add(ENV)
         add(BINARY)
@@ -84,6 +108,22 @@ internal object HotelCli {
         add(rooms.toString())
         add("--adult-count")
         add(adults.toString())
+        cancelPolicy?.takeIf(String::isNotBlank)?.let {
+            add("--cancel-policy")
+            add(quote(it))
+        }
+        mealType?.takeIf(String::isNotBlank)?.let {
+            add("--meal-type")
+            add(quote(it))
+        }
+        childCount?.takeIf { it > 0 }?.let {
+            add("--child-count")
+            add(it.toString())
+        }
+        childAges?.takeIf(String::isNotBlank)?.let {
+            add("--child-age")
+            add(quote(it))
+        }
         add("2>&1")
     }.joinToString(" ")
 
@@ -118,27 +158,49 @@ internal object HotelCli {
         firstName: String,
         lastName: String,
         email: String,
+        guests: List<HotelGuest> = emptyList(),
+        customerRequest: String? = null,
     ): String = buildList {
         add(ENV)
         add(BINARY)
         add("book")
         add("--reference-no")
         add(quote(referenceNo))
-        add("--first-name")
-        add(quote(firstName))
-        add("--last-name")
-        add(quote(lastName))
+        firstName.takeIf(String::isNotBlank)?.let {
+            add("--first-name")
+            add(quote(it))
+        }
+        lastName.takeIf(String::isNotBlank)?.let {
+            add("--last-name")
+            add(quote(it))
+        }
         add("--email")
         add(quote(email))
+        guests.forEach { guest ->
+            add("--guest")
+            add(quote("${guest.roomNum},${guest.firstName},${guest.lastName},${guest.isAdult}"))
+        }
+        customerRequest?.takeIf(String::isNotBlank)?.let {
+            add("--customer-request")
+            add(quote(it))
+        }
         add("2>&1")
     }.joinToString(" ")
 
-    fun ordersCommand(status: String?): String = buildList {
+    fun ordersCommand(status: String?, startDate: String? = null, endDate: String? = null): String = buildList {
         add(ENV)
         add(BINARY)
         add("orders")
         status?.takeIf(String::isNotBlank)?.let {
             add("--status")
+            add(quote(it))
+        }
+        startDate?.takeIf(String::isNotBlank)?.let {
+            add("--start-date")
+            add(quote(it))
+        }
+        endDate?.takeIf(String::isNotBlank)?.let {
+            add("--end-date")
             add(quote(it))
         }
         add("2>&1")
@@ -151,6 +213,62 @@ internal object HotelCli {
         add(quote(orderNo))
         add("2>&1")
     }.joinToString(" ")
+
+    fun preCancelCommand(orderNo: String): String =
+        "$ENV $BINARY pre-cancel --order-no ${quote(orderNo)} 2>&1"
+
+    fun confirmCancelCommand(
+        orderNo: String,
+        bookingId: String,
+        confirmId: String,
+        description: String?,
+    ): String = buildList {
+        add(ENV)
+        add(BINARY)
+        add("confirm-cancel")
+        add("--order-no")
+        add(quote(orderNo))
+        add("--booking-id")
+        add(quote(bookingId))
+        add("--confirm-id")
+        add(quote(confirmId))
+        description?.takeIf(String::isNotBlank)?.let {
+            add("--description")
+            add(quote(it))
+        }
+        add("2>&1")
+    }.joinToString(" ")
+
+    fun tagsCommand(): String = "$ENV $BINARY hotel-tags 2>&1"
+
+    fun updateCommand(): String = "$ENV $BINARY update 2>&1"
+
+    fun latestVersionCommand(): String = "$ENV npm view @rollinggo/hotel version 2>&1"
+
+    fun parseLatestVersion(output: String): String? =
+        Regex("""(?m)^\s*([0-9]+\.[0-9]+\.[0-9]+)\s*$""").find(output)?.groupValues?.get(1)
+            ?: Regex("""([0-9]+\.[0-9]+\.[0-9]+)""").find(output)?.groupValues?.get(1)
+
+    fun versionNewer(latest: String?, installed: String?): Boolean {
+        val left = parseParts(latest) ?: return false
+        val right = parseParts(installed) ?: return false
+        for (index in 0 until maxOf(left.size, right.size)) {
+            val a = left.getOrElse(index) { 0 }
+            val b = right.getOrElse(index) { 0 }
+            if (a != b) return a > b
+        }
+        return false
+    }
+
+    private fun parseParts(version: String?): List<Int>? {
+        val value = version?.trim()?.removePrefix("v")?.takeIf(String::isNotEmpty) ?: return null
+        val core = value.substringBefore('-').substringBefore('+')
+        val parts = core.split('.').map { it.toIntOrNull() ?: return null }
+        return parts.takeIf { it.isNotEmpty() }
+    }
+
+    private fun moneyArg(value: Double): String =
+        if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()
 
     fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 

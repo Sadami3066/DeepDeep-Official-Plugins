@@ -1,0 +1,84 @@
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "has_more": false,
+    "page_token": "",
+    "messages": [
+      {
+        "chat_id": "oc_5ce6d572455d361153b7cb51da133945",
+        "content": "<p>https://example.feishu.cn/docx/doc_paragraphed</p>",
+        "create_time": "2025-11-15 09:40",
+        "deleted": false,
+        "message_app_link": "https://applink.feishu.cn/client/chat/open?openChatId=oc_5ce6d572455d361153b7cb51da133945&position=4",
+        "message_id": "om_first",
+        "message_position": "4",
+        "msg_type": "text",
+        "sender": {
+          "id": "ou_000001",
+          "id_type": "open_id",
+          "name": "用户000001",
+          "sender_i18n_names": {
+            "zh_cn": "林小满"
+          },
+          "sender_type": "user"
+        },
+        "updated": false
+      },
+      {
+        "chat_id": "oc_5ce6d572455d361153b7cb51da133945",
+        "content": "<card>\n计划：\n1. 收集 SDK\n2. 数据入库\n</card>",
+        "create_time": "2025-11-15 09:30",
+        "deleted": false,
+        "message_app_link": "https://applink.feishu.cn/client/chat/open?openChatId=oc_5ce6d572455d361153b7cb51da133945&position=3",
+        "message_id": "om_card",
+        "message_position": "3",
+        "msg_type": "interactive",
+        "sender": {
+          "id": "ou_000002",
+          "id_type": "open_id",
+          "name": "韩梅梅",
+          "sender_type": "user"
+        },
+        "updated": false
+      },
+      {
+        "chat_id": "oc_5ce6d572455d361153b7cb51da133945",
+        "content": "  普通文本消息  ",
+        "create_time": "2025-11-15 09:20",
+        "deleted": false,
+        "message_app_link": "https://applink.feishu.cn/client/chat/open?openChatId=oc_5ce6d572455d361153b7cb51da133945&position=2",
+        "message_id": "om_plain",
+        "message_position": "2",
+        "msg_type": "text",
+        "sender": {
+          "id": "ou_000003",
+          "id_type": "open_id",
+          "name": "李雷",
+          "sender_type": "user"
+        },
+        "updated": false
+      },
+      {
+        "chat_id": "oc_5ce6d572455d361153b7cb51da133945",
+        "content": "用户000001 updated the group name from \"{old_group_name}\" to \"{group_name}\".",
+        "create_time": "2025-11-15 09:10",
+        "deleted": false,
+        "message_id": "om_system_rename",
+        "message_position": "1",
+        "msg_type": "system",
+        "updated": false
+      },
+      {
+        "chat_id": "oc_5ce6d572455d361153b7cb51da133945",
+        "content": "用户000001 invited 用户000004 to the group.",
+        "create_time": "2025-11-15 09:00",
+        "deleted": false,
+        "message_id": "om_system_invite",
+        "message_position": "0",
+        "msg_type": "system",
+        "updated": false
+      }
+    ]
+  }
+}

@@ -207,6 +207,7 @@ class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, 
             runCatching { config.cardEncoder(card) }.getOrNull()
         }
         val rawDetails = rawDetails(host, source)
+        val guidance = observation.text.trim().takeIf { it.isNotEmpty() }
         val details = buildJsonObject {
             if (cardPayload != null) {
                 put(
@@ -219,13 +220,17 @@ class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, 
                 )
             }
             rawDetails?.forEach { (key, value) -> put(key, value) }
+            if (rawDetails != null) {
+                guidance?.let { put(GUIDANCE_DETAILS_KEY, JsonPrimitive(it)) }
+            }
         }.takeIf { it.isNotEmpty() }
         log(
             host,
-            "after call=${request.callId} observation=ok chars=${observation.text.length} " +
+            "after call=${request.callId} observation=ok guidance=${guidance?.length ?: 0} " +
                 "card=${cardPayload != null} raw=${rawDetails != null} error=${observation.isError}",
         )
-        return resultReplace(textResult(observation.text, details = details, isError = observation.isError))
+        val content = if (rawDetails != null) "" else guidance.orEmpty()
+        return resultReplace(textResult(content, details = details, isError = observation.isError))
     }
 
     private suspend fun attachRaw(
@@ -236,19 +241,18 @@ class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, 
         val raw = rawDetails(host, source) ?: return decision
         if (decision.action != ToolResultAction.REPLACE) return decision
         val result = decision.result ?: return decision
-        val merged = JsonObject((result.details ?: JsonObject(emptyMap())) + raw)
-        val resultText = result.text
-        val replaced = if (resultText != null) {
-            textResult(resultText, details = merged, isError = result.isError)
-        } else {
-            richResult(result.blocks, details = merged, isError = result.isError)
+        val guidance = result.text?.trim()?.takeIf { it.isNotEmpty() }
+        val details = buildJsonObject {
+            (result.details as? JsonObject)?.forEach { (key, value) -> put(key, value) }
+            raw.forEach { (key, value) -> put(key, value) }
+            guidance?.let { put(GUIDANCE_DETAILS_KEY, JsonPrimitive(it)) }
         }
-        return resultReplace(replaced)
+        return resultReplace(textResult("", details = details, isError = result.isError))
     }
 
     private suspend fun rawDetails(host: PluginHost, source: CliOutput): JsonObject? {
-        val cleaned = CliText.stripAnsi(source.text).trim()
-        if (cleaned.isEmpty()) return null
+        val cleaned = CliText.stripHostNotices(CliText.stripAnsi(source.text)).trimEnd()
+        if (cleaned.isBlank()) return null
         val redacted = runCatching { config.redactRaw(host, cleaned) }.getOrNull() ?: return null
         if (redacted.isBlank()) return null
         return buildJsonObject { put(RAW_DETAILS_KEY, redacted) }
@@ -287,6 +291,7 @@ class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, 
     private companion object {
         const val CARD_DETAILS_KEY: String = "deepdeep.card"
         const val RAW_DETAILS_KEY: String = "deepdeep.raw"
+        const val GUIDANCE_DETAILS_KEY: String = "deepdeep.guidance"
         const val MAX_RECOVERED_OUTPUT_BYTES: Long = 4L * 1024L * 1024L
         const val TRUNCATION_HINT: String =
             "（上游输出超过单次上限已被截断，无法完整读取；请缩小范围后重试，例如 --page-size、--page-token 或更短的时间区间。）"

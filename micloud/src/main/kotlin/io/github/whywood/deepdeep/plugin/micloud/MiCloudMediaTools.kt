@@ -4,6 +4,8 @@ import io.github.whywood.deepdeep.plugin.api.PluginTool
 import io.github.whywood.deepdeep.plugin.api.pluginTool
 import io.github.whywood.deepdeep.plugin.api.textResult
 import java.io.File
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.put
@@ -15,30 +17,74 @@ internal fun galleryTool(client: MiCloudReadApi, text: MiCloudText): PluginTool 
     parameters = galleryParameters,
 ) { call ->
     call.signal?.throwIfCancelled()
-    miCloudToolResult {
+    miCloudToolResult(MiCloudFeature.GALLERY, text) {
         val args = call.args
         when (val action = args.argString("action") ?: "list") {
             "list" -> {
-                val response = client.getJson(galleriesPath(now()))
+                val page = (args.argInt("pageNum") ?: 1).coerceAtLeast(1)
+                val albumId = args.argString("albumId") ?: "1"
+                val pageSize = limitArg(args)
+                val response = client.getJson(galleriesPath(now(), albumId, page, pageSize))
                 val payload = response.json.payloadObject()
-                val items = response.json.payloadArray("galleries")
-                    .mapNotNull { it as? JsonObject }
-                val hasMore = payload.boolOrNull("hasMore") ?: false
+                val items = galleryItems(
+                    response.json.payloadArray("galleries", "items", "list", "media"),
+                )
+                val isLastPage = payload.boolOrNull("isLastPage")
+                val hasMore = payload.boolOrNull("hasMore") ?: isLastPage?.not() ?: false
+                val card = MiCloudGalleryCardData(
+                    mode = GALLERY_MODE_LIST,
+                    items = items,
+                    hasMore = hasMore,
+                    isLastPage = isLastPage,
+                )
                 textResult(
-                    galleryObservation(items, hasMore, text),
-                    details = rawResultDetails(response.body),
+                    text = "",
+                    details = toolResultDetails(
+                        raw = response.body,
+                        guidance = listOf(
+                            galleryGuidance(
+                                count = items.size,
+                                hasMore = hasMore,
+                                albums = false,
+                                nextPage = if (hasMore) page + 1 else 0,
+                                t = text,
+                            ),
+                            rawNoiseNote(text),
+                        ).filter(String::isNotBlank).joinToString(" "),
+                        card = MiCloudCard(
+                            title = text("相册内容", "Gallery items"),
+                            payload = card.toJson(),
+                        ),
+                    ),
                 )
             }
 
             "albums" -> {
                 val response = client.getJson(albumsPath(now()))
                 val payload = response.json.payloadObject()
-                val albums = response.json.payloadArray("albums")
-                    .mapNotNull { it as? JsonObject }
-                val hasMore = payload.boolOrNull("hasMore") ?: false
+                val items = galleryItems(response.json.payloadArray("albums"))
+                    .sortedWith(compareByDescending<MiCloudGalleryItem> { it.itemCount }.thenByDescending { it.timeMs })
+                val isLastPage = payload.boolOrNull("isLastPage")
+                val hasMore = payload.boolOrNull("hasMore") ?: isLastPage?.not() ?: false
+                val card = MiCloudGalleryCardData(
+                    mode = GALLERY_MODE_ALBUMS,
+                    items = items,
+                    hasMore = hasMore,
+                    isLastPage = isLastPage,
+                )
                 textResult(
-                    albumsObservation(albums, hasMore, text),
-                    details = rawResultDetails(response.body),
+                    text = "",
+                    details = toolResultDetails(
+                        raw = response.body,
+                        guidance = listOf(
+                            galleryGuidance(items.size, hasMore, albums = true, t = text),
+                            rawNoiseNote(text),
+                        ).filter(String::isNotBlank).joinToString(" "),
+                        card = MiCloudCard(
+                            title = text("我的相册", "My albums"),
+                            payload = card.toJson(),
+                        ),
+                    ),
                 )
             }
 
@@ -58,7 +104,7 @@ internal fun recordingsTool(
     parameters = recordingsParameters,
 ) { call ->
     call.signal?.throwIfCancelled()
-    miCloudToolResult {
+    miCloudToolResult(MiCloudFeature.RECORDINGS, text) {
         val args = call.args
         when (val action = args.argString("action") ?: "list") {
             "list" -> {
@@ -74,19 +120,36 @@ internal fun recordingsTool(
                 val files = items.map { item ->
                     MiCloudFileItem(
                         fileId = item.stringOrNull("id").orEmpty(),
-                        name = item.stringOrNull("name").orEmpty(),
+                        name = recordingDisplayName(item.stringOrNull("name").orEmpty()),
                         sizeBytes = item.longOrNull("size") ?: 0L,
-                        timeMs = item.longOrNull("createTime") ?: 0L,
+                        timeMs = item.longOrNull("createTime")
+                            ?: item.longOrNull("create_time")
+                            ?: item.longOrNull("modify_time")
+                            ?: 0L,
                         durationSeconds = recordingDurationSeconds(item.longOrNull("duration")),
+                        source = item,
                     )
                 }
-                val card = MiCloudFileCardData(mode = FILES_MODE_LIST, files = files)
+                val nextOffset = offset + items.size
+                val card = MiCloudFileCardData(
+                    mode = FILES_MODE_LIST,
+                    files = files,
+                    offset = offset,
+                    nextOffset = nextOffset,
+                    limit = limit,
+                )
                 textResult(
-                    recordingsObservation(items, offset + items.size, text),
-                    details = cardResultDetails(
-                        card = card.toJson(),
+                    text = "",
+                    details = toolResultDetails(
                         raw = response.body,
-                        title = text.fmt("通话录音（%d 条）", "Call recordings (%d)", files.size),
+                        guidance = listOf(
+                            recordingsListGuidance(items.size, nextOffset, text),
+                            rawNoiseNote(text),
+                        ).filter(String::isNotBlank).joinToString(" "),
+                        card = MiCloudCard(
+                            title = text("通话录音", "Call recordings"),
+                            payload = card.toJson(),
+                        ),
                     ),
                 )
             }
@@ -103,20 +166,17 @@ internal fun recordingsTool(
                     name = downloaded.name,
                     sizeBytes = downloaded.length(),
                     timeMs = now(),
+                    path = downloaded.absolutePath,
                 )
                 val card = MiCloudFileCardData(mode = FILES_MODE_DOWNLOAD, files = listOf(file))
                 textResult(
-                    recordingDownloadObservation(
-                        fileId = fileId,
-                        name = downloaded.name,
-                        size = downloaded.length(),
-                        path = downloaded.absolutePath,
-                        t = text,
-                    ),
-                    details = cardResultDetails(
-                        card = card.toJson(),
-                        raw = "",
-                        title = text("录音已保存", "Recording saved"),
+                    text = "",
+                    details = toolResultDetails(
+                        guidance = recordingDownloadGuidance(downloaded.absolutePath, text),
+                        card = MiCloudCard(
+                            title = text("录音已保存", "Recording saved"),
+                            payload = card.toJson(),
+                        ),
                     ),
                 )
             }
@@ -153,7 +213,11 @@ internal fun safeFileName(raw: String): String {
     return normalized.take(96).ifBlank { "recording" }
 }
 
-internal fun galleriesPath(ts: Long): String = "/gallery/user/galleries?ts=$ts"
+internal fun galleriesPath(ts: Long, albumId: String, pageNum: Int, pageSize: Int): String {
+    val endDate = LocalDate.now().plusDays(1).format(DateTimeFormatter.BASIC_ISO_DATE)
+    return "/gallery/user/galleries?startDate=20000101&endDate=$endDate" +
+        "&pageNum=$pageNum&pageSize=$pageSize&albumId=${encodeComponent(albumId)}&ts=$ts"
+}
 
 internal fun albumsPath(ts: Long): String = "/gallery/user/album/list?isShared=false&ts=$ts"
 
@@ -168,6 +232,9 @@ private val galleryParameters: JsonObject = toolParams {
         "action",
         propEnum("Action to perform: list media items or albums (default list)", listOf("list", "albums")),
     )
+    put("albumId", propString("Album id for action=list (default 1, the camera album)"))
+    put("pageNum", propInt("Page number for action=list, starting at 1", minimum = 1, default = 1))
+    put("limit", propInt("Photos per page for action=list", minimum = 1, maximum = MAX_LIST_LIMIT, default = 30))
 }
 
 private val recordingsParameters: JsonObject = toolParams(required = listOf("action")) {

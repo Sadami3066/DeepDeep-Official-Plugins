@@ -9,7 +9,6 @@ import java.time.LocalDate
 import java.time.format.DateTimeParseException
 import java.time.temporal.ChronoUnit
 import java.util.Locale
-import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -25,12 +24,19 @@ internal const val RAIL_DATE_WINDOW_DAYS = 15
 
 internal const val RAIL_RAW_DETAILS_KEY = "deepdeep.raw"
 
+internal const val RAIL_GUIDANCE_DETAILS_KEY = "deepdeep.guidance"
+
+internal const val RAIL_CARD_DETAILS_KEY = "deepdeep.card"
+
+internal const val RAIL_MESSAGE_DETAILS_KEY = "message"
+
 internal enum class TrainErrorKind {
     UNKNOWN_STATION,
     AMBIGUOUS_STATION,
     INVALID_DATE,
     INVALID_ROUTE,
     TRAIN_NOT_FOUND,
+    PRICE_LEG_NOT_FOUND,
     SERVICE_UNAVAILABLE,
     PARSE_FAILED,
 }
@@ -50,12 +56,7 @@ internal class TrainPriceUnavailableException(
 
 internal data class TrainSearchResult(
     val details: TrainSearchDetails,
-    val raw: String,
-)
-
-internal data class TrainPriceResult(
-    val details: TrainPriceDetails,
-    val raw: String,
+    val wire: String,
 )
 
 internal class RailRawLog {
@@ -71,8 +72,44 @@ internal class RailRawLog {
 internal fun joinRawLogs(vararg parts: String): String =
     parts.filter { it.isNotBlank() }.joinToString("\n\n")
 
-internal fun withRaw(details: JsonObject, raw: String): JsonObject =
-    if (raw.isBlank()) details else JsonObject(details + (RAIL_RAW_DETAILS_KEY to JsonPrimitive(raw)))
+internal object RailTrainCache {
+    const val TTL_MS = 10 * 60 * 1000L
+
+    private class Entry(val key: String, val trains: List<TrainOption>, val at: Long)
+
+    @Volatile
+    private var entry: Entry? = null
+
+    fun remember(
+        fromCode: String,
+        toCode: String,
+        date: String,
+        trains: List<TrainOption>,
+        now: Long = System.currentTimeMillis(),
+    ) {
+        entry = Entry(key(fromCode, toCode, date), trains, now)
+    }
+
+    fun lookup(
+        fromCode: String,
+        toCode: String,
+        date: String,
+        now: Long = System.currentTimeMillis(),
+    ): List<TrainOption>? {
+        val current = entry ?: return null
+        if (current.key != key(fromCode, toCode, date) || now - current.at > TTL_MS) {
+            entry = null
+            return null
+        }
+        return current.trains
+    }
+
+    fun clear() {
+        entry = null
+    }
+
+    private fun key(fromCode: String, toCode: String, date: String): String = "$fromCode|$toCode|$date"
+}
 
 internal enum class TravelDateIssue {
     VALID,
@@ -156,7 +193,7 @@ internal object TicketPricePayload {
             val price = parseSeatPrice(raw, key) ?: return@mapNotNull null
             SeatPrice(name = wire, priceText = price)
         }
-        return prices.ifEmpty { null }
+        return prices.sortedBy { seatOrder(it.name) }.ifEmpty { null }
     }
 
     private fun parseSeatPrice(raw: String, key: String): String? {
@@ -269,6 +306,9 @@ internal val RailSeatColumns: List<SeatColumn> = listOf(
     SeatColumn("standing", 26, setOf("WZ")),
 )
 
+internal fun seatOrder(name: String): Int = RailSeatColumns.indexOfFirst { it.wire == name }
+    .let { if (it >= 0) it else RailSeatColumns.size }
+
 internal data class NormalizedSeat(val status: SeatStatus, val count: String)
 
 internal fun normalizeSeatValue(raw: String?, offered: Boolean = true): NormalizedSeat {
@@ -299,12 +339,34 @@ internal fun parseSeats(fields: List<String>): List<SeatAvailability> {
 internal fun parseTrainRows(rows: List<String>, stationName: (String) -> String): List<TrainOption> =
     rows.mapNotNull { row -> parseTrainOption(row.split('|'), stationName) }
 
-internal fun pickTrainForPrice(trains: List<TrainOption>, code: String, requestedToCode: String): TrainOption? {
-    val matches = trains.filter { it.code.equals(code, ignoreCase = true) }
-    if (matches.isEmpty()) return null
-    return matches.firstOrNull { it.toCode == requestedToCode }
-        ?: matches.maxByOrNull { clockMinutes(it.arrive) ?: -1 }
-        ?: matches.first()
+internal fun pickTrainForPrice(
+    trains: List<TrainOption>,
+    code: String,
+    requestedToCode: String,
+    trainNo: String = "",
+    fromStationNo: String = "",
+    toStationNo: String = "",
+): TrainOption? {
+    val wantedTrainNo = trainNo.trim()
+    val candidates = trains
+        .filter { it.code.equals(code, ignoreCase = true) }
+        .filter { wantedTrainNo.isEmpty() || it.trainNo.equals(wantedTrainNo, ignoreCase = true) }
+    if (candidates.isEmpty()) return null
+    val wantedFromNo = fromStationNo.trim()
+    val wantedToNo = toStationNo.trim()
+    val narrowed = if (wantedFromNo.isNotEmpty() || wantedToNo.isNotEmpty()) {
+        candidates.filter { train ->
+            (wantedFromNo.isEmpty() || train.fromStationNo == wantedFromNo) &&
+                (wantedToNo.isEmpty() || train.toStationNo == wantedToNo)
+        }
+    } else {
+        candidates
+    }
+    if (narrowed.isEmpty()) return null
+    if (wantedToNo.isNotEmpty()) return narrowed.first()
+    return narrowed.firstOrNull { it.toCode == requestedToCode }
+        ?: narrowed.maxByOrNull { clockMinutes(it.arrive) ?: -1 }
+        ?: narrowed.first()
 }
 
 internal fun parseTrainOption(
@@ -334,13 +396,102 @@ internal fun parseTrainOption(
         toStationNo = fields.getOrNull(17).orEmpty().trim(),
         trainNo = fields.getOrNull(2).orEmpty().trim(),
         seatTypes = seatTypes,
+        date = fields.getOrNull(13).orEmpty().trim(),
     )
 }
 
 internal class TrainService(private val host: PluginHost) {
     private val session = HttpSession()
 
-    suspend fun search(fromQuery: String, toQuery: String, dateQuery: String): TrainSearchResult {
+    suspend fun search(fromQuery: String, toQuery: String, dateQuery: String): TrainSearchResult =
+        request(resolveQuery(fromQuery, toQuery, dateQuery))
+
+    suspend fun price(
+        fromQuery: String,
+        toQuery: String,
+        dateQuery: String,
+        trainCode: String,
+        trainNo: String = "",
+        fromStationNo: String = "",
+        toStationNo: String = "",
+    ): TrainPriceDetails {
+        val query = resolveQuery(fromQuery, toQuery, dateQuery)
+        val code = trainCode.trim().uppercase(Locale.ROOT)
+        if (code.isEmpty()) throw TrainQueryException(TrainErrorKind.TRAIN_NOT_FOUND, trainCode)
+        val cachedTrains = RailTrainCache.lookup(query.from.code, query.to.code, query.date)
+        val search = if (cachedTrains == null) request(query) else null
+        val trains = cachedTrains ?: search?.details?.trains.orEmpty()
+        val searchWire = search?.wire.orEmpty()
+        val legRequested = trainNo.isNotBlank() || fromStationNo.isNotBlank() || toStationNo.isNotBlank()
+        val train = pickTrainForPrice(trains, code, query.to.code, trainNo, fromStationNo, toStationNo)
+            ?: throw TrainQueryException(
+                kind = if (legRequested) TrainErrorKind.PRICE_LEG_NOT_FOUND else TrainErrorKind.TRAIN_NOT_FOUND,
+                detail = if (legRequested) legDetail(trainCode, trainNo, fromStationNo, toStationNo) else trainCode,
+                raw = searchWire,
+            )
+        if (train.trainNo.isBlank() || train.fromStationNo.isBlank() || train.toStationNo.isBlank() || train.seatTypes.isBlank()) {
+            throw TrainPriceUnavailableException("车次缺少票价参数", searchWire)
+        }
+        val raw = RailRawLog()
+        val response = try {
+            fetch(
+                RailEndpoints.priceUrl(
+                    trainNo = train.trainNo,
+                    fromStationNo = train.fromStationNo,
+                    toStationNo = train.toStationNo,
+                    seatTypes = train.seatTypes,
+                    date = query.date,
+                ),
+                baseHeaders(),
+                raw,
+            )
+        } catch (error: TrainQueryException) {
+            throw TrainPriceUnavailableException(
+                error.detail,
+                joinRawLogs(searchWire, raw.text()),
+            )
+        }
+        if (response.status !in 200..299) {
+            throw TrainPriceUnavailableException("HTTP ${response.status}", joinRawLogs(searchWire, raw.text()))
+        }
+        val prices = TicketPricePayload.parse(response.body)
+            ?: throw TrainPriceUnavailableException("", joinRawLogs(searchWire, raw.text()))
+        return TrainPriceDetails(
+            code = train.code,
+            from = query.from.name,
+            to = query.to.name,
+            fromCode = train.fromCode.ifBlank { query.from.code },
+            toCode = train.toCode.ifBlank { query.to.code },
+            date = query.date,
+            prices = prices,
+            fetchedAt = System.currentTimeMillis(),
+            bookingUrl = RailEndpoints.bookingUrl(
+                train.fromStation.ifBlank { query.from.name },
+                train.fromCode.ifBlank { query.from.code },
+                train.toStation.ifBlank { query.to.name },
+                train.toCode.ifBlank { query.to.code },
+                query.date,
+            ),
+            fromStation = train.fromStation,
+            toStation = train.toStation,
+            fromStationNo = train.fromStationNo,
+            toStationNo = train.toStationNo,
+            trainNo = train.trainNo,
+        )
+    }
+
+    private fun legDetail(trainCode: String, trainNo: String, fromStationNo: String, toStationNo: String): String =
+        buildString {
+            append(trainCode)
+            if (trainNo.isNotBlank()) append(" / ").append(trainNo)
+            if (fromStationNo.isNotBlank() || toStationNo.isNotBlank()) {
+                append(" ").append(fromStationNo.ifBlank { "?" }).append("→").append(toStationNo.ifBlank { "?" })
+            }
+        }
+
+    private data class SearchQuery(val from: Station, val to: Station, val date: String)
+
+    private fun resolveQuery(fromQuery: String, toQuery: String, dateQuery: String): SearchQuery {
         val index = StationIndex.load(host)
         val fromText = fromQuery.trim()
         val toText = toQuery.trim()
@@ -355,9 +506,20 @@ internal class TrainService(private val host: PluginHost) {
             TravelDateIssue.VALID -> Unit
             else -> throw TrainQueryException(TrainErrorKind.INVALID_DATE, date)
         }
+        return SearchQuery(from, to, date)
+    }
 
-        cached(from.code, to.code, date)?.let { return it }
+    private fun resolveStation(index: StationIndex, query: String): Station = when (val resolution = index.resolve(query)) {
+        is StationResolution.Found -> resolution.station
+        is StationResolution.Candidates -> throw TrainQueryException(
+            kind = TrainErrorKind.AMBIGUOUS_STATION,
+            detail = resolution.query,
+            candidates = resolution.stations.map { it.name },
+        )
+        StationResolution.NotFound -> throw TrainQueryException(TrainErrorKind.UNKNOWN_STATION, query)
+    }
 
+    private suspend fun request(query: SearchQuery): TrainSearchResult {
         val raw = RailRawLog()
         val headers = baseHeaders()
         runCatching { fetch(RailEndpoints.INIT_URL, headers, null) }
@@ -367,7 +529,7 @@ internal class TrainService(private val host: PluginHost) {
 
         val requestHeaders = headers + cookieHeaders
         var response = fetch(
-            RailEndpoints.queryGUrl(date, from.code, to.code),
+            RailEndpoints.queryGUrl(query.date, query.from.code, query.to.code),
             requestHeaders,
             raw,
         )
@@ -375,7 +537,7 @@ internal class TrainService(private val host: PluginHost) {
         var payload: ParsedTicketPayload
         if (primaryPayload == null || (primaryPayload.status == false && RailEndpoints.nextUrl(primaryPayload.cUrl) == null)) {
             response = fetch(
-                RailEndpoints.queryUrl(date, from.code, to.code),
+                RailEndpoints.queryUrl(query.date, query.from.code, query.to.code),
                 requestHeaders,
                 raw,
             )
@@ -383,7 +545,7 @@ internal class TrainService(private val host: PluginHost) {
         } else {
             payload = primaryPayload
         }
-        var currentUrl = RailEndpoints.queryGUrl(date, from.code, to.code)
+        var currentUrl = RailEndpoints.queryGUrl(query.date, query.from.code, query.to.code)
         var followed = 0
         while (payload.rows.isEmpty() && followed < MAX_FOLLOWED_REDIRECTS) {
             val next = RailEndpoints.nextUrl(payload.cUrl) ?: break
@@ -409,7 +571,7 @@ internal class TrainService(private val host: PluginHost) {
         }
 
         val stationName: (String) -> String = { code ->
-            payload.stationNames[code]?.takeIf { it.isNotBlank() } ?: index.nameOf(code)
+            payload.stationNames[code]?.takeIf { it.isNotBlank() } ?: StationIndex.load(host).nameOf(code)
         }
         val trains = parseTrainRows(payload.rows, stationName)
         if (payload.rows.isNotEmpty() && trains.isEmpty()) {
@@ -419,87 +581,18 @@ internal class TrainService(private val host: PluginHost) {
                 raw = raw.text(),
             )
         }
+        RailTrainCache.remember(query.from.code, query.to.code, query.date, trains)
         val details = TrainSearchDetails(
-            from = from.name,
-            to = to.name,
-            fromCode = from.code,
-            toCode = to.code,
-            date = date,
+            from = query.from.name,
+            to = query.to.name,
+            fromCode = query.from.code,
+            toCode = query.to.code,
+            date = query.date,
             trains = trains,
             fetchedAt = System.currentTimeMillis(),
-            bookingUrl = RailEndpoints.bookingUrl(from.name, from.code, to.name, to.code, date),
+            bookingUrl = RailEndpoints.bookingUrl(query.from.name, query.from.code, query.to.name, query.to.code, query.date),
         )
-        val result = TrainSearchResult(details, raw.text())
-        cache(from.code, to.code, date, result)
-        return result
-    }
-
-    suspend fun price(
-        fromQuery: String,
-        toQuery: String,
-        dateQuery: String,
-        trainCode: String,
-    ): TrainPriceResult {
-        val search = search(fromQuery, toQuery, dateQuery)
-        val details = search.details
-        val code = trainCode.trim().uppercase(Locale.ROOT)
-        if (code.isEmpty()) {
-            throw TrainQueryException(TrainErrorKind.TRAIN_NOT_FOUND, trainCode, raw = search.raw)
-        }
-        val train = pickTrainForPrice(details.trains, code, details.toCode)
-            ?: throw TrainQueryException(TrainErrorKind.TRAIN_NOT_FOUND, trainCode, raw = search.raw)
-        if (train.trainNo.isBlank() || train.fromStationNo.isBlank() || train.toStationNo.isBlank() || train.seatTypes.isBlank()) {
-            throw TrainPriceUnavailableException("车次缺少票价参数", search.raw)
-        }
-        val raw = RailRawLog()
-        val response = try {
-            fetch(
-                RailEndpoints.priceUrl(
-                    trainNo = train.trainNo,
-                    fromStationNo = train.fromStationNo,
-                    toStationNo = train.toStationNo,
-                    seatTypes = train.seatTypes,
-                    date = details.date,
-                ),
-                baseHeaders(),
-                raw,
-            )
-        } catch (error: TrainQueryException) {
-            throw TrainPriceUnavailableException(
-                error.detail,
-                joinRawLogs(search.raw, raw.text()),
-            )
-        }
-        val combinedRaw = joinRawLogs(search.raw, raw.text())
-        if (response.status !in 200..299) {
-            throw TrainPriceUnavailableException("HTTP ${response.status}", combinedRaw)
-        }
-        val prices = TicketPricePayload.parse(response.body)
-            ?: throw TrainPriceUnavailableException("", combinedRaw)
-        return TrainPriceResult(
-            details = TrainPriceDetails(
-                code = train.code,
-                from = details.from,
-                to = details.to,
-                fromCode = details.fromCode,
-                toCode = details.toCode,
-                date = details.date,
-                prices = prices,
-                fetchedAt = System.currentTimeMillis(),
-                bookingUrl = details.bookingUrl,
-            ),
-            raw = combinedRaw,
-        )
-    }
-
-    private fun resolveStation(index: StationIndex, query: String): Station = when (val resolution = index.resolve(query)) {
-        is StationResolution.Found -> resolution.station
-        is StationResolution.Candidates -> throw TrainQueryException(
-            kind = TrainErrorKind.AMBIGUOUS_STATION,
-            detail = resolution.query,
-            candidates = resolution.stations.map { it.name },
-        )
-        StationResolution.NotFound -> throw TrainQueryException(TrainErrorKind.UNKNOWN_STATION, query)
+        return TrainSearchResult(details, raw.text())
     }
 
     private fun parseResponse(response: HttpResponse, raw: RailRawLog): ParsedTicketPayload = TicketPayload.parse(response.body)
@@ -594,25 +687,6 @@ internal class TrainService(private val host: PluginHost) {
 
     private data class HttpResponse(val status: Int, val body: String)
 
-    private data class CachedDetails(val result: TrainSearchResult, val at: Long)
-
-    private fun cached(fromCode: String, toCode: String, date: String): TrainSearchResult? {
-        val key = cacheKey(fromCode, toCode, date)
-        val entry = cache[key] ?: return null
-        if (System.currentTimeMillis() - entry.at > CACHE_TTL_MS) {
-            cache.remove(key)
-            return null
-        }
-        return entry.result
-    }
-
-    private fun cache(fromCode: String, toCode: String, date: String, result: TrainSearchResult) {
-        if (cache.size > CACHE_CAPACITY) cache.clear()
-        cache[cacheKey(fromCode, toCode, date)] = CachedDetails(result, System.currentTimeMillis())
-    }
-
-    private fun cacheKey(fromCode: String, toCode: String, date: String): String = "$fromCode|$toCode|$date"
-
     private fun baseHeaders(): Map<String, String> = mapOf(
         "User-Agent" to USER_AGENT,
         "Referer" to RailEndpoints.INIT_URL,
@@ -634,13 +708,6 @@ internal class TrainService(private val host: PluginHost) {
 
         private const val MAX_FOLLOWED_REDIRECTS = 2
 
-
-        private const val CACHE_TTL_MS = 60_000L
-
-        private const val CACHE_CAPACITY = 32
-
         private val COOKIE_PATTERN = Regex("([A-Za-z0-9_]+)=([^;,\\s]*)")
-
-        private val cache = ConcurrentHashMap<String, CachedDetails>()
     }
 }

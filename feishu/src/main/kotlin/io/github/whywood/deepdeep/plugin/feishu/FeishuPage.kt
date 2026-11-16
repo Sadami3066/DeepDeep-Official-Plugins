@@ -87,8 +87,8 @@ internal fun FeishuPage(host: PluginHost, runtime: FeishuRuntime) {
             )
             DdText(
                 text = host.t(
-                    "连接后可以在对话里读写消息、日历和云文档。",
-                    "Connect to read and write Feishu messages, calendar and docs in chat.",
+                    "连接后可以在对话里读写消息、日历、云文档、邮箱和任务。",
+                    "Connect to read and write Feishu messages, calendar, docs, mail and tasks in chat.",
                 ),
                 style = DdType.bodySmall,
                 color = colors.inkSecondary,
@@ -190,8 +190,8 @@ internal fun FeishuPage(host: PluginHost, runtime: FeishuRuntime) {
 
         DdText(
             text = host.t(
-                "连接后在对话里告诉我要做什么，例如发消息、查日程或读写文档。",
-                "Once connected, tell me what to do in chat, such as sending a message, checking your calendar or editing docs.",
+                "连接后在对话里告诉我要做什么，例如发消息、查日程、看邮件或读写文档。",
+                "Once connected, tell me what to do in chat, such as sending a message, checking your calendar, reading mail or editing docs.",
             ),
             style = DdType.micro,
             color = colors.inkTertiary,

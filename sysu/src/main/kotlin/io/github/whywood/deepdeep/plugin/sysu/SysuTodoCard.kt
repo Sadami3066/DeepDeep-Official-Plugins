@@ -34,8 +34,8 @@ import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
 import java.time.format.DateTimeFormatter
 
-private val TODO_DUE_TIME = DateTimeFormatter.ofPattern("MM-dd HH:mm")
-private val TODO_DUE_DATE = DateTimeFormatter.ofPattern("MM-dd")
+private val TODO_DUE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+private val TODO_DUE_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 private const val TODO_PREVIEW = 4
 
 @Composable

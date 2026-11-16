@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "message_id": "om_sent_1",
+    "chat_id": "oc_1",
+    "create_time": "1763000000"
+  }
+}

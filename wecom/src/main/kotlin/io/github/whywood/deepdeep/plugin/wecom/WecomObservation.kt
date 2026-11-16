@@ -3,221 +3,139 @@ package io.github.whywood.deepdeep.plugin.wecom
 import io.github.whywood.deepdeep.plugin.cli.CliText
 
 internal object WecomObservation {
+    fun summary(command: WecomCommand, parsed: WecomParsed): String =
+        buildString { header(command, parsed) }
+            .lineSequence()
+            .firstOrNull()
+            .orEmpty()
+            .take(120)
+
     fun build(command: WecomCommand, parsed: WecomParsed): String = buildString {
         when (parsed) {
-            is WecomParsed.Groups -> groups(command, parsed)
-            is WecomParsed.Messages -> messages(command, parsed)
-            is WecomParsed.Docs -> docs(command, parsed)
-            is WecomParsed.DocContent -> docContent(command, parsed)
-            is WecomParsed.Schedules -> schedules(command, parsed)
-            is WecomParsed.Todos -> todos(command, parsed)
-            is WecomParsed.Contacts -> contacts(command, parsed)
+            is WecomParsed.Groups -> groups(parsed)
+            is WecomParsed.Messages -> messages(parsed)
+            is WecomParsed.Docs -> docs(parsed)
+            is WecomParsed.DocContent -> docContent(parsed)
+            is WecomParsed.Schedules -> schedules(parsed)
+            is WecomParsed.Todos -> todos(parsed)
+            is WecomParsed.Contacts -> contacts(parsed)
         }
         parsed.securityNotice?.let { securityNotice(it) }
+    }.trim()
+
+    private fun StringBuilder.header(command: WecomCommand, parsed: WecomParsed) {
+        when (parsed) {
+            is WecomParsed.Groups -> {
+                append("企业微信群聊会话：共 ").append(parsed.count).append(" 个")
+                command.contextLabel?.let { append("，时间范围 ").append(it) }
+            }
+            is WecomParsed.Messages -> {
+                append("企业微信会话消息：共 ").append(parsed.count).append(" 条")
+                command.contextLabel?.let { append("，").append(it) }
+            }
+            is WecomParsed.Docs -> {
+                append("企业微信文档搜索：共 ").append(parsed.count).append(" 篇")
+                command.contextLabel?.let { append("，关键词 ").append(it) }
+            }
+            is WecomParsed.DocContent -> {
+                append("企业微信文档内容")
+                parsed.name?.let { append("：").append(it) }
+                parsed.version?.let { append(" | 版本 ").append(it) }
+                command.docId?.let { append(" | docid=").append(it) }
+                parsed.url?.let { append(" | ").append(it) }
+                parsed.errcode?.let { append(" | errcode=").append(it) }
+                parsed.errmsg?.let { append(" | errmsg=").append(it) }
+            }
+            is WecomParsed.Schedules -> {
+                append("企业微信日程：共 ").append(parsed.count).append(" 个")
+                command.contextLabel?.let { append("，时间范围 ").append(it) }
+            }
+            is WecomParsed.Todos -> {
+                append("企业微信待办：共 ").append(parsed.count).append(" 个")
+                command.contextLabel?.let { append("，").append(it) }
+            }
+            is WecomParsed.Contacts -> {
+                append("企业微信通讯录：共 ").append(parsed.count).append(" 位成员")
+                command.contextLabel?.let { append("，关键词 ").append(it) }
+            }
+        }
     }
 
-    private fun StringBuilder.groups(command: WecomCommand, parsed: WecomParsed.Groups) {
-        append("企业微信群聊会话：共 ").append(parsed.count).append(" 个")
-        command.contextLabel?.let { append("，时间范围 ").append(it) }
-        appendLine()
+    private fun StringBuilder.groups(parsed: WecomParsed.Groups) {
         if (parsed.items.isEmpty()) {
-            append("没有符合条件的群聊会话。").appendLine()
+            appendLine("没有符合条件的群聊会话，这是正常的空结果。")
         } else {
-            parsed.items.forEachIndexed { index, item ->
-                append(index + 1).append(". ")
-                append(item.name?.takeIf { it.isNotBlank() } ?: "未命名会话")
-                item.chatId?.let { append(" | chat_id=").append(it) }
-                item.lastMessageTime?.let { append(" | 最近消息 ").append(it) }
-                item.messageCount?.let { append(" | ").append(it).append(" 条消息") }
-                appendLine()
-            }
+            appendLine("需要查看某个会话的消息时，用 wecom-cli chat messages list --chat-id <chat_id> 继续。")
         }
         appendPagination(parsed.hasMore, parsed.nextCursor)
     }
 
-    private fun StringBuilder.messages(command: WecomCommand, parsed: WecomParsed.Messages) {
-        append("企业微信会话消息：共 ").append(parsed.count).append(" 条")
-        command.contextLabel?.let { append("，").append(it) }
-        appendLine()
+    private fun StringBuilder.messages(parsed: WecomParsed.Messages) {
         if (parsed.items.isEmpty()) {
-            append("该时间范围内没有消息。").appendLine()
+            appendLine("该时间范围内没有消息，这是正常的空结果；chat 只支持最近 7 天，可调整 --begin-time/--end-time。")
         } else {
-            parsed.items.forEachIndexed { index, item ->
-                append(index + 1).append(". ")
-                item.sendTime?.let { append(it).append(" ") }
-                val sender = item.senderName?.takeIf { it.isNotBlank() }
-                    ?: item.senderId?.takeIf { it.isNotBlank() }
-                    ?: "未知成员"
-                append(sender)
-                item.senderId?.takeIf { it.isNotBlank() && sender != it }?.let { append("（").append(it).append("）") }
-                append("：")
-                val body = item.summary?.takeIf { it.isNotBlank() }
-                if (body == null) {
-                    appendLine(messageTypeLabel(item.type))
-                } else {
-                    appendLine()
-                    body.lineSequence().forEach { line -> append("   ").append(line).appendLine() }
-                }
-                if (item.mediaIds.isNotEmpty()) {
-                    append("   media_id=").append(item.mediaIds.joinToString("、")).appendLine()
-                }
-            }
+            appendLine("需要更早的消息时，调整时间范围再查。")
         }
         appendPagination(parsed.hasMore, parsed.nextCursor)
     }
 
-    private fun StringBuilder.docs(command: WecomCommand, parsed: WecomParsed.Docs) {
-        append("企业微信文档搜索：共 ").append(parsed.count).append(" 篇")
-        command.contextLabel?.let { append("，关键词 ").append(it) }
-        appendLine()
+    private fun StringBuilder.docs(parsed: WecomParsed.Docs) {
         if (parsed.items.isEmpty()) {
-            append("没有找到符合条件的文档。").appendLine()
+            appendLine("没有找到符合条件的文档，这是正常的空结果；可以换关键词再试。")
         } else {
-            parsed.items.forEachIndexed { index, item ->
-                append(index + 1).append(". ")
-                append(item.name?.takeIf { it.isNotBlank() } ?: "未命名文档")
-                item.type?.let { append("（").append(docTypeLabel(it)).append("）") }
-                item.docId?.let { append(" | docid=").append(it) }
-                item.creatorName?.let { append(" | 创建人 ").append(it) }
-                item.creatorUserId?.let { append(" | 创建人 ID ").append(it) }
-                item.createTime?.let { append(" | 创建于 ").append(it) }
-                item.openTime?.let { append(" | 最近打开 ").append(it) }
-                item.modifyTime?.let { append(" | 修改于 ").append(it) }
-                if (item.textHighlight.isNotEmpty()) {
-                    append(" | 命中 ").append(item.textHighlight.joinToString(" "))
-                }
-                item.url?.let { append(" | ").append(it) }
-                appendLine()
-            }
+            appendLine("需要全文时用 wecom-cli doc contents get --docid <docid> 读取。")
         }
         appendPagination(parsed.hasMore, parsed.nextCursor)
     }
 
-    private fun StringBuilder.docContent(command: WecomCommand, parsed: WecomParsed.DocContent) {
-        append("企业微信文档内容")
-        parsed.name?.let { append("：").append(it) }
-        parsed.version?.let { append(" | 版本 ").append(it) }
-        command.docId?.let { append(" | docid=").append(it) }
-        parsed.url?.let { append(" | ").append(it) }
-        parsed.errcode?.let { append(" | errcode=").append(it) }
-        parsed.errmsg?.let { append(" | errmsg=").append(it) }
-        appendLine()
+    private fun StringBuilder.docContent(parsed: WecomParsed.DocContent) {
         val content = parsed.content.trim()
         if (content.isEmpty()) {
             val path = parsed.filePath?.takeIf { it.isNotBlank() }
             if (path != null) {
-                append("正文已写入 ").append(path)
+                append("正文已写入 ").append(path).append("，可在 bash 中 cat ").append(path).append(" 查看。")
                 appendLine()
-                append("未能读取文件内容，可在 bash 中直接用 cat ").append(path).append(" 查看。").appendLine()
             } else {
-                append("文档内容为空。").appendLine()
+                appendLine("文档内容为空，这是正常的空结果。")
             }
         } else {
-            appendLine()
-            append(content).appendLine()
+            appendLine("正文已全部返回；回答时概括要点，不要粘贴原始 JSON。")
             parsed.filePath?.takeIf { it.isNotBlank() }?.let {
-                append("正文同时写入 ").append(it).appendLine()
+                append("正文同时写入 ").append(it).append("，可直接读取该文件。").appendLine()
             }
         }
     }
 
-    private fun StringBuilder.schedules(command: WecomCommand, parsed: WecomParsed.Schedules) {
-        append("企业微信日程：共 ").append(parsed.count).append(" 个")
-        command.contextLabel?.let { append("，时间范围 ").append(it) }
-        appendLine()
+    private fun StringBuilder.schedules(parsed: WecomParsed.Schedules) {
         if (parsed.items.isEmpty()) {
-            append("该时间范围内没有日程。").appendLine()
+            appendLine("该时间范围内没有日程，这是正常的空结果。")
         } else {
-            parsed.items.forEachIndexed { index, item ->
-                append(index + 1).append(". ")
-                append(item.subject?.takeIf { it.isNotBlank() } ?: "未命名日程")
-                if (item.allDay) append("（全天）")
-                item.beginTime?.let { begin ->
-                    append(" | ").append(begin)
-                    item.endTime?.takeIf { it.isNotBlank() }?.let { append(" 至 ").append(it) }
-                }
-                item.location?.takeIf { it.isNotBlank() }?.let { append(" | 地点 ").append(it) }
-                item.meetingRoom?.takeIf { it.isNotBlank() }?.let { append(" | 会议室 ").append(it) }
-                if (item.attendees.isNotEmpty()) {
-                    append(" | 参与人 ").append(item.attendees.joinToString("、"))
-                }
-                item.creatorName?.takeIf { it.isNotBlank() }?.let { append(" | 创建人 ").append(it) }
-                item.calendarName?.takeIf { it.isNotBlank() }?.let { append(" | 日历 ").append(it) }
-                item.scheduleId?.let { append(" | schedule_id=").append(it) }
-                appendLine()
-            }
+            appendLine("需要更早或更晚的日程时，调整时间范围再查。")
         }
         appendPagination(parsed.hasMore, parsed.nextCursor)
     }
 
-    private fun StringBuilder.todos(command: WecomCommand, parsed: WecomParsed.Todos) {
-        append("企业微信待办：共 ").append(parsed.count).append(" 个")
-        command.contextLabel?.let { append("，").append(it) }
-        appendLine()
+    private fun StringBuilder.todos(parsed: WecomParsed.Todos) {
         if (parsed.items.isEmpty()) {
-            append("没有待处理的事项。").appendLine()
+            appendLine("没有待处理的事项，这是正常的空结果。")
         } else {
-            parsed.items.forEachIndexed { index, item ->
-                append(index + 1).append(". ")
-                append(item.title?.takeIf { it.isNotBlank() } ?: "未命名待办")
-                append(" [").append(todoStatusLabel(item.status)).append("]")
-                item.todoId?.let { append(" | todo_id=").append(it) }
-                item.userStatus?.takeIf { it.isNotBlank() }?.let {
-                    append(" | 我的状态 ").append(todoUserStatusLabel(it))
-                }
-                item.deadline?.takeIf { it.isNotBlank() }?.let {
-                    append(" | 截止 ").append(it)
-                    item.deadlineType?.takeIf { type -> type.isNotBlank() }?.let { type ->
-                        append("（").append(deadlineTypeLabel(type)).append("）")
-                    }
-                }
-                item.creator?.takeIf { it.isNotBlank() }?.let { append(" | 创建人 ").append(it) }
-                if (item.followers.isNotEmpty()) {
-                    append(" | 参与人 ").append(
-                        item.followers.joinToString("、") { follower ->
-                            follower.status?.takeIf { it.isNotBlank() }?.let { status ->
-                                "${follower.name}（${todoUserStatusLabel(status)}）"
-                            } ?: follower.name
-                        },
-                    )
-                }
-                item.updateTime?.takeIf { it.isNotBlank() }?.let { append(" | 更新于 ").append(it) }
-                appendLine()
-                item.description?.takeIf { it.isNotBlank() }?.let { description ->
-                    description.lineSequence().forEach { line -> append("   描述：").append(line).appendLine() }
-                }
-            }
+            appendLine("需要已完成的事项时，调整状态过滤再查。")
         }
         appendPagination(parsed.hasMore, parsed.nextCursor)
     }
 
-    private fun StringBuilder.contacts(command: WecomCommand, parsed: WecomParsed.Contacts) {
-        append("企业微信通讯录：共 ").append(parsed.count).append(" 位成员")
-        command.contextLabel?.let { append("，关键词 ").append(it) }
-        appendLine()
+    private fun StringBuilder.contacts(parsed: WecomParsed.Contacts) {
         if (parsed.items.isEmpty()) {
-            append("没有找到符合条件的成员。").appendLine()
+            appendLine("没有找到符合条件的成员，这是正常的空结果；可以换关键词再试。")
         } else {
-            parsed.items.forEachIndexed { index, item ->
-                append(index + 1).append(". ")
-                append(item.name?.takeIf { it.isNotBlank() } ?: "未知成员")
-                item.userId?.let { append("（").append(it).append("）") }
-                if (item.departments.isNotEmpty()) append(" | ").append(item.departments.joinToString("/"))
-                item.position?.takeIf { it.isNotBlank() }?.let { append(" | ").append(it) }
-                item.email?.takeIf { it.isNotBlank() }?.let { append(" | ").append(it) }
-                item.alias?.takeIf { it.isNotBlank() }?.let { append(" | 英文名 ").append(it) }
-                if (item.matchedKeywords.isNotEmpty()) {
-                    append(" | 命中关键词 ").append(item.matchedKeywords.joinToString("、"))
-                }
-                appendLine()
-            }
+            appendLine("需要更多成员时按 cursor 继续拉取。")
         }
         parsed.hint?.takeIf { it.isNotBlank() }?.let { append("提示：").append(it).appendLine() }
         appendPagination(parsed.hasMore, parsed.nextCursor)
     }
 
     private fun StringBuilder.appendPagination(hasMore: Boolean, nextCursor: String?) {
-        append(paginationNote(hasMore, nextCursor))
+        append("${paginationNote(hasMore, nextCursor)}\n")
     }
 
     private fun StringBuilder.securityNotice(notice: String) {
@@ -232,16 +150,6 @@ internal object WecomObservation {
         hasMore && !nextCursor.isNullOrBlank() -> "还有更多数据，可用 cursor=$nextCursor 继续拉取。"
         hasMore -> "还有更多数据，可调整时间范围或分页参数继续拉取。"
         else -> "已返回全部结果。"
-    }
-
-    private fun messageTypeLabel(type: String?): String = when (type) {
-        "text" -> "[文本]"
-        "image" -> "[图片]"
-        "file" -> "[文件]"
-        "voice" -> "[语音]"
-        "video" -> "[视频]"
-        "mixed" -> "[图文]"
-        else -> "[消息]"
     }
 
     internal fun todoStatusLabel(status: String?): String = when (status) {

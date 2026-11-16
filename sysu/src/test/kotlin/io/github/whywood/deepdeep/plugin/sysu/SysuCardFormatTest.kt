@@ -1,6 +1,7 @@
 package io.github.whywood.deepdeep.plugin.sysu
 
 import io.github.whywood.deepdeep.plugin.cli.CliJsonEnvelope
+import io.github.whywood.deepdeep.plugin.cli.card.CliCardItem
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -40,6 +41,19 @@ class SysuCardFormatTest {
         assertEquals(LocalDateTime.of(2026, 12, 11, 23, 0), entry.due)
         assertTrue(entry.hasDueTime)
         assertEquals(26L, entry.daysUntil)
+    }
+
+    @Test
+    fun todoPlanConvertsRawIsoDeadlineToShanghaiTime() {
+        val model = CliCardModel(
+            kind = SysuCardKind.Todo.wire,
+            title = "作业与待办",
+            items = listOf(CliCardItem(title = "作业", meta = "2026-12-11T15:00:00.000Z")),
+        )
+        val plan = SysuCardFormat.todoPlan(model, today = LocalDate.of(2026, 11, 15))
+        assertNotNull(plan)
+        assertEquals(LocalDateTime.of(2026, 12, 11, 23, 0), plan!!.single().due)
+        assertTrue(plan.single().hasDueTime)
     }
 
     @Test
@@ -156,5 +170,25 @@ class SysuCardFormatTest {
         assertNull(SysuCardFormat.netpayPlan(
             SysuObservation.render(SysuCommandKind.Netpay, payload("netpay_no_services.json"), ChineseStrings)!!.card!!,
         ))
+    }
+
+    @Test
+    fun netpayPlanFallsBackToEnglishExpiry() {
+        val model = CliCardModel(
+            kind = SysuCardKind.Netpay.wire,
+            title = "校园网服务",
+            context = "张三",
+            items = listOf(
+                io.github.whywood.deepdeep.plugin.cli.card.CliCardItem(
+                    title = "校园网",
+                    subtitle = "在用 · 未定",
+                    meta = "到期 Dec 7, 2026 · 剩余 21 天",
+                ),
+            ),
+        )
+        val plan = SysuCardFormat.netpayPlan(model, today = LocalDate.of(2026, 11, 15))
+        assertNotNull(plan)
+        assertEquals(LocalDate.of(2026, 12, 7), plan!!.earliestExpiry)
+        assertEquals(21L, plan.earliestDaysLeft)
     }
 }

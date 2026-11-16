@@ -23,38 +23,46 @@ internal fun todoTool(
 ): PluginTool = pluginTool(
     name = "mi_cloud_todo",
     label = "mi_cloud_todo",
-    description = "List, create, update or delete to-do items in Xiaomi Cloud. Reads and writes the user's own to-do list; writes are only allowed when the to-do write switch is on.",
+    description = "List, create, update or delete to-do items in Xiaomi Cloud. The list call returns every readable to-do at once (incremental sync API, no pagination); duplicate rows are merged with their ids kept in duplicateIds. Writes are only allowed when the to-do write switch is on.",
     parameters = todoParameters,
 ) { call ->
     call.signal?.throwIfCancelled()
-    miCloudToolResult {
+    miCloudToolResult(MiCloudFeature.TODOS, text) {
         val args = call.args
         when (val action = args.argString("action") ?: "list") {
             "list" -> {
                 val limit = limitArg(args)
-                val response = client.getJson(
-                    todoRecordsPath(now(), limit, args.argString("cursor")),
-                )
+                val response = client.getJson(todoRecordsPath(now(), limit))
                 val payload = response.json.payloadObject()
-                val items = payload.arrayOrNull("records").orEmpty()
+                val records = payload.arrayOrNull("records").orEmpty()
                     .mapNotNull { it as? JsonObject }
                     .map(::todoItem)
-                val cursor = cursorValue(payload.stringOrNull("syncToken"))
-                val hasMore = payload.boolOrNull("hasMore") ?: false
+                val grouped = records.groupBy { todoContentKey(it) to it.done }
+                val items = grouped.values.map { group ->
+                    group.first().copy(
+                        duplicateIds = group.drop(1).mapNotNull { it.id.takeIf(String::isNotBlank) },
+                    )
+                }
+                val duplicateCount = records.size - items.size
                 val card = MiCloudTodoCardData(
                     action = TODO_ACTION_LIST,
-                    total = items.size,
-                    doneCount = items.count { it.done },
-                    cursor = cursor,
-                    hasMore = hasMore,
+                    total = records.size,
+                    doneCount = records.count { it.done },
+                    duplicateCount = duplicateCount,
                     rows = items,
                 )
                 textResult(
-                    todoListObservation(items, cursor, hasMore, text),
-                    details = cardResultDetails(
-                        card = card.toJson(),
+                    text = "",
+                    details = toolResultDetails(
                         raw = response.body,
-                        title = text.fmt("待办清单（%d 条）", "To-do list (%d)", items.size),
+                        guidance = listOf(
+                            todoListGuidance(records.size, items.size, duplicateCount, limit, text),
+                            rawNoiseNote(text),
+                        ).filter(String::isNotBlank).joinToString(" "),
+                        card = MiCloudCard(
+                            title = text("待办清单", "To-do list"),
+                            payload = card.toJson(),
+                        ),
                     ),
                 )
             }
@@ -79,13 +87,16 @@ internal fun todoTool(
                     content = content,
                     remindTime = remindAt ?: 0L,
                     modifyTime = timestamp,
+                    response = response,
                 )
                 textResult(
-                    todoWriteObservation(TODO_ACTION_CREATE, todoId, content, false, remindAt ?: 0L, timestamp, text),
-                    details = cardResultDetails(
-                        card = card.toJson(),
+                    text = "",
+                    details = toolResultDetails(
                         raw = responseBody,
-                        title = text("已新建待办", "To-do created"),
+                        card = MiCloudCard(
+                            title = text("已新建待办", "To-do created"),
+                            payload = card.toJson(),
+                        ),
                     ),
                 )
             }
@@ -106,7 +117,7 @@ internal fun todoTool(
                 val timestamp = now()
                 val updated = updatedTodoRecord(existing, content, done, remindAt, timestamp)
                 val responseBody = writer.post(todoUpdatePath(id), todoUpdateForm(eTag, updated))
-                parseResponseObject(responseBody)
+                val response = parseResponseObject(responseBody)
                 val updatedContent = content ?: existingItem.content
                 val updatedDone = done ?: existingItem.done
                 val updatedRemind = remindAt ?: existingItem.remindTime
@@ -118,21 +129,16 @@ internal fun todoTool(
                     done = updatedDone,
                     remindTime = updatedRemind,
                     modifyTime = timestamp,
+                    response = response,
                 )
                 textResult(
-                    todoWriteObservation(
-                        TODO_ACTION_UPDATE,
-                        id,
-                        updatedContent,
-                        updatedDone,
-                        updatedRemind,
-                        timestamp,
-                        text,
-                    ),
-                    details = cardResultDetails(
-                        card = card.toJson(),
+                    text = "",
+                    details = toolResultDetails(
                         raw = responseBody,
-                        title = text("已修改待办", "To-do updated"),
+                        card = MiCloudCard(
+                            title = text("已修改待办", "To-do updated"),
+                            payload = card.toJson(),
+                        ),
                     ),
                 )
             }
@@ -145,28 +151,23 @@ internal fun todoTool(
                 val eTag = etagOf(existing)
                     ?: throw IllegalArgumentException("To-do has no eTag; cannot delete")
                 val responseBody = writer.post(todoDeletePath(id), todoDeleteForm(eTag))
-                parseResponseObject(responseBody)
+                val response = parseResponseObject(responseBody)
                 val card = MiCloudTodoCardData(
                     action = TODO_ACTION_DELETE,
                     total = 1,
                     todoId = id,
                     content = existingItem.content,
                     done = existingItem.done,
+                    response = response,
                 )
                 textResult(
-                    todoWriteObservation(
-                        TODO_ACTION_DELETE,
-                        id,
-                        existingItem.content,
-                        existingItem.done,
-                        0L,
-                        0L,
-                        text,
-                    ),
-                    details = cardResultDetails(
-                        card = card.toJson(),
+                    text = "",
+                    details = toolResultDetails(
                         raw = responseBody,
-                        title = text("已删除待办", "To-do deleted"),
+                        card = MiCloudCard(
+                            title = text("已删除待办", "To-do deleted"),
+                            payload = card.toJson(),
+                        ),
                     ),
                 )
             }
@@ -185,10 +186,8 @@ private fun etagOf(record: JsonObject): String? =
     (record["eTag"] as? JsonPrimitive)?.contentOrNull
         ?: (record["etag"] as? JsonPrimitive)?.contentOrNull
 
-internal fun todoRecordsPath(ts: Long, limit: Int, cursor: String?): String {
-    val base = "/todo/v1/user/records?ts=$ts&limit=$limit"
-    return if (cursor == null) base else "$base&syncToken=${encodeComponent(cursor)}"
-}
+internal fun todoRecordsPath(ts: Long, limit: Int): String =
+    "/todo/v1/user/records?ts=$ts&limit=$limit"
 
 internal fun todoRecordPath(id: String): String = "/todo/v1/user/records/${encodeComponent(id)}"
 
@@ -285,6 +284,5 @@ private val todoParameters: JsonObject = toolParams(required = listOf("action"))
     put("content", propString("To-do text, required for create"))
     put("done", propBool("Mark the item finished or unfinished"))
     put("remindAt", propLong("Reminder time in epoch milliseconds"))
-    put("cursor", propString("Pagination cursor returned as next by a previous list call"))
     put("limit", propInt("Number of items to return", minimum = 1, maximum = MAX_LIST_LIMIT, default = DEFAULT_LIST_LIMIT))
 }

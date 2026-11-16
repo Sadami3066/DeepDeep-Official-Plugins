@@ -39,8 +39,8 @@ kotlin {
 }
 
 dependencies {
-    compileOnly("io.github.sadami3066.deepdeep:plugin-api:1.2.0")
-    compileOnly("io.github.sadami3066.deepdeep:design:0.10.0")
+    compileOnly("io.github.sadami3066.deepdeep:plugin-api:1.3.1")
+    compileOnly("io.github.sadami3066.deepdeep:design:0.11.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     compileOnly("androidx.activity:activity:1.12.4")
@@ -55,7 +55,7 @@ dependencies {
     testImplementation("androidx.compose.ui:ui")
     testImplementation("androidx.compose.foundation:foundation")
     testImplementation("androidx.compose.material3:material3")
-    testImplementation("io.github.sadami3066.deepdeep:plugin-api:1.2.0")
+    testImplementation("io.github.sadami3066.deepdeep:plugin-api:1.3.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")

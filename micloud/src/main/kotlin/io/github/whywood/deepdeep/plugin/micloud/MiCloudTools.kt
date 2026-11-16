@@ -63,7 +63,11 @@ private fun capabilityGated(
     promptGuidelines = tool.promptGuidelines,
 ) { call ->
     if (!settings.capabilities.value.readEnabled(feature)) {
-        textResult(capabilityOffText(feature, text), isError = true)
+        textResult(
+            text = "",
+            details = toolResultDetails(guidance = capabilityOffText(feature, text)),
+            isError = true,
+        )
     } else {
         tool.execute(call)
     }
@@ -76,7 +80,7 @@ private fun accountTool(client: MiCloudReadApi, text: MiCloudText): PluginTool =
     parameters = accountParameters,
 ) { call ->
     call.signal?.throwIfCancelled()
-    miCloudToolResult {
+    miCloudToolResult(MiCloudFeature.ACCOUNT, text) {
         val action = call.args.argString("action") ?: "profile"
         when (action) {
             "profile" -> {
@@ -89,13 +93,17 @@ private fun accountTool(client: MiCloudReadApi, text: MiCloudText): PluginTool =
                     userId = profile?.userId.orEmpty(),
                     email = data.stringOrNull("email") ?: data.stringOrNull("mail").orEmpty(),
                     phone = data.stringOrNull("phone") ?: data.stringOrNull("mobile").orEmpty(),
+                    data = data,
                 )
                 textResult(
-                    accountProfileObservation(profile, data, text),
-                    details = cardResultDetails(
-                        card = card.toJson(),
+                    text = "",
+                    details = toolResultDetails(
                         raw = response.body,
-                        title = text("小米账号", "Xiaomi account"),
+                        guidance = accountGuidance(profile != null, text),
+                        card = MiCloudCard(
+                            title = text("小米账号", "Xiaomi account"),
+                            payload = card.toJson(),
+                        ),
                     ),
                 )
             }
@@ -103,13 +111,21 @@ private fun accountTool(client: MiCloudReadApi, text: MiCloudText): PluginTool =
             "quota" -> {
                 val response = client.getJson("/status/vip/quota/summary?ts=${now()}")
                 val entries = parseQuotaEntries(response.json)
-                val card = MiCloudAccountCardData(mode = ACCOUNT_MODE_QUOTA, entries = entries)
+                val data = miCloudResponseData(response.json)
+                val card = MiCloudAccountCardData(
+                    mode = ACCOUNT_MODE_QUOTA,
+                    entries = entries,
+                    data = data,
+                )
                 textResult(
-                    quotaObservation(entries, text),
-                    details = cardResultDetails(
-                        card = card.toJson(),
+                    text = "",
+                    details = toolResultDetails(
                         raw = response.body,
-                        title = text.fmt("小米云空间（%d 项）", "Xiaomi Cloud storage (%d items)", entries.size),
+                        guidance = quotaGuidance(entries.size, text),
+                        card = MiCloudCard(
+                            title = text("小米云空间", "Xiaomi Cloud storage"),
+                            payload = card.toJson(),
+                        ),
                     ),
                 )
             }

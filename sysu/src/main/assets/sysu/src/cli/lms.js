@@ -1,10 +1,6 @@
 // sysu lms —— 在线教学平台（Moodle）
 const lms = require('../lms');
-const sso = require('../sso');
-
-const { red, green, dim, bold, width, pad, cut } = require('../style');
 const { downloadDir } = require('../paths');
-const C = { red, green, dim, bold };
 
 const HELP = `sysu lms                   我的课程
 sysu lms courses           同上（显式写法）
@@ -20,64 +16,32 @@ sysu lms notices           课程公告（--num N，默认 5）
 sysu lms login [--code N]  强制重新换票（要 MFA 时加 --code）
 
 --code N 企业微信验证码（会话过期且该站点要求二次验证时用）
---json   输出 JSON
+数据命令默认输出 JSON；--json 只为兼容旧命令保留，不改变输出。
 数据来自 Moodle 的 ajax 接口；会话由 CAS 的 TGC 自动换取，失效会静默重试一次。`;
-
-const fmtDate = (d) => (d ? `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '—');
 
 async function showCourses(opts) {
   const lmsc = await lms.connect({ renew: opts.renew, code: opts.code });
   const list = await lms.courses(lmsc);
-  if (opts.json) return console.log(JSON.stringify(list, null, 2));
-  if (!list.length) return console.log('没有选课记录（或者课程都隐藏了）');
-  const rows = list.map((c) => [String(c.id), cut(c.name, 34), c.progress === null ? '—' : `${c.progress}%`, c.end || '—']);
-  const head = ['ID', '课程', '进度', '结课'];
-  const w = [6, 34, 6, 12].map((n, i) => Math.max(n, ...rows.map((r) => width(r[i])), width(head[i])));
-  console.log(C.bold(head.map((h, i) => pad(h, w[i])).join('  ')));
-  for (const r of rows) console.log(r.map((v, i) => pad(v, w[i])).join('  '));
-  console.log(C.dim(`\n共 ${list.length} 门  ·  sysu lms course <id> 看详情`));
+  console.log(JSON.stringify({ ok: true, courses: list }, null, 2));
 }
 
 async function showTodo(opts) {
   const lmsc = await lms.connect({ renew: opts.renew, code: opts.code });
   const list = await lms.events(lmsc, { days: opts.days });
-  if (opts.json) return console.log(JSON.stringify(list, null, 2));
-  if (!list.length) return console.log(`未来 ${opts.days} 天没有待办`);
-  list.sort((a, b) => (a.at?.getTime() || 0) - (b.at?.getTime() || 0));
-  for (const e of list) {
-    const when = e.at ? fmtDate(e.at) : '—';
-    const days = e.at ? Math.ceil((e.at - Date.now()) / 864e5) : null;
-    const flag = days !== null && days <= 2 ? C.red(when) : when;
-    console.log(`${flag}  ${cut(e.name, 40)}`);
-    if (e.course) console.log(C.dim(`         ${cut(e.course, 40)}`));
-  }
-  console.log(C.dim(`\n共 ${list.length} 项`));
+  console.log(JSON.stringify({ ok: true, days: opts.days, items: list }, null, 2));
 }
 
 async function showCourse(opts) {
   if (!opts.id) throw new Error('用法：sysu lms course <id>（id 从 sysu lms courses 看）');
   const lmsc = await lms.connect({ renew: opts.renew, code: opts.code });
   const sections = await lms.contents(lmsc, opts.id);
-  if (opts.json) return console.log(JSON.stringify(sections, null, 2));
-  if (!sections.length) return console.log('这门课没有可见内容');
-  for (const sec of sections) {
-    console.log(C.bold(sec.section || '(未命名)'));
-    if (!sec.modules.length) console.log(C.dim('  （空）'));
-    for (const m of sec.modules) {
-      const tag = C.dim(`[${m.mod}]`);
-      console.log(`  ${tag} ${cut(m.name, 52)}`);
-      if (opts.urls && m.url) console.log(C.dim(`        ${m.url}`));
-    }
-    console.log('');
-  }
+  console.log(JSON.stringify({ ok: true, course: opts.id, sections }, null, 2));
 }
 
 async function main(argvIn = []) {
-  const argv = argvIn.slice();
+  const argv = argvIn.slice().filter((arg) => arg !== '--json');
   const opts = {
-    json: argv.includes('--json'),
     renew: argv.includes('--renew'),
-    urls: argv.includes('--urls'),
     days: 14,
     id: null,
     code: null,
@@ -110,7 +74,7 @@ async function main(argvIn = []) {
     argv.splice(di, 2);
     if (!(opts.days > 0)) throw new Error('--days 要是正数');
   }
-  for (const flag of ['--json', '--renew', '--urls']) {
+  for (const flag of ['--renew', '--urls']) {
     const i = argv.indexOf(flag);
     if (i >= 0) argv.splice(i, 1);
   }
@@ -129,36 +93,19 @@ async function main(argvIn = []) {
   if (cmd === 'help') return console.log(HELP);
   if (cmd === 'login') {
     const lmsc = await lms.connect({ renew: true, code: opts.code });
-    console.log(`换票成功  ·  userid ${lmsc.userid || '?'}`);
-    return undefined;
+    return console.log(JSON.stringify({ ok: true, userid: lmsc.userid || null }, null, 2));
   }
   if (cmd === 'whoami') {
     const lmsc = await lms.connect({ renew: opts.renew, code: opts.code });
     const list = await lms.courses(lmsc);
-    if (opts.json) return console.log(JSON.stringify({ userid: lmsc.userid, courses: list.length }, null, 2));
-    console.log(`LMS userid：${lmsc.userid || '?'}`);
-    console.log(`在修课程：${list.length} 门`);
-    return undefined;
+    return console.log(JSON.stringify({ ok: true, userid: lmsc.userid || null, courses: list.length }, null, 2));
   }
   if (cmd === 'files') {
     opts.id = argv.find((a) => /^\d+$/.test(a)) || null;
     if (!opts.id) throw new Error('用法：sysu lms files <课程 id>');
     const lmsc = await lms.connect({ renew: opts.renew, code: opts.code });
     const list = await lms.collectFiles(lmsc, opts.id);
-    if (opts.json) return console.log(JSON.stringify(list, null, 2));
-    if (!list.length) return console.log('这门课没有可下载的文件');
-    const groups = new Map();
-    for (const f of list) {
-      const key = f.mod === 'folder' ? f.name : `[${f.mod}] ${f.name}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(f);
-    }
-    for (const [key, files] of groups) {
-      console.log(`  ${C.dim(key)}`);
-      for (const f of files) console.log(`    ${cut(f.file || f.name, 48)}\n      ${C.dim(f.url)}`);
-    }
-    console.log(C.dim(`\n共 ${list.length} 个  ·  sysu lms get ${opts.id} 全部下载`));
-    return undefined;
+    return console.log(JSON.stringify({ ok: true, course: opts.id, files: list }, null, 2));
   }
   if (cmd === 'get') {
     opts.id = argv.find((a) => /^\d+$/.test(a)) || null;
@@ -166,67 +113,64 @@ async function main(argvIn = []) {
     const lmsc = await lms.connect({ renew: opts.renew, code: opts.code });
     const all = await lms.collectFiles(lmsc, opts.id);
     const list = opts.only ? all.filter((f) => f.name.includes(opts.only) || f.url.includes(encodeURIComponent(opts.only))) : all;
-    if (!list.length) return console.log('没有匹配的文件');
+    if (!list.length) {
+      return console.log(JSON.stringify({ ok: true, dryRun: opts.dryRun, course: opts.id, total: 0, files: [] }, null, 2));
+    }
     if (opts.dryRun) {
-      for (const f of list) console.log(`  ${f.file || f.name}`);
-      return console.log(C.dim(`\n共 ${list.length} 个（--dry-run 未下载）`));
+      return console.log(JSON.stringify({
+        ok: true,
+        dryRun: true,
+        course: opts.id,
+        total: list.length,
+        files: list.map((f) => ({ name: f.file || f.name, url: f.url })),
+      }, null, 2));
     }
     const dir = opts.out || require('node:path').join(downloadDir(), `lms-${opts.id}`);
-    console.log(C.dim(`下载到 ${dir}`));
-    let ok = 0;
-    let bytes = 0;
+    const downloaded = [];
+    const failed = [];
     for (const f of list) {
-      process.stdout.write(`  ${cut(f.file || f.name, 40)} … `);
       try {
         const r = await lms.download(lmsc, f.url, dir, { referer: `${lms.BASE}/course/view.php?id=${opts.id}` });
-        ok += 1;
-        bytes += r.size;
-        console.log(`${(r.size / 1048576).toFixed(1)} MB`);
+        downloaded.push({ name: r.name, size: r.size, path: r.path });
       } catch (err) {
-        console.log(C.red(`失败：${err.message}`));
+        failed.push({ name: f.file || f.name, error: err.message });
       }
     }
-    console.log(C.dim(`\n完成 ${ok}/${list.length}，共 ${(bytes / 1048576).toFixed(1)} MB`));
-    return undefined;
+    const output = {
+      ok: failed.length === 0,
+      dryRun: false,
+      course: opts.id,
+      dir,
+      total: list.length,
+      downloaded,
+      failed,
+    };
+    if (failed.length) process.exitCode = 1;
+    return console.log(JSON.stringify(output, null, 2));
   }
   if (cmd === 'assignments') {
     const lmsc = await lms.connect({ renew: opts.renew, code: opts.code });
     const cid = argv.find((a) => /^\d+$/.test(a));
     const list = await lms.assignments(lmsc, cid);
-    if (opts.json) return console.log(JSON.stringify(list, null, 2));
-    if (!list.length) return console.log('没有作业');
-    for (const a of list) {
-      const mark = a.submitted ? C.green('已交') : C.red('未交');
-      console.log(`${mark}  ${cut(a.name, 34)}`);
-      console.log(C.dim(`      ${cut(a.course, 34)}  ${a.due ? `剩余 ${a.due}` : ''}`));
-      if (a.files?.length) console.log(C.dim(`      文件：${a.files.join(', ')}`));
-    }
-    const missing = list.filter((a) => !a.submitted).length;
-    console.log(C.dim(`
-共 ${list.length} 份，未交 ${missing} 份`));
-    return undefined;
+    return console.log(JSON.stringify({ ok: true, assignments: list }, null, 2));
   }
   if (cmd === 'grades') {
     const cid = argv.find((a) => /^\d+$/.test(a));
     if (!cid) throw new Error('用法：sysu lms grades <课程 id>');
     const lmsc = await lms.connect({ renew: opts.renew, code: opts.code });
     const rows = await lms.grades(lmsc, cid);
-    if (opts.json) return console.log(JSON.stringify(rows, null, 2));
-    for (const r of rows) {
-      const indent = '  '.repeat(Math.max(0, r.level - 1));
-      const grade = r.grade && r.grade !== '-' ? r.grade : '';
-      console.log(`${indent}${r.kind === 'cat' ? C.bold(r.name) : r.name}${grade ? '  ' + grade : ''}`);
-    }
-    return undefined;
+    return console.log(JSON.stringify({
+      ok: true,
+      course: cid,
+      published: rows.some((r) => r.grade && r.grade !== '-'),
+      grades: rows,
+    }, null, 2));
   }
   if (cmd === 'notices') {
     const lmsc = await lms.connect({ renew: opts.renew, code: opts.code });
     const cid = argv.find((a) => /^\d+$/.test(a));
     const list = await lms.notices(lmsc, { courseid: cid, num: opts.num });
-    if (opts.json) return console.log(JSON.stringify(list, null, 2));
-    if (!list.length) return console.log('没有公告');
-    for (const n of list) console.log(`  ${cut(n.title, 46)}\n      ${C.dim(cut(n.course, 30))} · ${n.url}`);
-    return undefined;
+    return console.log(JSON.stringify({ ok: true, notices: list }, null, 2));
   }
   if (cmd === 'courses') return showCourses(opts);
   if (cmd === 'todo') return showTodo(opts);

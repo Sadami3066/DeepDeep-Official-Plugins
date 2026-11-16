@@ -45,6 +45,7 @@ internal class FakeSettings(initial: MiCloudCapabilities) : MiCloudSettings {
 internal class FakeReadApi(
     private val responses: List<Pair<String, JsonElement>>,
     private val userId: String = "user-1",
+    private val failures: Map<String, Exception> = emptyMap(),
 ) : MiCloudReadApi {
     val requested = mutableListOf<String>()
 
@@ -52,6 +53,8 @@ internal class FakeReadApi(
 
     override suspend fun getJson(pathWithQuery: String): MiCloudResponse {
         requested += pathWithQuery
+        failures.entries.firstOrNull { (prefix, _) -> pathWithQuery.startsWith(prefix) }
+            ?.let { (_, error) -> throw error }
         val json = responses.firstOrNull { (prefix, _) -> pathWithQuery.startsWith(prefix) }?.second
             ?: throw IllegalStateException("unexpected request: $pathWithQuery")
         return MiCloudResponse(body = json.toString(), json = json)

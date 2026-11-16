@@ -66,13 +66,14 @@ private fun TasksContent(host: PluginHost, model: FeishuCardModel) {
         FeishuCardHead(
             host = host,
             title = model.title?.takeIf { it.isNotBlank() } ?: host.t("任务", "Tasks"),
-            detail = when {
+            detail = model.context?.takeIf { it.isNotBlank() } ?: when {
                 count == 0 -> null
                 open == count -> host.t("$count 条待办", "$count to do")
                 open == 0 -> host.t("全部完成", "All done")
                 else -> host.t("$open 条待办 · $count 条", "$open to do · $count total")
             },
-            trailing = model.trailing?.takeIf { it.isNotBlank() },
+            trailing = model.trailing?.takeIf { it.isNotBlank() }
+                ?: if (count > 0) host.tf("%d 条", "%d tasks", count) else null,
         )
         Spacer(Modifier.height(DdSpacing.Sm))
         rows.forEachIndexed { index, item ->
@@ -177,22 +178,6 @@ private fun TasksRow(host: PluginHost, item: FeishuCardItem) {
                         color = colors.inkTertiary,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            item.meta?.takeIf { it.isNotBlank() }?.let { meta ->
-                Spacer(Modifier.width(DdSpacing.Sm))
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(percent = 50))
-                        .background(if (completed) colors.wash else colors.accentSoft)
-                        .padding(horizontal = DdSpacing.Sm, vertical = 3.dp),
-                ) {
-                    DdText(
-                        text = meta,
-                        style = DdType.chip,
-                        color = if (completed) colors.inkTertiary else colors.accent,
-                        maxLines = 1,
                     )
                 }
             }

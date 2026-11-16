@@ -1,10 +1,14 @@
 package io.github.whywood.deepdeep.plugin.sysu
 
+import io.github.whywood.deepdeep.plugin.cli.card.CliCardItem
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardSection
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
@@ -151,12 +155,18 @@ internal object SysuCardFormat {
     private val CREDITS = Regex("""([\d.]+)\s*(?:学分|credits?)""")
     private val PERCENT = Regex("""(\d+)\s*%""")
     private val DATE = Regex("""(\d{4}-\d{2}-\d{2})""")
+    private val ENGLISH_DATE = Regex("""([A-Za-z]{3,9})\.?\s+(\d{1,2}),\s*(\d{4})""")
+    private val MONTHS = mapOf(
+        "jan" to 1, "feb" to 2, "mar" to 3, "apr" to 4, "may" to 5, "jun" to 6,
+        "jul" to 7, "aug" to 8, "sep" to 9, "oct" to 10, "nov" to 11, "dec" to 12,
+    )
     private val DAYS_LEFT = Regex("""剩余\s*(\d+)\s*天""")
     private val DAYS_LEFT_EN = Regex("""(\d+)\s*days?\s*left""")
     private val SLOT_TIME = Regex("""(\d{2}:\d{2})-(\d{2}:\d{2})""")
     private val SLOT_REMAIN = Regex("""余\s*(\d+)""")
     private val SLOT_REMAIN_EN = Regex("""\d{2}:\d{2}\s+(\d+)(?:\s+left)?\s*$""")
     private val DUE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+    private val ZONE: ZoneId = ZoneId.of("Asia/Shanghai")
     private val WINDOW = Regex("""(?:预约窗口|Booking window)\s*(.+?)(?:\s*·|$)""")
     private val WEEKDAY_NAMES = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
@@ -292,27 +302,23 @@ internal object SysuCardFormat {
 
     fun gradesPlan(model: CliCardModel): SysuGradesPlan? {
         val groups = mutableListOf<SysuGradeGroup>()
-        for (section in model.sections) {
-            val label = section.label.orEmpty()
-            groups += SysuGradeGroup(
-                label = label,
-                gpa = GPA.find(label)?.groupValues?.get(1)?.toDoubleOrNull(),
-                credits = CREDITS.find(label)?.groupValues?.get(1)?.toDoubleOrNull(),
-                rows = section.items.map { gradeRow(it.title, it.subtitle, it.meta) },
-            )
-        }
-        if (model.items.isNotEmpty()) {
-            val rows = model.items.map { gradeRow(it.title, it.subtitle, it.meta) }
-            if (groups.isEmpty()) {
+        if (model.sections.isNotEmpty()) {
+            for (section in model.sections) {
+                val label = section.label.orEmpty()
                 groups += SysuGradeGroup(
-                    label = model.context.orEmpty(),
-                    gpa = GPA.find(model.note.orEmpty())?.groupValues?.get(1)?.toDoubleOrNull(),
-                    credits = CREDITS.find(model.note.orEmpty())?.groupValues?.get(1)?.toDoubleOrNull(),
-                    rows = rows,
+                    label = label,
+                    gpa = GPA.find(label)?.groupValues?.get(1)?.toDoubleOrNull(),
+                    credits = CREDITS.find(label)?.groupValues?.get(1)?.toDoubleOrNull(),
+                    rows = section.items.map { gradeRow(it.title, it.subtitle, it.meta) },
                 )
-            } else {
-                groups += SysuGradeGroup(label = "", gpa = null, credits = null, rows = rows)
             }
+        } else if (model.items.isNotEmpty()) {
+            groups += SysuGradeGroup(
+                label = model.context.orEmpty(),
+                gpa = GPA.find(model.note.orEmpty())?.groupValues?.get(1)?.toDoubleOrNull(),
+                credits = CREDITS.find(model.note.orEmpty())?.groupValues?.get(1)?.toDoubleOrNull(),
+                rows = model.items.map { gradeRow(it.title, it.subtitle, it.meta) },
+            )
         }
         if (groups.all { it.rows.isEmpty() }) return null
         val first = groups.firstOrNull()
@@ -348,28 +354,32 @@ internal object SysuCardFormat {
         today: LocalDate = LocalDate.now(),
     ): SysuExamsPlan? {
         val entries = mutableListOf<SysuExamEntry>()
-        for (section in model.sections) {
-            val label = section.label.orEmpty()
-            val date = DATE.find(label)?.groupValues?.get(1)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-            val weekday = label.replace(DATE, "").trim().ifBlank { null }
-            for (item in section.items) {
-                entries += examEntry(item, date, weekday, today)
+        if (model.sections.isNotEmpty()) {
+            for (section in model.sections) {
+                val label = section.label.orEmpty()
+                val date = DATE.find(label)?.groupValues?.get(1)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                val weekday = label.replace(DATE, "").trim().ifBlank { null }
+                for (item in section.items) {
+                    entries += examEntry(item, date, weekday, today)
+                }
+            }
+        } else {
+            model.items.forEach { item ->
+                val date = DATE.find(item.meta.orEmpty())?.groupValues?.get(1)
+                    ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                entries += examEntry(item, date, null, today)
             }
         }
-        model.items.forEach { item ->
-            val date = DATE.find(item.meta.orEmpty())?.groupValues?.get(1)
-                ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-            entries += examEntry(item, date, null, today)
-        }
-        if (entries.isEmpty()) return null
+        val unique = entries.distinctBy { Triple(it.name, it.date, it.time) }
+        if (unique.isEmpty()) return null
         return SysuExamsPlan(
             term = model.context,
-            entries = entries.sortedWith(compareBy({ it.date ?: LocalDate.MAX }, { it.time.orEmpty() })),
+            entries = unique.sortedWith(compareBy({ it.date ?: LocalDate.MAX }, { it.time.orEmpty() })),
         )
     }
 
     private fun examEntry(
-        item: io.github.whywood.deepdeep.plugin.cli.card.CliCardItem,
+        item: CliCardItem,
         date: LocalDate?,
         weekday: String?,
         today: LocalDate,
@@ -390,7 +400,7 @@ internal object SysuCardFormat {
     }
 
     fun lmsPlan(model: CliCardModel): SysuLmsPlan? {
-        val rows = (model.sections.flatMap { it.items } + model.items).distinctBy { it.title to it.subtitle }
+        val rows = rowItems(model)
         if (rows.isEmpty()) return null
         val courses = rows.map { item ->
             val meta = item.meta.orEmpty()
@@ -408,7 +418,7 @@ internal object SysuCardFormat {
     }
 
     fun todoPlan(model: CliCardModel, today: LocalDate = LocalDate.now()): List<SysuTodoEntry>? {
-        val rows = (model.sections.flatMap { it.items } + model.items).distinctBy { it.title to it.meta }
+        val rows = rowItems(model)
         if (rows.isEmpty()) return null
         return rows.map { item ->
             val due = parseDue(item.meta)
@@ -429,6 +439,8 @@ internal object SysuCardFormat {
         if (text.isEmpty()) return null
         runCatching { LocalDateTime.parse(text) }.getOrNull()?.let { return it }
         runCatching { LocalDateTime.parse(text, DUE_FORMAT) }.getOrNull()?.let { return it }
+        runCatching { Instant.parse(text) }.getOrNull()?.let { return LocalDateTime.ofInstant(it, ZONE) }
+        runCatching { OffsetDateTime.parse(text) }.getOrNull()?.let { return it.atZoneSameInstant(ZONE).toLocalDateTime() }
         return runCatching { LocalDate.parse(text).atStartOfDay() }.getOrNull()
     }
 
@@ -491,7 +503,7 @@ internal object SysuCardFormat {
     }
 
     fun netpayPlan(model: CliCardModel, today: LocalDate = LocalDate.now()): SysuNetpayPlan? {
-        val rows = (model.sections.flatMap { it.items } + model.items).distinctBy { it.title to it.meta }
+        val rows = rowItems(model)
         if (rows.isEmpty()) return null
         val services = rows.map { item ->
             val meta = item.meta.orEmpty()
@@ -500,7 +512,7 @@ internal object SysuCardFormat {
                 name = item.title,
                 status = subtitleTokens.firstOrNull(),
                 address = subtitleTokens.drop(1).joinToString(" · ").ifEmpty { null },
-                expiry = DATE.find(meta)?.groupValues?.get(1)?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
+                expiry = parseExpiry(meta) ?: parseExpiry(item.subtitle),
                 daysLeft = DAYS_LEFT.find(meta)?.groupValues?.get(1)?.toLongOrNull()
                     ?: DAYS_LEFT_EN.find(meta)?.groupValues?.get(1)?.toLongOrNull(),
                 details = bodyLines(item.body),
@@ -515,6 +527,20 @@ internal object SysuCardFormat {
             earliestDaysLeft = earliestDaysLeft,
         )
     }
+
+    private fun parseExpiry(value: String?): LocalDate? {
+        val text = value?.trim().orEmpty()
+        if (text.isEmpty()) return null
+        DATE.find(text)?.groupValues?.get(1)?.let { return runCatching { LocalDate.parse(it) }.getOrNull() }
+        val match = ENGLISH_DATE.find(text) ?: return null
+        val month = MONTHS[match.groupValues[1].take(3).lowercase()] ?: return null
+        return runCatching {
+            LocalDate.of(match.groupValues[3].toInt(), month, match.groupValues[2].toInt())
+        }.getOrNull()
+    }
+
+    private fun rowItems(model: CliCardModel): List<CliCardItem> =
+        if (model.sections.isEmpty()) model.items else model.sections.flatMap { it.items }
 
     private fun bodyLines(body: String?): List<String> = body.orEmpty()
         .lines()

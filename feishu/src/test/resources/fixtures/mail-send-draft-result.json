@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "draft_id": "draft_1",
+    "tip": "draft saved",
+    "reference": "https://example.feishu.cn/mail/draft/draft_1"
+  }
+}

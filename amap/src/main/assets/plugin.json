@@ -1,14 +1,15 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.amap",
-  "version": "1.3.0",
+  "version": "1.5.2",
   "apiLevel": 6,
-  "minHostVersion": "1.3.0",
+  "minHostVersion": "1.4.0",
   "capabilities": [
     "logs",
     "network",
     "secrets",
     "settings",
-    "ui"
+    "ui",
+    "images"
   ],
   "entryClass": "io.github.whywood.deepdeep.plugin.amap.AmapPlugin",
   "name": {

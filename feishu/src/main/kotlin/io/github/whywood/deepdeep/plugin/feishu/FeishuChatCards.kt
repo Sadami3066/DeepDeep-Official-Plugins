@@ -236,7 +236,7 @@ private fun MessagesContent(host: PluginHost, model: FeishuCardModel) {
         FeishuCardHead(
             host = host,
             title = model.title?.takeIf { it.isNotBlank() } ?: host.t("消息", "Messages"),
-            detail = cardRangeText(model.context),
+            detail = model.context?.takeIf { it.isNotBlank() },
             trailing = model.trailing?.takeIf { it.isNotBlank() }
                 ?: if (count > 0) host.tf("%d 条", "%d messages", count) else null,
         )
@@ -415,5 +415,176 @@ private fun MessagesEmpty(host: PluginHost) {
                 .height(22.dp)
                 .background(deepDeepColors().wash, RoundedCornerShape(topStart = 4.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 14.dp)),
         )
+    }
+}
+
+@Composable
+internal fun FeishuMessagesSearchCard(host: PluginHost, model: FeishuCardModel) {
+    FeishuCardShell {
+        if (model.isEmpty) MessagesSearchEmpty(host) else MessagesSearchContent(host, model)
+    }
+}
+
+@Composable
+private fun MessagesSearchContent(host: PluginHost, model: FeishuCardModel) {
+    val all = model.items
+    val count = model.total.coerceAtLeast(all.size)
+    var expanded by remember(model) { mutableStateOf(false) }
+    val rows = if (expanded) all else all.take(FEISHU_SEARCH_PREVIEW_ROWS)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = DdSpacing.Lg, end = DdSpacing.Lg, top = DdSpacing.Md, bottom = DdSpacing.Sm),
+    ) {
+        FeishuCardHead(
+            host = host,
+            title = model.title?.takeIf { it.isNotBlank() } ?: host.t("消息搜索", "Message search"),
+            detail = model.context?.takeIf { it.isNotBlank() },
+            trailing = model.trailing?.takeIf { it.isNotBlank() }
+                ?: if (count > 0) host.tf("%d 条", "%d messages", count) else null,
+        )
+        Spacer(Modifier.height(DdSpacing.Xs))
+        rows.forEachIndexed { index, item ->
+            if (index > 0) DdRowDivider(leadingInset = 36.dp)
+            MessageSearchRow(host = host, item = item)
+        }
+        if (all.size > FEISHU_SEARCH_PREVIEW_ROWS) {
+            DdExpandToggle(
+                expanded = expanded,
+                collapsedLabel = host.tf(
+                    "展开其余 %d 条",
+                    "Show %d more",
+                    all.size - FEISHU_SEARCH_PREVIEW_ROWS,
+                ),
+                expandedLabel = host.t("收起搜索结果", "Show fewer"),
+                onToggle = { expanded = !expanded },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun MessageSearchRow(host: PluginHost, item: FeishuCardItem) {
+    val colors = deepDeepColors()
+    val sender = item.messageSender()
+    val kindLabel = item.messageKindLabel()
+    val parts = item.subtitle?.split(" · ").orEmpty()
+    val attachments = parts.drop(2).filter { it.isNotBlank() }
+    val time = item.meta?.takeIf { it.isNotBlank() }
+    val markers = item.badgeTokens()
+    val recalled = markers.any { it == "已撤回" || it == "Recalled" }
+    val text = item.body?.takeIf { it.isNotBlank() }.orEmpty()
+    val long = text.lineSequence().count() > FEISHU_MESSAGE_PREVIEW_LINES || text.length > 160
+    var expanded by remember(item) { mutableStateOf(false) }
+    val onOpen = item.url?.let { url -> { host.openFeishuLink(url) } }
+    val content: @Composable () -> Unit = {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = DdSpacing.Sm),
+            verticalAlignment = Alignment.Top,
+        ) {
+            FeishuAvatar(host = host, avatarUrl = null, name = sender ?: item.title, size = 28)
+            Spacer(Modifier.width(DdSpacing.Sm))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    DdText(
+                        text = item.title.takeIf { it.isNotBlank() } ?: host.t("单聊", "Direct"),
+                        modifier = Modifier.weight(1f),
+                        style = feishuItemTitleStyle().copy(fontSize = 13.sp, lineHeight = 18.sp),
+                        color = colors.ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    time?.let {
+                        Spacer(Modifier.width(DdSpacing.Xs))
+                        DdText(text = it, style = DdType.numeric, color = colors.inkTertiary, maxLines = 1)
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    sender?.let { who ->
+                        DdText(
+                            text = who,
+                            modifier = Modifier.weight(1f, fill = false),
+                            style = DdType.label.copy(
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                                fontSize = 12.sp,
+                            ),
+                            color = colors.inkSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    kindLabel?.let {
+                        Spacer(Modifier.width(DdSpacing.Xs))
+                        DdText(text = it, style = DdType.numeric, color = colors.inkTertiary, maxLines = 1)
+                    }
+                    markers.take(3).forEach { marker ->
+                        Spacer(Modifier.width(DdSpacing.Xs))
+                        FeishuChip(text = marker, tint = colors.inkSecondary, background = colors.wash)
+                    }
+                }
+                Spacer(Modifier.height(DdSpacing.Xs))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colors.wash, RoundedCornerShape(14.dp))
+                        .padding(horizontal = DdSpacing.Md, vertical = DdSpacing.Sm),
+                ) {
+                    Column {
+                        attachments.forEach { name ->
+                            FeishuChip(
+                                text = name,
+                                tint = colors.inkSecondary,
+                                background = colors.surface,
+                                shape = RoundedCornerShape(DdSpacing.Sm),
+                            )
+                            Spacer(Modifier.height(DdSpacing.Xs))
+                        }
+                        if (text.isNotBlank()) {
+                            DdText(
+                                text = text,
+                                style = DdType.bodySmall.copy(
+                                    textDecoration = if (recalled) TextDecoration.LineThrough else TextDecoration.None,
+                                ),
+                                color = if (recalled) colors.inkTertiary else colors.ink,
+                                maxLines = if (expanded) Int.MAX_VALUE else FEISHU_MESSAGE_PREVIEW_LINES,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+                if (long) {
+                    DdExpandToggle(
+                        expanded = expanded,
+                        collapsedLabel = host.t("展开全文", "Show full message"),
+                        expandedLabel = host.t("收起全文", "Show less"),
+                        onToggle = { expanded = !expanded },
+                    )
+                }
+            }
+        }
+    }
+    if (onOpen != null) {
+        DdPressable(
+            onClick = onOpen,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RectangleShape,
+            contentDescription = item.title,
+            content = { content() },
+        )
+    } else {
+        content()
+    }
+}
+
+@Composable
+private fun MessagesSearchEmpty(host: PluginHost) {
+    FeishuEmptyBody(
+        title = host.t("没有搜到消息", "No messages found"),
+        message = host.t("换个关键词、时间范围或会话再试", "Try another keyword, time range or chat"),
+    ) {
+        DdIcon(icon = DdIcons.Search, tint = deepDeepColors().inkTertiary, size = 24.dp)
     }
 }

@@ -6,6 +6,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -29,7 +30,8 @@ class HotelJsonTest {
                   "distanceInMeters": 1200,
                   "price": {"lowestPrice": 352, "currency": "CNY"},
                   "tags": ["五星酒店", "免费WiFi", "免费停车场"],
-                  "bookingUrl": "https://rollinggo.cn/example"
+                  "bookingUrl": "https://rollinggo.cn/example",
+                  "imageUrl": "https://image-cdn.rollinggo.cn/hotel.jpg"
                 }
               ]
             }
@@ -44,6 +46,9 @@ class HotelJsonTest {
         assertEquals("杭州富阳东方茂开元名都大酒店", hotel.name)
         assertEquals("5", hotel.starRating)
         assertEquals("¥352", hotel.priceText)
+        assertEquals(352.0, hotel.lowestPrice!!, 0.001)
+        assertEquals("CNY", hotel.currency)
+        assertEquals("https://image-cdn.rollinggo.cn/hotel.jpg", hotel.imageUrl)
         assertEquals("富春街道金桥北路61号", hotel.address)
         assertEquals(1200, hotel.distanceMeters)
         assertEquals("1.2 公里", hotelDistanceText(hotel.distanceMeters))
@@ -163,51 +168,48 @@ class HotelJsonTest {
     }
 
     @Test
-    fun detailTextListsEveryPlanFact() {
+    fun detailGuidanceExplainsGroupingAndRatePlanSelection() {
         val details = requireNotNull(parseHotelDetail(sampleDetailJson(), "fallback"))
 
-        val text = hotelDetailText(details, zh)
+        val guidance = hotelDetailGuidance(details, zh)
 
-        assertTrue(text.contains("共 2 个房型、3 个价格方案"))
-        assertTrue(text.contains("豪华大床房"))
-        assertTrue(text.contains("园景双床房"))
-        assertTrue(text.contains("1 张大床"))
-        assertTrue(text.contains("¥823"))
-        assertTrue(text.contains("不可取消"))
-        assertTrue(text.contains("rp-strict"))
-        assertTrue(text.contains("rp-free"))
-        assertTrue(text.contains("入住 2026-11-20 → 离店 2026-11-21"))
-        assertTrue(text.contains("rate_plan_id"))
-        assertTrue(text.contains("官方预订链接：https://rollinggo.cn/example"))
+        assertTrue(guidance.contains("按名称分组"))
+        assertTrue(guidance.contains("组内按总价"))
+        assertTrue(guidance.contains("rate_plan_id"))
     }
 
     @Test
-    fun detailTextReportsRollingGoError() {
+    fun detailGuidanceReportsRollingGoError() {
         val details = requireNotNull(
             parseHotelDetail("""{"success":false,"errorMessage":"入住日期不合法"}""", "某酒店"),
         )
 
-        val text = hotelDetailText(details, zh)
+        val guidance = hotelDetailGuidance(details, zh)
 
-        assertTrue(text.contains("暂时没有可订房型"))
-        assertTrue(text.contains("入住日期不合法"))
+        assertTrue(guidance.contains("没有可用房型"))
+        assertTrue(guidance.contains("入住日期不合法"))
     }
 
     @Test
-    fun searchTextIncludesEveryFactAndNeverSaysCard() {
-        val details = requireNotNull(parseHotelSearch(sampleSearchJson(), "q", "杭州西湖", "景点", "2026-11-20", 1))
+    fun searchGuidanceMentionsBudgetAndPagingWithoutDroppingHotels() {
+        val raw = """
+            {"hotelInformationList":[
+              {"name":"A","price":{"lowestPrice":147,"currency":"CNY"}},
+              {"name":"B","price":{"lowestPrice":320,"currency":"CNY"}}
+            ],"nextPageToken":"token-1"}
+        """.trimIndent()
+        val details = withHotelBudget(
+            requireNotNull(parseHotelSearch(raw, "q", "中山大学", "景点", "2026-11-20", 1)),
+            100.0,
+        )
 
-        val text = hotelSearchText(details, zh)
+        val guidance = hotelSearchGuidance(details, zh)
 
-        assertTrue(text.contains("杭州富阳东方茂开元名都大酒店"))
-        assertTrue(text.contains("hotelId 1090005"))
-        assertTrue(text.contains("5★"))
-        assertTrue(text.contains("参考价 ¥352"))
-        assertTrue(text.contains("1.2 公里"))
-        assertTrue(text.contains("富春街道金桥北路61号"))
-        assertTrue(text.contains("五星酒店"))
-        assertTrue(text.contains("https://rollinggo.cn/example"))
-        assertTrue(!text.contains("卡片"))
+        assertTrue(guidance.contains("2 家超出预算"))
+        assertTrue(guidance.contains("最低 ¥147"))
+        assertTrue(guidance.contains("还有下一页"))
+        assertTrue(guidance.contains("hotel_detail"))
+        assertEquals(2, details.hotels.size)
     }
 
     @Test
@@ -235,25 +237,13 @@ class HotelJsonTest {
     }
 
     @Test
-    fun ordersTextListsEveryFactAndStatusLabel() {
-        val details = requireNotNull(parseHotelOrders(sampleOrdersJson()))
+    fun ordersGuidancePointsToOrderDetailForCancellationReason() {
+        val details = requireNotNull(parseHotelOrders(realOrderListJson()))
 
-        val text = hotelOrdersText(details, zh)
+        val guidance = hotelOrdersGuidance(details, zh)
 
-        assertTrue(text.contains("杭州西湖国宾馆"))
-        assertTrue(text.contains("M17816893017792282"))
-        assertTrue(text.contains("S17816893017792283"))
-        assertTrue(text.contains("参考号 ref-1"))
-        assertTrue(text.contains("入住 2026-11-20 → 离店 2026-11-21"))
-        assertTrue(text.contains("1 晚"))
-        assertTrue(text.contains("2 间"))
-        assertTrue(text.contains("已完成或已关闭（3）"))
-        assertTrue(text.contains("待支付（CREATED）"))
-        assertTrue(text.contains("总价：¥1023"))
-        assertTrue(text.contains("西湖区杨公堤18号"))
-        assertTrue(text.contains("San Zhang"))
-        assertTrue(text.contains("san@example.com"))
-        assertTrue(!text.contains("卡片"))
+        assertTrue(guidance.contains("没有取消原因"))
+        assertTrue(guidance.contains("hotel_order_detail"))
     }
 
     @Test
@@ -262,7 +252,7 @@ class HotelJsonTest {
 
         assertTrue(details.orders.isEmpty())
         assertEquals("暂无订单", details.message)
-        assertTrue(hotelOrdersText(details, zh).contains("当前没有酒店订单"))
+        assertTrue(hotelOrdersGuidance(details, zh).contains("没有酒店订单"))
     }
 
     @Test
@@ -326,7 +316,7 @@ class HotelJsonTest {
     }
 
     @Test
-    fun bookingTextCarriesCompleteFacts() {
+    fun bookingGuidanceKeepsPaymentInstruction() {
         val booking = HotelBookingDetails(
             orderNo = "order-1",
             hotelName = "杭州西湖国宾馆",
@@ -340,16 +330,11 @@ class HotelJsonTest {
             fetchedAt = 1L,
         )
 
-        val text = hotelBookingText(booking, zh)
+        val guidance = hotelBookingGuidance(booking, zh)
 
-        assertTrue(text.contains("订单号：order-1"))
-        assertTrue(text.contains("杭州西湖国宾馆"))
-        assertTrue(text.contains("豪华大床房 · 含双早 · 限时免费取消"))
-        assertTrue(text.contains("入住 2026-11-20 → 离店 2026-11-21"))
-        assertTrue(text.contains("取消政策：2026-11-19 前可免费取消"))
-        assertTrue(text.contains("总价：¥1023"))
-        assertTrue(text.contains("https://rollinggo.cn/pay"))
-        assertTrue(!text.contains("卡片"))
+        assertTrue(guidance.contains("30 分钟内"))
+        assertTrue(guidance.contains("不要说已经付款"))
+        assertTrue(hotelBookingGuidance(booking.copy(paymentUrl = null), zh).contains("没有返回支付链接"))
     }
 
     @Test
@@ -565,22 +550,19 @@ class HotelJsonTest {
     }
 
     @Test
-    fun realPlansTextListsNightlyTotalMealAndCancellation() {
+    fun realPlansGroupsCarryRoomFactsAndImages() {
         val details = requireNotNull(parseHotelDetail(realRoomRatePlansJson(), "fallback"))
 
-        val text = hotelDetailText(details, zh)
+        val group = details.roomGroups.first()
 
-        assertTrue(text.contains("按总价从低到高（总价按 2 晚计算）"))
-        assertTrue(text.contains("每晚 ¥754"))
-        assertTrue(text.contains("总价 ¥1508（按 2 晚折算）"))
-        assertTrue(text.contains("不含早餐"))
-        assertTrue(text.contains("不可免费取消"))
-        assertTrue(text.contains("rp-a"))
-        assertTrue(text.contains("面积 43㎡"))
-        assertTrue(text.contains("有窗"))
-        assertTrue(text.contains("可住 2 人"))
-        assertTrue(text.contains("需酒店确认"))
-        assertTrue(!text.contains("卡片"))
+        assertEquals("威珀斯商务大床房", group.name)
+        assertEquals("43", group.roomSize)
+        assertEquals("17-29", group.floor)
+        assertEquals(2, group.maxOccupancy)
+        assertEquals(true, group.hasWindow)
+        assertEquals(true, group.hasWifi)
+        assertEquals("https://image-cdn.rollinggo.cn/example.jpg", group.images.single())
+        assertTrue(group.plans.all { it.ratePlanId != null })
     }
 
     @Test
@@ -737,23 +719,19 @@ class HotelJsonTest {
     }
 
     @Test
-    fun liveRollingGoSampleTextShowsNightlyAndTotalPrice() {
+    fun liveSampleGroupsKeepEveryPlanAndRoomInfo() {
         val raw = requireNotNull(javaClass.classLoader?.getResourceAsStream("fixtures/hotel-detail-live.json"))
             .bufferedReader()
             .use { it.readText() }
         val details = requireNotNull(parseHotelDetail(raw, "广州威珀斯酒店"))
 
-        val text = hotelDetailText(details, zh)
-
-        assertTrue(text.contains("共 16 个房型、70 个价格方案"))
-        assertTrue(text.contains("按总价从低到高（总价按 1 晚计算）"))
-        assertTrue(text.contains("每晚 ¥754"))
-        assertTrue(text.contains("总价 ¥754（按 1 晚折算）"))
-        assertTrue(text.contains("不含早餐"))
-        assertTrue(text.contains("不可免费取消"))
-        assertTrue(text.contains("价格方案 ID：8mXl7C5So4b-64rnH7LfIBR"))
-        assertTrue(!text.contains("价格待确认"))
-        assertTrue(!text.contains("卡片"))
+        assertEquals(16, details.roomGroups.size)
+        assertEquals(70, details.roomGroups.sumOf { it.plans.size })
+        assertTrue(details.roomGroups.any { it.images.isNotEmpty() })
+        assertTrue(details.rooms.all { it.totalDerived })
+        val guidance = hotelDetailGuidance(details, zh)
+        assertTrue(guidance.contains("按名称分组"))
+        assertTrue(guidance.contains("按 1 晚"))
     }
 
     @Test
@@ -779,24 +757,15 @@ class HotelJsonTest {
     }
 
     @Test
-    fun realOrderListTextKeepsEverySummaryFieldAndPointsToDetail() {
+    fun orderListKeepsCancellationPolicyAndPointsToDetail() {
         val details = requireNotNull(parseHotelOrders(realOrderListJson()))
+        val order = details.orders.single()
 
-        val text = hotelOrdersText(details, zh)
-
-        assertTrue(text.contains("H178969795522549201"))
-        assertTrue(text.contains("广州威珀斯酒店"))
-        assertTrue(text.contains("威珀斯商务大床房"))
-        assertTrue(text.contains("入住 2026-11-16 → 离店 2026-11-18"))
-        assertTrue(text.contains("2 晚"))
-        assertTrue(text.contains("2 间"))
-        assertTrue(text.contains("双早"))
-        assertTrue(text.contains("11月15日前免费取消"))
-        assertTrue(text.contains("已确认"))
-        assertTrue(text.contains("总价：¥1508"))
-        assertTrue(text.contains("下单时间 2026-11-10 12:34:56"))
-        assertTrue(text.contains("订单详情链接：https://rollinggo.cn/order/detail?orderNo=H178969795522549201"))
-        assertTrue(text.contains("hotel_order_detail"))
+        assertEquals("11月15日前免费取消", order.cancelPolicy)
+        assertEquals("已确认", hotelOrderStatusText(order.status, zh))
+        val guidance = hotelOrdersGuidance(details, zh)
+        assertTrue(guidance.contains("没有取消原因"))
+        assertTrue(guidance.contains("hotel_order_detail"))
     }
 
     @Test
@@ -840,39 +809,13 @@ class HotelJsonTest {
     }
 
     @Test
-    fun orderDetailTextKeepsEveryField() {
+    fun orderDetailGuidanceCoversCancellationAndPayment() {
         val details = requireNotNull(parseHotelOrderDetail(realOrderDetailJson(), "H178969795522549201"))
 
-        val text = hotelOrderDetailText(details, zh)
+        val guidance = hotelOrderDetailGuidance(details, zh)
 
-        listOf(
-            "订单号：H178969795522549201",
-            "订单状态：已确认",
-            "下单时间：2026-11-10 12:34:56",
-            "酒店：广州威珀斯酒店",
-            "地址：广州市天河区示例路 1 号",
-            "酒店电话：020-12345678",
-            "平台客服：400-888-8888",
-            "酒店确认号：HC-998877",
-            "入住 2026-11-16 → 离店 2026-11-18",
-            "2 晚",
-            "2 间",
-            "威珀斯商务大床房",
-            "1张特大床 (1.8m)",
-            "双早",
-            "最早入住 14:00",
-            "最晚退房 12:00",
-            "入住人：ZHANG SAN、LI SI",
-            "联系人：张三 · 13800000000 · san@example.com",
-            "总价：¥1508",
-            "支付方式：URL",
-            "支付截止：2026-11-10 13:04:56",
-            "支付链接：https://rollinggo.cn/pay/H178969795522549201",
-            "取消政策：11月15日前免费取消",
-            "当前可免费取消",
-            "免费取消截止：2026-11-15 18:00:00",
-            "订单页面：https://rollinggo.cn/pages/order/detail?orderNo=H178969795522549201",
-        ).forEach { assertTrue("missing: $it", text.contains(it)) }
+        assertTrue(guidance.contains("cancelPolicy"))
+        assertTrue(guidance.contains("支付链接"))
     }
 
     @Test
@@ -881,33 +824,125 @@ class HotelJsonTest {
     }
 
     @Test
-    fun rawDetailsKeepFullOutputAndStripAnsi() {
-        val details = kotlinx.serialization.json.buildJsonObject {
-            put("message", "查询成功")
-        }
-        val raw = "\u001b[32m{\"success\":true,\"orderNo\":\"H1\"}\u001b[0m\n"
+    fun resultDetailsAttachCleanRawGuidanceAndCardTitle() {
+        val body = kotlinx.serialization.json.buildJsonObject { put("message", "查询成功") }
+        val raw = "\u001B[32m◇ injected env (1) from ../../root/.hotel-cli/.env // tip: ◈ encrypted .env [www.dotenvx.com]\u001B[0m\n" +
+            "◇ injected env (1) from ../../root/.hotel-cli/.env // tip: ⌘ override existing { override: true }\n" +
+            "◇ injected env (1) from ../../root/.hotel-cli/.env // tip: ⌘ enable debugging { debug: true }\n" +
+            "{\"success\":true}\n[exit: 0]\n"
 
-        val withRaw = withHotelRaw(details, raw)
+        val details = hotelResultDetails(body, raw, "使用说明", "酒店订单（1 笔）")
 
-        assertEquals("{\"success\":true,\"orderNo\":\"H1\"}", withRaw["deepdeep.raw"]?.jsonPrimitive?.contentOrNull)
-        assertEquals(details, withHotelRaw(details, "   "))
+        assertEquals("{\"success\":true}", details[DEEPDEEP_RAW_KEY]?.jsonPrimitive?.contentOrNull)
+        assertEquals("使用说明", details[DEEPDEEP_GUIDANCE_KEY]?.jsonPrimitive?.contentOrNull)
+        assertEquals(
+            "酒店订单（1 笔）",
+            (details[DEEPDEEP_CARD_KEY] as kotlinx.serialization.json.JsonObject)["title"]?.jsonPrimitive?.contentOrNull,
+        )
+        assertEquals("查询成功", details["message"]?.jsonPrimitive?.contentOrNull)
     }
 
     @Test
-    fun searchTextListsEveryHotelAndEveryTag() {
-        val hotels = (1..6).joinToString(",") { index ->
-            """{"name":"酒店$index","tags":["标签1","标签2","标签3","标签4","标签5","标签6","标签7","标签8"],"hotelAmenities":["设施1","设施2"]}"""
-        }
-        val details = requireNotNull(
-            parseHotelSearch("""{"hotelInformationList":[$hotels]}""", "q", "杭州", "城市", null, 1),
+    fun errorDetailsKeepMessageForCardAndRawForModel() {
+        val details = hotelErrorDetails(
+            "需要先安装酒店服务",
+            "◇ injected env (1) from ../../root/.hotel-cli/.env // tip: ⌘ enable debugging { debug: true }\nboom\n[exit: 1]",
         )
 
-        val text = hotelSearchText(details, zh)
+        assertEquals("需要先安装酒店服务", details["message"]?.jsonPrimitive?.contentOrNull)
+        assertEquals("需要先安装酒店服务", details[DEEPDEEP_GUIDANCE_KEY]?.jsonPrimitive?.contentOrNull)
+        assertEquals("boom", details[DEEPDEEP_RAW_KEY]?.jsonPrimitive?.contentOrNull)
+        assertTrue(!details.containsKey(DEEPDEEP_CARD_KEY))
+    }
 
-        (1..6).forEach { assertTrue("missing hotel $it", text.contains("酒店$it")) }
-        (1..8).forEach { assertTrue("missing tag $it", text.contains("标签$it")) }
-        assertTrue(text.contains("设施2"))
-        assertEquals(8, details.hotels.first().tags.size)
+    @Test
+    fun budgetsMarkOverBudgetCountAndLowestPriceWithoutDroppingResults() {
+        val raw = """
+            {"hotelInformationList":[
+              {"name":"A","price":{"lowestPrice":147,"currency":"CNY"}},
+              {"name":"B","price":{"lowestPrice":320,"currency":"CNY"}},
+              {"name":"C","price":{"message":"价格待确认"}}
+            ]}
+        """.trimIndent()
+        val details = requireNotNull(parseHotelSearch(raw, "q", "p", "城市", null, 1))
+
+        val budgeted = withHotelBudget(details, 100.0)
+
+        assertEquals(100.0, budgeted.maxPrice!!, 0.001)
+        assertEquals(2, budgeted.overBudgetCount)
+        assertEquals("¥147", budgeted.lowestOverBudgetPrice)
+        assertEquals(3, budgeted.hotels.size)
+        assertEquals(details.hotels, budgeted.hotels)
+        assertTrue(hotelIsOverBudget(budgeted.hotels[0], budgeted.maxPrice))
+        assertTrue(!hotelIsOverBudget(budgeted.hotels[2], budgeted.maxPrice))
+
+        val withinBudget = withHotelBudget(details, 400.0)
+        assertEquals(0, withinBudget.overBudgetCount)
+        assertNull(withinBudget.lowestOverBudgetPrice)
+        assertNull(withHotelBudget(details, null).maxPrice)
+    }
+
+    @Test
+    fun displayLabelsDedupeAndLimit() {
+        val labels = hotelDistinctLabels(listOf("免费WiFi", "停车场", "免费WiFi", "  ", "停车场"))
+
+        assertEquals(listOf("免费WiFi", "停车场"), labels)
+        assertEquals(listOf("A", "B", "C"), hotelVisibleLabels(listOf("A", "B", "C", "D"), expanded = false))
+        assertEquals(listOf("A", "B", "C", "D"), hotelVisibleLabels(listOf("A", "B", "C", "D"), expanded = true))
+    }
+
+    @Test
+    fun budgetIsInferredFromChineseQuery() {
+        assertEquals(100.0, hotelBudgetFromQuery("中大南校园附近 100 元以内 一晚")!!, 0.001)
+        assertEquals(300.0, hotelBudgetFromQuery("预算300元，找五星酒店")!!, 0.001)
+        assertEquals(200.0, hotelBudgetFromQuery("每晚不超过200元")!!, 0.001)
+        assertNull(hotelBudgetFromQuery("中大南校园附近一晚"))
+        assertNull(hotelBudgetFromQuery("距离1000米以内"))
+    }
+
+    @Test
+    fun dirtyRatePlanNameIsNormalizedForDisplayButKeptInPayload() {
+        assertEquals("大床 1.8米", hotelDisplayRatePlanName(",,大床|1|1.8米"))
+        assertEquals("大床房(Queen Room)", hotelDisplayRatePlanName("大床房(Queen Room)"))
+        assertNull(hotelDisplayRatePlanName(" , , "))
+
+        val raw = """
+            {"name":"某酒店","checkIn":"2026-11-20","checkOut":"2026-11-21","roomRatePlans":[
+              {"roomName":"特惠房","ratePlanId":"rp-1","ratePlanName":",,大床|1|1.8米","averagePrice":218,"currency":"CNY","bedTypeDescription":"1 大床 或 2 单人床"}
+            ]}
+        """.trimIndent()
+        val details = requireNotNull(parseHotelDetail(raw, "fallback"))
+        val plan = details.rooms.single()
+        val payload = HotelJson.encodeToJsonElement(HotelDetailDetails.serializer(), details)
+        val decoded = HotelJson.decodeFromJsonElement(HotelDetailDetails.serializer(), payload)
+
+        assertEquals(",,大床|1|1.8米", plan.ratePlanName)
+        assertEquals("大床 1.8米", hotelDisplayRatePlanName(plan.ratePlanName))
+        assertEquals("1 大床 或 2 单人床", plan.bed)
+        assertEquals(",,大床|1|1.8米", decoded.rooms.single().ratePlanName)
+        assertEquals("大床 1.8米", hotelDisplayRatePlanName(decoded.rooms.single().ratePlanName))
+    }
+
+    @Test
+    fun searchCardPayloadKeepsImageLowestPriceAndBudget() {
+        val raw = """
+            {"hotelInformationList":[
+              {"name":"A","imageUrl":"https://image-cdn.rollinggo.cn/a.jpg","price":{"lowestPrice":147,"currency":"CNY"},"tags":["t1"],"hotelAmenities":["wifi","wifi"]}
+            ],"nextPageToken":"token"}
+        """.trimIndent()
+        val details = withHotelBudget(
+            requireNotNull(parseHotelSearch(raw, "q", "p", "城市", null, 1)),
+            100.0,
+        )
+        val payload = HotelJson.encodeToJsonElement(HotelSearchDetails.serializer(), details)
+        val decoded = HotelJson.decodeFromJsonElement(HotelSearchDetails.serializer(), payload)
+
+        assertEquals(details, decoded)
+        assertEquals("https://image-cdn.rollinggo.cn/a.jpg", decoded.hotels.single().imageUrl)
+        assertEquals(147.0, decoded.hotels.single().lowestPrice!!, 0.001)
+        assertEquals(1, decoded.overBudgetCount)
+        assertEquals(100.0, decoded.maxPrice!!, 0.001)
+        assertEquals("token", decoded.nextPageToken)
     }
 
     @Test
@@ -1017,31 +1052,207 @@ class HotelJsonTest {
 
 
     @Test
-    fun liveDetailTextContainsEveryRatePlan() {
+    fun liveSamplePayloadKeepsEveryRatePlanId() {
         val raw = requireNotNull(javaClass.classLoader?.getResourceAsStream("fixtures/hotel-detail-live.json"))
             .bufferedReader()
             .use { it.readText() }
         val details = requireNotNull(parseHotelDetail(raw, "广州威珀斯酒店"))
+        val payload = HotelJson.encodeToJsonElement(HotelDetailDetails.serializer(), details)
+        val decoded = HotelJson.decodeFromJsonElement(HotelDetailDetails.serializer(), payload)
 
-        val text = hotelDetailText(details, zh)
-
-        val missing = details.rooms.filterNot { text.contains(it.ratePlanId.orEmpty()) }
-        assertTrue("missing room plans: ${missing.map { it.ratePlanId }}", missing.isEmpty())
-        assertEquals(70, details.rooms.size)
+        assertEquals(70, decoded.rooms.size)
+        assertEquals(details.rooms.map { it.ratePlanId }, decoded.rooms.map { it.ratePlanId })
+        assertTrue(decoded.rooms.all { it.ratePlanId != null })
     }
 
     @Test
-    fun ordersTextContainsEveryOrder() {
+    fun ordersPayloadKeepsEveryOrderAndDetailLink() {
         val rows = (1..4).joinToString(",") { index ->
             """{"orderNo":"H$index","hotelName":"酒店$index","roomName":"大床房","checkInDate":"2026-11-16","checkOutDate":"2026-11-17","orderStatus":"已确认","totalPrice":$index}"""
         }
         val details = requireNotNull(parseHotelOrders("""{"message":"查询成功","orderList":[$rows]}"""))
+        val payload = HotelJson.encodeToJsonElement(HotelOrdersDetails.serializer(), details)
+        val decoded = HotelJson.decodeFromJsonElement(HotelOrdersDetails.serializer(), payload)
 
-        val text = hotelOrdersText(details, zh)
-
-        assertEquals(4, details.orders.size)
-        (1..4).forEach { assertTrue("missing order $it", text.contains("H$it")) }
+        assertEquals(4, decoded.orders.size)
+        assertEquals(details.orders, decoded.orders)
+        assertEquals("H1", decoded.orders.first().orderNo)
     }
 
+    @Test
+    fun groupsRoomsIgnoringMarketingSuffix() {
+        val plans = listOf(
+            roomPlan(name = "豪华家庭房", ratePlanId = "p1", price = 500.0),
+            roomPlan(name = "豪华家庭房（大空间+一房一厅+可观广州塔景色）", ratePlanId = "p2", price = 700.0),
+            roomPlan(name = "行政套房", ratePlanId = "p3", price = 900.0),
+        )
+        val groups = groupHotelRooms(plans)
+        assertEquals(2, groups.size)
+        assertEquals("豪华家庭房", groups.first().name)
+        assertEquals(2, groups.first().plans.size)
+        assertEquals("行政套房", groups.last().name)
+    }
 
+    @Test
+    fun extractsRoomMarketingSuffixes() {
+        assertEquals(listOf("无窗"), hotelRoomSuffixes("双床房（无窗）"))
+        assertEquals(listOf("大空间+一房一厅+可观广州塔景色"), hotelRoomSuffixes("豪华家庭房（大空间+一房一厅+可观广州塔景色）"))
+        assertTrue(hotelRoomSuffixes("豪华家庭房").isEmpty())
+        assertEquals("双床房", hotelRoomBaseName("双床房（无窗）（高层）"))
+    }
+
+    @Test
+    fun parsesSearchTagsGroupedByCategory() {
+        val tags = parseHotelSearchTags(
+            """{"success":true,"tags":[{"name":"免费WiFi","category":"服务与餐饮"},{"name":"近地铁","category":"交通与支付"},{"name":"全季","category":"品牌与评分"}]}""",
+        )
+        assertEquals(3, tags?.count)
+        assertEquals(3, tags?.categories?.size)
+        assertEquals(listOf("免费WiFi"), tags?.categories?.first { it.category == "服务与餐饮" }?.names)
+    }
+
+    @Test
+    fun parsesCancelQuoteAndResult() {
+        val quote = parseHotelCancelQuote(
+            """{"success":true,"canCancel":true,"orderNo":"H1","cancelFee":50,"currency":"CNY","cancelPolicyDesc":"入住当天 18:00 前取消扣 50 元","confirmId":"c1","bookingId":"b1","expireTime":"2026-11-20 21:10:00"}""",
+            "H1",
+        )
+        assertEquals("H1", quote?.orderNo)
+        assertTrue(quote?.canCancel == true)
+        assertEquals("¥50", quote?.feeText)
+        assertEquals("c1", quote?.confirmId)
+        assertEquals("b1", quote?.bookingId)
+        assertEquals("入住当天 18:00 前取消扣 50 元", quote?.policy)
+
+        val refused = parseHotelCancelQuote(
+            """{"success":false,"canCancel":false,"message":"该订单按规则无法在线取消","orderNo":"H1"}""",
+            "H1",
+        )
+        assertFalse(refused?.canCancel ?: true)
+        assertTrue(refused?.message.orEmpty().contains("无法在线取消"))
+
+        val result = parseHotelCancelResult(
+            """{"success":true,"orderNo":"H1","orderStatus":"Canceled","message":"取消成功"}""",
+            "H1",
+            "西湖国宾馆",
+        )
+        assertTrue(result?.cancelled == true)
+        assertEquals("Canceled", result?.orderStatus)
+        assertEquals("西湖国宾馆", result?.hotelName)
+    }
+
+    @Test
+    fun sortsByBudgetThenDistance() {
+        val hotels = listOf(
+            sortedHotel("A", price = 300.0, meters = 2000),
+            sortedHotel("B", price = 180.0, meters = 800),
+            sortedHotel("C", price = 240.0, meters = 1500),
+        )
+        val priced = sortHotelResults(searchDetails(hotels, maxPrice = 300.0))
+        assertEquals("price", priced.sortedBy)
+        assertEquals(listOf("B", "C", "A"), priced.hotels.map { it.name })
+
+        val distanced = sortHotelResults(searchDetails(hotels, maxPrice = null))
+        assertEquals("distance", distanced.sortedBy)
+        assertEquals(listOf("B", "C", "A"), distanced.hotels.map { it.name })
+
+        val noSignal = sortHotelResults(
+            searchDetails(hotels.map { it.copy(distanceMeters = null) }, maxPrice = null),
+        )
+        assertNull(noSignal.sortedBy)
+        assertEquals(listOf("A", "B", "C"), noSignal.hotels.map { it.name })
+    }
+
+    private fun roomPlan(name: String, ratePlanId: String, price: Double) = HotelRoomPlan(
+        name = name,
+        ratePlanId = ratePlanId,
+        priceText = "¥$price",
+        totalPrice = price,
+        currency = "CNY",
+    )
+
+    private fun sortedHotel(name: String, price: Double, meters: Int) = HotelSummary(
+        name = name,
+        priceText = "¥$price",
+        lowestPrice = price,
+        currency = "CNY",
+        distanceMeters = meters,
+    )
+
+    private fun searchDetails(hotels: List<HotelSummary>, maxPrice: Double?) = HotelSearchDetails(
+        query = "西湖附近酒店",
+        place = "西湖",
+        placeType = "景点",
+        checkIn = "2026-11-20",
+        nights = 1,
+        hotels = hotels,
+        fetchedAt = 1L,
+        maxPrice = maxPrice,
+    )
+
+    @Test
+    fun groupsPlanVariantsByBedMealAndPrice() {
+        val plans = listOf(
+            HotelRoomPlan(
+                name = "特惠房", ratePlanName = "大床", bed = "1 大床", meal = "不含早",
+                priceText = "¥200", avgPriceText = "¥200", totalPrice = 200.0, ratePlanId = "p1",
+                cancellation = "不可取消", cancellations = listOf("不可取消"), onRequest = false,
+            ),
+            HotelRoomPlan(
+                name = "特惠房", ratePlanName = "大床", bed = "1 大床", meal = "不含早",
+                priceText = "¥200", avgPriceText = "¥200", totalPrice = 200.0, ratePlanId = "p2",
+                cancellation = "入住当天 18:00 前免费取消", cancellations = listOf("入住当天 18:00 前免费取消"),
+                onRequest = true,
+            ),
+            HotelRoomPlan(
+                name = "特惠房", ratePlanName = "大床", bed = "1 大床", meal = "不含早",
+                priceText = "¥220", avgPriceText = "¥220", totalPrice = 220.0, ratePlanId = "p3",
+                cancellation = "不可取消", cancellations = listOf("不可取消"), onRequest = false,
+            ),
+        )
+        val variants = groupHotelPlanVariants(plans)
+        assertEquals(2, variants.size)
+        assertEquals(2, variants.first().count)
+        assertEquals(1, variants.last().count)
+        assertEquals(2, variants.first().policies.size)
+        assertTrue(variants.first().mixedOnRequest)
+        assertEquals("p1", variants.first().plan.ratePlanId)
+    }
+
+    @Test
+    fun cleansBedDescriptionAndDropsContradictorySingleBed() {
+        assertEquals(null, hotelCleanBed("1 单人床", "双床房"))
+        assertEquals("1 大床", hotelCleanBed("1 大床", "大床房"))
+        assertEquals("2 单人床", hotelCleanBed("2 单人床", "双床房"))
+        assertEquals("大床 1.8米", hotelCleanBed(",,大床|1|1.8米", "大床房"))
+    }
+
+    @Test
+    fun budgetGuidanceExplainsUpstreamFilterWhenNothingIsOverBudget() {
+        val details = withHotelBudget(
+            searchDetails(
+                listOf(sortedHotel("A", price = 180.0, meters = 800), sortedHotel("B", price = 260.0, meters = 900)),
+                maxPrice = 300.0,
+            ),
+            300.0,
+        )
+        val guidance = hotelSearchGuidance(details, zh)
+        assertTrue(guidance.contains("上游筛选"))
+        assertTrue(guidance.contains("size"))
+    }
+
+    @Test
+    fun cancelGuidanceForAlreadyCancelledOrderDoesNotAskForSupport() {
+        val guidance = hotelCancelQuoteGuidance(
+            HotelCancelQuote(
+                orderNo = "H1",
+                canCancel = false,
+                alreadyCancelled = true,
+                fetchedAt = 1L,
+            ),
+            zh,
+        )
+        assertTrue(guidance.contains("已经取消"))
+        assertFalse(guidance.contains("请联系") || guidance.contains("需要联系"))
+    }
 }

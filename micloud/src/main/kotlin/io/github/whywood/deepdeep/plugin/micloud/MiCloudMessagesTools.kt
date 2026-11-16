@@ -3,7 +3,9 @@ package io.github.whywood.deepdeep.plugin.micloud
 import io.github.whywood.deepdeep.plugin.api.PluginTool
 import io.github.whywood.deepdeep.plugin.api.pluginTool
 import io.github.whywood.deepdeep.plugin.api.textResult
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.put
 
 internal fun smsTool(client: MiCloudReadApi, text: MiCloudText): PluginTool = pluginTool(
     name = "mi_cloud_sms",
@@ -12,29 +14,51 @@ internal fun smsTool(client: MiCloudReadApi, text: MiCloudText): PluginTool = pl
     parameters = smsParameters,
 ) { call ->
     call.signal?.throwIfCancelled()
-    miCloudToolResult {
+    miCloudToolResult(MiCloudFeature.SMS, text) {
         val args = call.args
         val userId = requiredUserId(client)
         val limit = limitArg(args)
+        val withPhoneCall = args.argBool("withPhoneCall") ?: true
         val response = client.getJson(
             smsThreadPath(
                 userId = userId,
                 ts = now(),
                 limit = limit,
-                withPhoneCall = args.argBool("withPhoneCall") ?: true,
+                withPhoneCall = withPhoneCall,
                 syncTag = args.argString("syncTag") ?: "0",
                 syncThreadTag = args.argString("syncThreadTag") ?: "0",
             ),
         )
         val payload = response.json.payloadObject()
-        val entries = response.json.payloadArray("entries")
-            .mapNotNull { it as? JsonObject }
-        val watermark = cursorValue(payload.stringOrNull("watermark"))
-        val nextSyncTag = cursorValue(payload.stringOrNull("syncTag")).ifBlank { watermark }
+        val entries = smsItems(response.json.payloadArray("entries"))
+        val watermark = payload.objectOrNull("watermark")
+        val callEntries = payload.objectOrNull("phonecall_view")?.arrayOrNull("entries")
+            ?: JsonArray(emptyList())
+        val calls = callItems(callEntries)
+        val nextSyncTag = cursorValue(payload.stringOrNull("syncTag"))
+            .ifBlank { watermark.stringOrNull("syncTag").orEmpty() }
+            .ifBlank { cursorValue(payload?.get("watermark")) }
         val nextSyncThreadTag = cursorValue(payload.stringOrNull("syncThreadTag"))
+            .ifBlank { watermark.stringOrNull("syncThreadTag").orEmpty() }
+        val card = MiCloudSmsCardData(
+            entries = entries,
+            calls = calls,
+            nextSyncTag = nextSyncTag,
+            nextSyncThreadTag = nextSyncThreadTag,
+            watermark = watermark,
+            withPhoneCall = withPhoneCall,
+            limit = limit,
+        )
         textResult(
-            smsObservation(entries, nextSyncTag, nextSyncThreadTag, watermark, text),
-            details = rawResultDetails(response.body),
+            text = "",
+            details = toolResultDetails(
+                raw = response.body,
+                guidance = smsListGuidance(entries.size, nextSyncTag, nextSyncThreadTag, text),
+                card = MiCloudCard(
+                    title = text.fmt("短信与通话（%d 条）", "SMS and calls (%d)", entries.size),
+                    payload = card.toJson(),
+                ),
+            ),
         )
     }
 }

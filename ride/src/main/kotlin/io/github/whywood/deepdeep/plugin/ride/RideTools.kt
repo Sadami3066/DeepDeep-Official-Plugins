@@ -10,7 +10,6 @@ import io.github.whywood.deepdeep.plugin.api.uiConfirmRequest
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -66,19 +65,19 @@ internal fun rideTools(host: PluginHost, toolState: RideToolState = RideToolStat
                     put("keywords", args["keywords"]?.jsonPrimitive?.contentOrNull.orEmpty())
                     put("city", args["city"]?.jsonPrimitive?.contentOrNull.orEmpty())
                 }
-            }) { payload ->
-                val places = parseRidePlaces(payload)
-                val query = listOfNotNull(
-                    call.args["keywords"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                    call.args["city"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                ).joinToString(" · ")
+            }) { response ->
+                val places = parseRidePlaces(response.payload)
+                val keywords = call.args["keywords"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                val city = call.args["city"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                val query = listOfNotNull(keywords, city).joinToString(" · ")
                 RideSummary(
-                    text = ridePlacesText(places, host.rideTranslate),
+                    details = ridePlaceBase(response.payload, keywords, city),
                     cardTitle = when {
                         places.isEmpty() -> host.t("地点搜索", "Place search")
                         query.isBlank() -> host.tf("地点搜索（%d 个）", "Place search (%d)", places.size)
                         else -> host.tf("地点搜索：%s（%d 个）", "Place search: %s (%d)", query, places.size)
                     },
+                    guidance = ridePlaceGuidance(host.rideTranslate),
                 )
             }
         },
@@ -87,8 +86,8 @@ internal fun rideTools(host: PluginHost, toolState: RideToolState = RideToolStat
         name = "ride_estimate",
         label = host.t("打车预估", "Ride estimate"),
         description = host.t(
-            "预估打车价格，返回接口给出的全部车型：车型名、车型 ID/品类、参考价、券后价、优惠、币种、接驾等待、距离、时长、账号手机尾号和 traceId。参数 from_name/from_lng/from_lat/to_name/to_lng/to_lat，坐标来自 ride_place_search，经纬度都传字符串。",
-            "Estimate ride fares and return every vehicle the API gives: names, product IDs/categories, list and discounted prices, coupons, currency, pickup ETA, distance, duration, account phone suffix and traceId. Parameters: from_name/from_lng/from_lat/to_name/to_lng/to_lat, coordinates from ride_place_search and all passed as strings.",
+            "预估打车价格，返回接口给出的全部车型，以及滴滴实际吸附后的上/下车点（from/to 含名称、地址、经纬度）、distanceKm、eta、车型参考价、券后价、品类、接驾时间、账号手机尾号和 traceId。参数 from_name/from_lng/from_lat/to_name/to_lng/to_lat，坐标来自 ride_place_search，经纬度都传字符串。",
+            "Estimate ride fares and return every vehicle, the pickup and drop-off points DiDi actually snapped to (from/to with name, address and coordinates), distanceKm, eta, list and discounted prices, categories, pickup times, account phone suffix and traceId. Parameters: from_name/from_lng/from_lat/to_name/to_lng/to_lat, coordinates from ride_place_search and all passed as strings.",
         ),
         parameters = buildJsonObject {
             put("type", "object")
@@ -110,19 +109,20 @@ internal fun rideTools(host: PluginHost, toolState: RideToolState = RideToolStat
                         put(name, args[name]?.jsonPrimitive?.contentOrNull.orEmpty())
                     }
                 }
-            }) { payload ->
+            }) { response ->
                 val fromName = call.args["from_name"]?.jsonPrimitive?.contentOrNull
                 val toName = call.args["to_name"]?.jsonPrimitive?.contentOrNull
-                val estimate = parseRideEstimate(payload as? JsonObject, fromName, toName)
+                val estimate = parseRideEstimate(response.payload as? JsonObject, fromName, toName)
                 toolState.rememberEstimate(call.sessionId, estimate)
-                val route = estimate.route.ifBlank { host.t("本次行程", "This trip") }
+                val route = estimate.userRoute.ifBlank { host.t("本次行程", "This trip") }
                 RideSummary(
-                    text = rideEstimateText(estimate, host.rideTranslate),
+                    details = rideEstimateBase(response.payload, estimate),
                     cardTitle = if (estimate.isEmpty) {
                         host.t("打车价格", "Ride fares")
                     } else {
                         host.tf("打车价格：%s（%d 种车型）", "Ride fares: %s (%d options)", route, estimate.items.size)
                     },
+                    guidance = rideEstimateGuidance(estimate, host.rideTranslate),
                 )
             }
         },
@@ -153,24 +153,19 @@ internal fun rideTools(host: PluginHost, toolState: RideToolState = RideToolStat
                         put("product_category", it)
                     }
                 }
-            }) { payload ->
-                val link = parseRideLink(payload as? JsonObject)
-                val text = if (link.isEmpty) {
-                    host.t("没有生成可用的链接，请重新预估后再试。", "No ride link was generated. Estimate again and retry.")
-                } else {
-                    buildString {
-                        append(host.t("已生成滴滴发单链接，请在滴滴内确认车型和价格后下单。", "Ride link ready. Confirm the ride and fare in Didi before booking."))
-                        link.appLink?.takeIf { it.isNotBlank() }?.let {
-                            append("\n").append(host.t("App 链接：$it", "App link: $it"))
-                        }
-                        link.miniprogramLink?.takeIf { it.isNotBlank() }?.let {
-                            append("\n").append(host.t("小程序链接：$it", "Mini program link: $it"))
-                        }
-                    }
-                }
+            }) { response ->
+                val link = parseRideLink(response.payload as? JsonObject)
                 RideSummary(
-                    text = text,
+                    details = ridePayloadBase(response.payload),
                     cardTitle = host.t("滴滴发单链接", "DiDi booking link"),
+                    guidance = if (link.isEmpty) {
+                        host.t(
+                            "这次没有生成可用链接，先重新预估再试；不要编造链接。",
+                            "No usable link was generated; estimate again first and don't invent links.",
+                        )
+                    } else {
+                        rideLinkGuidance(host.rideTranslate)
+                    },
                 )
             }
         },
@@ -257,32 +252,23 @@ internal fun rideTools(host: PluginHost, toolState: RideToolState = RideToolStat
                         put("order_id", it)
                     }
                 }
-            }) { payload ->
-                val order = parseRideOrder(payload as? JsonObject)
-                if (order.isEmpty) {
-                    RideSummary(
-                        text = host.t(
-                            "当前没有进行中的滴滴订单。历史订单请在滴滴 App 查看。",
-                            "No active Didi order found. Historical orders are available in the Didi app.",
-                        ),
-                        cardTitle = host.t("滴滴订单", "DiDi ride"),
-                    )
-                } else {
-                    val status = rideStatusLabel(
-                        code = order.statusCode ?: order.status,
-                        statusText = order.statusText,
-                        translate = host.rideTranslate,
-                        includeCode = false,
-                    )
-                    RideSummary(
-                        text = rideOrderText(order, host.rideTranslate),
-                        cardTitle = if (status.isNullOrBlank()) {
-                            host.t("滴滴订单", "DiDi ride")
-                        } else {
-                            host.tf("滴滴订单：%s", "DiDi ride: %s", status)
-                        },
-                    )
-                }
+            }) { response ->
+                val order = parseRideOrder(response.payload as? JsonObject)
+                val status = rideStatusLabel(
+                    code = order.statusCode ?: order.status,
+                    statusText = order.statusText,
+                    translate = host.rideTranslate,
+                    includeCode = false,
+                )
+                RideSummary(
+                    details = ridePayloadBase(response.payload),
+                    cardTitle = if (order.isEmpty || status.isNullOrBlank()) {
+                        host.t("滴滴订单", "DiDi ride")
+                    } else {
+                        host.tf("滴滴订单：%s", "DiDi ride: %s", status)
+                    },
+                    guidance = rideOrderGuidance(order.isEmpty, host.rideTranslate),
+                )
             }
         },
     ),
@@ -301,11 +287,11 @@ internal fun rideTools(host: PluginHost, toolState: RideToolState = RideToolStat
         execute = { call ->
             perform(host, "taxi_get_driver_location", call, { args ->
                 buildJsonObject { put("order_id", args["order_id"]?.jsonPrimitive?.contentOrNull.orEmpty()) }
-            }) { payload ->
-                val location = parseRideDriverLocation(payload as? JsonObject)
+            }) { response ->
                 RideSummary(
-                    text = rideDriverLocationText(location, host.rideTranslate),
+                    details = ridePayloadBase(response.payload),
                     cardTitle = host.t("司机位置", "Driver location"),
+                    guidance = rideDriverGuidance(host.rideTranslate),
                 )
             }
         },
@@ -340,7 +326,7 @@ internal suspend fun createRideOrder(
     if (traceId.isNullOrBlank() || category.isNullOrBlank()) {
         return textResult(translate("这次预估缺少下单所需信息，请重新预估后再下单。", "This estimate is missing booking data. Estimate again before booking."), isError = true)
     }
-    val route = estimate.route
+    val route = estimate.userRoute
     val price = item.priceDiscounted ?: item.priceText.orEmpty()
     val message = listOfNotNull(
         route.takeIf { it.isNotBlank() },
@@ -375,20 +361,20 @@ internal suspend fun createRideOrder(
         val order = parseRideOrder(response.payload as? JsonObject)
         toolState.rememberOrder(call.sessionId, order.orderId)
         textResult(
-            text = rideCreatedOrderText(order, translate),
+            text = "",
             details = rideDetails(
-                payload = response.payload,
+                base = ridePayloadBase(response.payload),
                 raw = response.raw,
                 cardTitle = translate("滴滴订单已创建", "DiDi ride created"),
+                guidance = rideCreateGuidance(translate),
             ),
         )
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (error: Throwable) {
         val secret = runCatching { currentKey() }.getOrNull()
-        val text = rideErrorText(error, secret, translate, "下单失败", "Could not create the order")
         warn("ride create order failed: ${summarizeDidiError(error.message, secret)}", error)
-        textResult(text, details = rideErrorDetails(error), isError = true)
+        rideFailureResult(error, secret, translate)
     }
 }
 
@@ -429,33 +415,54 @@ internal suspend fun cancelRideOrder(
                 call.args["reason"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }?.let { put("reason", it) }
             },
         )
-        val result = parseRideCancelResult(response.payload as? JsonObject)
-        val message = result.message ?: when (result.cancelled) {
-            true -> translate("订单已取消。", "Order cancelled.")
-            false -> translate("订单暂时无法取消。", "The order cannot be cancelled yet.")
-            null -> translate("已提交取消请求。", "Cancellation requested.")
-        }
         textResult(
-            text = message,
+            text = "",
             details = rideDetails(
-                payload = response.payload,
+                base = ridePayloadBase(response.payload),
                 raw = response.raw,
                 cardTitle = translate("取消订单", "Cancel ride"),
+                guidance = rideCancelGuidance(translate),
             ),
         )
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (error: Throwable) {
         val secret = runCatching { currentKey() }.getOrNull()
-        val text = rideErrorText(error, secret, translate, "取消失败", "Couldn't cancel")
         warn("ride cancel order failed: ${summarizeDidiError(error.message, secret)}", error)
-        textResult(text, details = rideErrorDetails(error), isError = true)
+        rideFailureResult(error, secret, translate)
+    }
+}
+
+internal fun rideFailureResult(
+    error: Throwable,
+    secret: String?,
+    translate: RideTranslate,
+): PluginToolResult {
+    val code = (error as? DidiException)?.code
+    val kind = rideErrorKind(code, error.message)
+    val guidance = rideErrorGuidance(kind, code, translate)
+    val summary = summarizeDidiError(error.message, secret)
+        .ifBlank { translate("操作失败，请稍后重试。", "The action failed. Try again later.") }
+    val raw = (error as? DidiException)?.raw?.takeIf { it.isNotBlank() }
+    return if (raw != null) {
+        textResult(
+            text = "",
+            details = rideErrorDetails(raw, guidance, kind, summary),
+            isError = true,
+        )
+    } else {
+        textResult(
+            text = summary,
+            details = rideErrorDetails(null, guidance, kind, summary),
+            isError = true,
+        )
     }
 }
 
 private data class RideSummary(
-    val text: String,
-    val cardTitle: String?,
+    val details: JsonObject,
+    val cardTitle: String,
+    val guidance: String,
 )
 
 private suspend fun perform(
@@ -463,31 +470,25 @@ private suspend fun perform(
     tool: String,
     call: PluginToolCall,
     arguments: (JsonObject) -> JsonObject,
-    summary: suspend (JsonElement) -> RideSummary,
+    summary: suspend (RideResponse) -> RideSummary,
 ): PluginToolResult {
-    var upstreamRaw: String? = null
     return try {
         val response = DidiClient(host).call(tool, arguments(call.args))
-        upstreamRaw = response.raw
-        val outcome = summary(response.payload)
+        val outcome = summary(response)
         textResult(
-            text = outcome.text,
+            text = "",
             details = rideDetails(
-                payload = response.payload,
+                base = outcome.details,
                 raw = response.raw,
                 cardTitle = outcome.cardTitle,
+                guidance = outcome.guidance,
             ),
         )
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (error: Throwable) {
         val secret = runCatching { RideKeyStore(host.settings(), host.secrets()).currentKey() }.getOrNull()
-        val message = rideErrorText(error, secret, host.rideTranslate, "查询失败", "Lookup failed")
         host.logs().warn("ride $tool failed: ${summarizeDidiError(error.message, secret)}")
-        textResult(
-            text = message,
-            details = rideErrorDetails(error) ?: upstreamRaw?.let { rideDetails(null, it, null) },
-            isError = true,
-        )
+        rideFailureResult(error, secret, host.rideTranslate)
     }
 }

@@ -13,6 +13,7 @@ import io.github.whywood.deepdeep.plugin.api.localizedText
 import io.github.whywood.deepdeep.plugin.api.resultReplace
 import io.github.whywood.deepdeep.plugin.api.textResult
 import io.github.whywood.deepdeep.plugin.cli.CliJsonEnvelope
+import io.github.whywood.deepdeep.plugin.cli.CliText
 import io.github.whywood.deepdeep.plugin.cli.bridge.CliBridgeConfig
 import io.github.whywood.deepdeep.plugin.cli.bridge.CliCommandParser
 import io.github.whywood.deepdeep.plugin.cli.bridge.CliErrorMapper
@@ -92,9 +93,10 @@ private fun mapSysuError(
     val strings = host.sysuStrings()
     val raw = request.result.text.orEmpty()
     val site = command.site()
+    val payload = CliJsonEnvelope.LENIENT.element(raw)
+    val errorMessage = ((payload as? JsonObject)?.get("error") as? JsonObject)?.get("message").scalarText()
     val kind = (command as? SysuInvocation.Supported)?.kind
     if (kind == SysuCommandKind.GymSlots) {
-        val payload = CliJsonEnvelope.LENIENT.element(raw)
         val message = payload?.let { SysuJson.gymSlots(it)?.error?.message }
         if (!message.isNullOrBlank()) {
             val text = SysuFailures.actionable(message, SysuSite.Gym, strings) ?: strings.text(
@@ -104,8 +106,13 @@ private fun mapSysuError(
             return resultReplace(textResult(text, isError = true))
         }
     }
-    SysuFailures.actionable(raw, site, strings)?.let { message ->
+    val source = errorMessage ?: raw
+    SysuFailures.actionable(source, site, strings)?.let { message ->
         return resultReplace(textResult(message, isError = true))
+    }
+    if (!errorMessage.isNullOrBlank()) {
+        val safe = SysuFailures.redactSensitive(errorMessage, strings) ?: errorMessage
+        return resultReplace(textResult(safe, isError = true))
     }
     SysuFailures.redactSensitive(raw, strings)?.let { safe ->
         return resultReplace(textResult(safe, isError = true))
@@ -185,7 +192,8 @@ internal class SysuToolBridge {
     }
 
     private fun JsonObject?.withRaw(text: String, strings: SysuStrings): JsonObject {
-        val raw = SysuFailures.redactSensitive(text, strings) ?: text
+        val cleaned = CliText.stripHostNotices(text).trimEnd()
+        val raw = SysuFailures.redactSensitive(cleaned, strings) ?: cleaned
         return JsonObject((this ?: JsonObject(emptyMap())) + buildJsonObject { put(RAW_KEY, raw) })
     }
 
@@ -251,19 +259,23 @@ internal object SysuFailures {
         if (!text.contains("undefined")) return null
         if (!text.contains("名下没有网络服务") && !text.contains("·  ·")) return null
         return strings.text(
-            "网费服务数据读取不完整：请用 `sysu netpay --json` 重新查询；如果仍未登录，先执行 `sysu netpay login`，需要验证码再到「中山大学 CLI」插件页。",
-            "Network service data was incomplete. Re-query with `sysu netpay --json`; if it is still signed out, run `sysu netpay login` and use the SYSU CLI plugin page if a code is required.",
+            "网费服务数据读取不完整：请用 `sysu netpay` 重新查询；如果仍未登录，先执行 `sysu netpay login`，需要验证码再到「中山大学 CLI」插件页。",
+            "Network service data was incomplete. Re-query with `sysu netpay`; if it is still signed out, run `sysu netpay login` and use the SYSU CLI plugin page if a code is required.",
         )
     }
 
     fun redactSensitive(text: String, strings: SysuStrings): String? {
         if (!SENSITIVE.containsMatchIn(text)) return null
-        val kept = text.lines().filterNot { SENSITIVE.containsMatchIn(it) }
         val note = strings.text(
             "（输出中的登录票据、Cookie 与会话信息已隐去）",
             "(Sign-in tickets, cookies and session data were removed.)",
         )
-        val body = kept.joinToString("\n").trim()
+        val trimmed = text.trimStart()
+        val body = if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+            sanitizeSensitive(text, strings)
+        } else {
+            text.lines().filterNot { SENSITIVE.containsMatchIn(it) }.joinToString("\n").trim()
+        }
         return if (body.isEmpty()) note else "$note\n\n$body"
     }
 

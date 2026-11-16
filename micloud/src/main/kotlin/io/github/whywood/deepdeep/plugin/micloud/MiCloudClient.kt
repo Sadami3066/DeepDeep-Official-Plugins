@@ -10,6 +10,11 @@ import kotlinx.serialization.json.Json
 
 internal class MiCloudAuthException(message: String) : Exception(message)
 
+internal class MiCloudHttpException(
+    val status: Int,
+    val body: String,
+) : IOException("HTTP $status")
+
 internal class MiCloudClient(
     private val cookieProvider: suspend () -> String?,
     private val baseUrl: String = DEFAULT_BASE_URL,
@@ -28,7 +33,12 @@ internal class MiCloudClient(
             if (status == HttpURLConnection.HTTP_UNAUTHORIZED || status == HttpURLConnection.HTTP_FORBIDDEN) {
                 authExpired()
             }
-            if (status !in 200..299) throw IOException("HTTP $status")
+            if (status !in 200..299) {
+                val body = runCatching {
+                    connection.errorStream?.use { it.readBytes().decodeToString() }.orEmpty()
+                }.getOrDefault("")
+                throw MiCloudHttpException(status = status, body = body)
+            }
             if (connection.url.host != baseHost()) authExpired()
             val body = connection.inputStream.use { it.readBytes().decodeToString() }
             val json = runCatching { Json.parseToJsonElement(body) }.getOrNull()

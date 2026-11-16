@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import io.github.whywood.deepdeep.design.DdExpandToggle
 import io.github.whywood.deepdeep.design.DdGroupCard
 import io.github.whywood.deepdeep.design.DdHairline
+import io.github.whywood.deepdeep.design.DdNoticeBar
+import io.github.whywood.deepdeep.design.DdNoticeTone
 import io.github.whywood.deepdeep.design.DdSpinner
 import io.github.whywood.deepdeep.design.DdSpacing
 import io.github.whywood.deepdeep.design.DdStatusRow
@@ -44,11 +46,20 @@ internal fun rideCardPayload(state: ToolResultState): JsonObject? =
         ?: unwrapRidePayload(state.result?.details)
         ?: (parseDidiPayload(state.result?.text) as? JsonObject)
 
-private fun rideCardError(state: ToolResultState): String? {
+private data class RideCardError(
+    val message: String,
+    val kind: String?,
+)
+
+private fun rideCardError(state: ToolResultState): RideCardError? {
     val result = state.result ?: return null
     if (!result.isError) return null
-    val text = summarizeDidiError(result.text)
-    return text.ifBlank { null }
+    val error = result.details?.get(RIDE_ERROR_DETAIL_KEY) as? JsonObject
+    val message = error?.stringValue("message")
+        ?: summarizeDidiError(result.text).lineSequence().firstOrNull()
+    val trimmed = message?.trim().orEmpty()
+    if (trimmed.isEmpty()) return null
+    return RideCardError(trimmed, error?.stringValue("kind"))
 }
 
 private fun estimateArguments(state: ToolResultState): Pair<String?, String?> {
@@ -56,6 +67,12 @@ private fun estimateArguments(state: ToolResultState): Pair<String?, String?> {
     val to = (state.arguments["to_name"] as? JsonPrimitive)?.contentOrNull
     return from to to
 }
+
+private fun rideDistanceLabel(host: PluginHost, value: String?): String? =
+    rideMeasureText(value, host.t("公里", "km"), "公里", "km")
+
+private fun rideMinutesLabel(host: PluginHost, value: String?): String? =
+    rideMeasureText(value, host.t("分钟", "min"), "分钟", "min", "小时", "hours", "hour")
 
 @Composable
 private fun RideCardShell(
@@ -110,17 +127,26 @@ private fun RideLoadingCard(host: PluginHost, title: String) {
 }
 
 @Composable
-private fun RideErrorCard(host: PluginHost, title: String, error: String) {
-    RideCardShell(
-        title = title,
-        subtitle = error,
-        footer = host.t("可以稍后在对话里重试。", "Try again in the chat later."),
-    )
+private fun RideErrorCard(host: PluginHost, title: String, error: RideCardError) {
+    val footer = when (error.kind) {
+        "rate_limit" -> host.t("查询次数已达上限，请约 1 分钟后重试。", "The query quota is used up. Retry in about a minute.")
+        "no_order" -> host.t("历史订单在滴滴 App 查看。", "Historical orders are in the DiDi app.")
+        "param" -> host.t("检查参数后重试，坐标来自地点搜索。", "Check the parameters and retry; coordinates come from place search.")
+        else -> host.t("可以稍后在对话里重试。", "Try again in the chat later.")
+    }
+    RideCardShell(title = title, subtitle = error.message, footer = footer)
 }
 
 @Composable
 private fun RideEmptyCard(host: PluginHost, title: String, reason: String) {
     RideCardShell(title = title, subtitle = reason)
+}
+
+@Composable
+private fun RideMapCaption(host: PluginHost, text: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        DdText(text, style = DdType.micro, color = deepDeepColors().inkTertiary, maxLines = 1)
+    }
 }
 
 @Composable
@@ -140,15 +166,16 @@ private fun RideEstimateRow(host: PluginHost, item: RideEstimateItem) {
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                item.eta?.takeIf { it.isNotBlank() }?.let {
+                item.eta?.let { rideMinutesLabel(host, it) }?.let {
                     Spacer(Modifier.width(DdSpacing.Sm))
-                    RideTag(host.t("接驾 $it", "ETA $it"))
+                    RideTag(host.t("接驾约 $it", "pickup about $it"))
                 }
             }
             val meta = listOfNotNull(
-                item.distance?.let { host.t("距离 $it", "distance $it") },
-                item.duration?.let { host.t("约 $it", "about $it") },
-                item.coupon?.let { host.t("优惠 $it", "coupon $it") },
+                item.productCategory?.takeIf { it.isNotBlank() }?.let { host.t("品类 $it", "category $it") },
+                item.coupon?.takeIf { it.isNotBlank() }?.let { host.t("优惠 $it", "coupon $it") },
+                item.distance?.let { rideDistanceLabel(host, it) }?.let { host.t("距离 $it", "distance $it") },
+                item.duration?.let { rideMinutesLabel(host, it) }?.let { host.t("约 $it", "about $it") },
             ).joinToString(" · ")
             if (meta.isNotBlank()) {
                 DdText(meta, style = DdType.micro, color = colors.inkTertiary, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -161,6 +188,8 @@ private fun RideEstimateRow(host: PluginHost, item: RideEstimateItem) {
             price = finalPrice ?: listPrice,
             listPrice = if (finalPrice != null) listPrice else null,
             highlighted = finalPrice != null,
+            priceLabel = if (finalPrice != null) host.t("券后", "coupon") else host.t("参考", "est."),
+            listLabel = host.t("参考", "list"),
         )
     }
 }
@@ -188,21 +217,55 @@ internal fun RideEstimateCard(host: PluginHost, state: ToolResultState) {
     }
     var expanded by remember(estimate.traceId, estimate.route, estimate.items.size) { mutableStateOf(false) }
     val colors = deepDeepColors()
-    val route = estimate.route.ifBlank { host.t("本次行程", "This trip") }
-    val routeFacts = listOfNotNull(
-        estimate.distance?.let { host.t("全程 $it", "distance $it") },
-        estimate.duration?.let { host.t("约 $it", "about $it") },
-        estimate.eta?.let { host.t("接驾约 $it", "pickup in $it") },
-        estimate.phoneSuffix?.let { host.t("账号尾号 $it", "account suffix $it") },
-    ).joinToString(" · ")
+    val translate: RideTranslate = { zh, en -> host.t(zh, en) }
+    val facts = listOfNotNull(
+        estimate.distanceKm?.let { rideDistanceLabel(host, it) }?.let { host.t("全程 $it", "distance $it") },
+        estimate.eta?.let { rideMinutesLabel(host, it) }?.let { host.t("接驾约 $it", "pickup about $it") },
+        estimate.duration?.let { rideMinutesLabel(host, it) }?.let { host.t("约 $it", "about $it") },
+        estimate.phoneSuffix?.takeIf { it.isNotBlank() }?.let { host.t("账号尾号 $it", "account suffix $it") },
+    )
+    val snapped = buildList {
+        if (estimate.adsorpedFrom) {
+            estimate.from?.name?.takeIf { it.isNotBlank() }?.let { add(host.t("上车点 $it", "pickup $it")) }
+        }
+        if (estimate.adsorpedTo) {
+            estimate.to?.name?.takeIf { it.isNotBlank() }?.let { add(host.t("下车点 $it", "drop-off $it")) }
+        }
+    }
+    val fromPoint = estimate.from?.geoPoint()
+    val toPoint = estimate.to?.geoPoint()
     val visible = if (expanded) estimate.items else estimate.items.take(CARD_PREVIEW_ITEMS)
     RideCardShell(
-        title = route,
-        subtitle = routeFacts.ifBlank {
-            host.t("车型与参考价", "Ride options and estimated fares")
-        },
+        title = title,
         footer = host.t("参考价，实际以下单页为准", "Estimated fare; the booking page is final."),
     ) {
+        RideRouteStrip(
+            from = estimate.pickupName,
+            to = estimate.dropoffName,
+            translate = translate,
+            fromLabel = host.t("上车", "Pickup"),
+            toLabel = host.t("下车", "Drop-off"),
+        )
+        if (snapped.isNotEmpty()) {
+            DdNoticeBar(
+                text = host.t(
+                    "滴滴已吸附到该点位：${snapped.joinToString("、")}",
+                    "DiDi snapped to these points: ${snapped.joinToString(", ")}",
+                ),
+                tone = DdNoticeTone.WARNING,
+            )
+        }
+        RideFactStrip(facts)
+        if (estimate.routes.size >= 2 || (fromPoint != null && toPoint != null)) {
+            RideRouteMap(
+                route = estimate.routes,
+                from = fromPoint,
+                to = toPoint,
+                fromLabel = host.t("上车", "Pickup"),
+                toLabel = host.t("下车", "Drop-off"),
+            )
+            RideMapCaption(host, host.t("路线示意", "Route sketch"))
+        }
         DdHairline()
         visible.forEachIndexed { index, item ->
             RideEstimateRow(host, item)
@@ -314,7 +377,13 @@ internal fun RideOrderCard(host: PluginHost, state: ToolResultState) {
     ) {
         if (order.fromName != null && order.toName != null) {
             DdHairline()
-            RideRouteStrip(from = order.fromName, to = order.toName, translate = translate)
+            RideRouteStrip(
+                from = order.fromName,
+                to = order.toName,
+                translate = translate,
+                fromLabel = host.t("上车", "Pickup"),
+                toLabel = host.t("下车", "Drop-off"),
+            )
         }
         if (order.driver != null || order.carModel != null || order.plate != null || order.phone != null ||
             order.driverRating != null || order.driverOrderCount != null
@@ -342,8 +411,12 @@ internal fun RideOrderCard(host: PluginHost, state: ToolResultState) {
             }
         }
         val positionRows = buildList<Triple<String, String, DdStatusTone>> {
-            order.distanceKm?.let { add(Triple(host.t("距上车点", "To pickup"), it, DdStatusTone.NEUTRAL)) }
-            order.eta?.let { add(Triple(host.t("预计到达", "ETA"), it, DdStatusTone.ACCENT)) }
+            order.distanceKm?.let { rideDistanceLabel(host, it) }?.let {
+                add(Triple(host.t("距上车点", "To pickup"), it, DdStatusTone.NEUTRAL))
+            }
+            order.eta?.let { rideMinutesLabel(host, it) }?.let {
+                add(Triple(host.t("预计到达", "ETA"), it, DdStatusTone.ACCENT))
+            }
             order.phase?.let { phase ->
                 val label = when (phase) {
                     "to_pickup" -> host.t("前往上车点", "Heading to pickup")
@@ -446,10 +519,10 @@ internal fun RideDriverLocationCard(host: PluginHost, state: ToolResultState) {
                 tone = rideStatusTone(status),
             )
         }
-        location.distance?.let {
+        location.distance?.let { rideDistanceLabel(host, it) }?.let {
             DdStatusRow(label = host.t("距上车点", "To pickup"), value = it, tone = DdStatusTone.NEUTRAL)
         }
-        location.eta?.let {
+        location.eta?.let { rideMinutesLabel(host, it) }?.let {
             DdStatusRow(label = host.t("预计到达", "ETA"), value = it, tone = DdStatusTone.ACCENT)
         }
         location.updatedAt?.let {
@@ -512,62 +585,67 @@ internal fun RideSearchCard(host: PluginHost, state: ToolResultState) {
         RideEmptyCard(host, title, host.t("没有找到匹配的地点。", "No matching places found."))
         return
     }
-    var expanded by remember(places.size, places.firstOrNull()?.displayName) { mutableStateOf(false) }
     val colors = deepDeepColors()
-    val cities = places.mapNotNull { it.city?.takeIf { city -> city.isNotBlank() } }.distinct()
+    val groups = ridePlaceGroups(places)
+    val cities = groups.mapNotNull { it.first }
     val subtitle = if (cities.size == 1) {
         host.tf("%s · %d 个地点", "%s · %d places", cities.first(), places.size)
     } else {
         host.tf("找到 %d 个地点", "Found %d places", places.size)
     }
-    val visible = if (expanded) places else places.take(CARD_PREVIEW_ITEMS)
+    val located = places.withIndex().mapNotNull { entry ->
+        entry.value.geoPoint()?.let { point -> point to "${entry.index + 1}" }
+    }
     RideCardShell(title = title, subtitle = subtitle) {
-        DdHairline()
-        visible.forEachIndexed { index, place ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                verticalAlignment = Alignment.Top,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .clip(CircleShape)
-                        .background(colors.wash),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    DdText("${index + 1}", style = DdType.numeric, color = colors.inkSecondary)
-                }
-                Spacer(Modifier.width(DdSpacing.Md))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    DdText(
-                        text = place.displayName ?: host.t("地点", "Place"),
-                        style = DdType.body,
-                        color = colors.ink,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    place.address?.takeIf { it.isNotBlank() && it != place.name }?.let {
-                        DdText(it, style = DdType.bodySmall, color = colors.inkSecondary, maxLines = 3)
-                    }
-                    val meta = listOfNotNull(
-                        place.city?.takeIf { it.isNotBlank() },
-                        place.coordinates,
-                    ).joinToString(" · ")
-                    if (meta.isNotBlank()) {
-                        DdText(meta, style = DdType.micro, color = colors.inkTertiary, maxLines = 1)
-                    }
-                }
-            }
-            if (index < visible.lastIndex) DdHairline()
+        if (located.isNotEmpty()) {
+            RidePlaceMap(points = located.map { it.first }, labels = located.map { it.second })
+            RideMapCaption(host, host.t("点位分布", "Place map"))
         }
-        if (places.size > CARD_PREVIEW_ITEMS) {
-            DdExpandToggle(
-                expanded = expanded,
-                collapsedLabel = host.tf("查看全部 %d 个地点", "Show all %d places", places.size),
-                expandedLabel = host.t("收起地点", "Show fewer places"),
-                onToggle = { expanded = !expanded },
-                modifier = Modifier.fillMaxWidth(),
-            )
+        DdHairline()
+        var rendered = 0
+        groups.forEach { (city, entries) ->
+            if (groups.size > 1) {
+                DdText(
+                    text = city ?: host.t("其他城市", "Other cities"),
+                    modifier = Modifier.padding(top = DdSpacing.Sm),
+                    style = DdType.chip,
+                    color = colors.inkSecondary,
+                )
+            }
+            entries.forEach { entry ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clip(CircleShape)
+                            .background(colors.wash),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        DdText("${entry.index + 1}", style = DdType.numeric, color = colors.inkSecondary)
+                    }
+                    Spacer(Modifier.width(DdSpacing.Md))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        DdText(
+                            text = entry.value.displayName ?: host.t("地点", "Place"),
+                            style = DdType.body,
+                            color = colors.ink,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        entry.value.address?.takeIf { it.isNotBlank() && it != entry.value.name }?.let {
+                            DdText(it, style = DdType.bodySmall, color = colors.inkSecondary, maxLines = 3)
+                        }
+                        entry.value.coordinates?.let {
+                            DdText(it, style = DdType.micro, color = colors.inkTertiary, maxLines = 1)
+                        }
+                    }
+                }
+                rendered++
+                if (rendered < places.size) DdHairline()
+            }
         }
     }
 }

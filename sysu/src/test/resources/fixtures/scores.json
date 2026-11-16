@@ -1,30 +1,33 @@
-[
-  {
-    "semester": "2025-2",
-    "count": 3,
-    "credit": 6.0,
-    "gpa": 2.433333333333333,
-    "courses": [
-      {
-        "scoCourseNumber": "LN101",
-        "scoCourseName": "课程甲",
-        "scoCredit": 3,
-        "scoFinalScore": "B",
-        "scoPoint": 3.3
-      },
-      {
-        "scoCourseNumber": "LN102",
-        "scoCourseName": "课程乙",
-        "scoCredit": 2,
-        "scoFinalScore": "D",
-        "scoPoint": 1
-      },
-      {
-        "scoCourseNumber": "LN103",
-        "scoCourseName": "课程丙",
-        "scoCredit": 1,
-        "scoFinalScore": "缓考"
-      }
-    ]
-  }
-]
+{
+  "ok": true,
+  "semesters": [
+    {
+      "semester": "2025-2",
+      "count": 3,
+      "credit": 6.0,
+      "gpa": 2.433333333333333,
+      "courses": [
+        {
+          "scoCourseNumber": "LN101",
+          "scoCourseName": "课程甲",
+          "scoCredit": 3,
+          "scoFinalScore": "B",
+          "scoPoint": 3.3
+        },
+        {
+          "scoCourseNumber": "LN102",
+          "scoCourseName": "课程乙",
+          "scoCredit": 2,
+          "scoFinalScore": "D",
+          "scoPoint": 1
+        },
+        {
+          "scoCourseNumber": "LN103",
+          "scoCourseName": "课程丙",
+          "scoCredit": 1,
+          "scoFinalScore": "缓考"
+        }
+      ]
+    }
+  ]
+}

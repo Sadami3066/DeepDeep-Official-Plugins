@@ -1,0 +1,12 @@
+{
+  "ok": false,
+  "identity": "user",
+  "error": {
+    "type": "api",
+    "subtype": "unknown",
+    "code": 4013,
+    "message": "API call failed: [15180001] user not found",
+    "log_id": "mock_log_id",
+    "troubleshooter": "mock troubleshooter"
+  }
+}

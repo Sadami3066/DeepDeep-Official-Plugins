@@ -14,6 +14,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -32,11 +33,11 @@ class WecomHooksTest {
         hooks.beforeToolCall(request("call-1", "wecom-cli chat groups list --begin-time '2026-11-08 00:00:00'"))
         val decision = hooks.afterToolExecution(result("call-1", wecomFixture("chat-groups.json")))
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        val text = decision.result!!.text!!
-        assertTrue(text.contains("产品讨论群"))
-        assertTrue(text.contains("wrOgQhDgAAmockchatid001"))
-        assertTrue(text.contains("2026-11-15 10:24:31"))
-        assertFalse(text.contains("卡片 id"))
+        val guidance = guidanceOf(decision)
+        assertTrue(guidance.contains("wecom-cli chat messages list"))
+        assertFalse(guidance.contains("产品讨论群"))
+        assertFalse(guidance.contains("卡片 id"))
+        assertEquals("企业微信群聊会话：共 2 个，时间范围 2026-11-08 00:00:00 起", cardTitle(decision))
         val raw = rawOf(decision)
         assertNotNull(raw)
         assertTrue(raw!!.contains("\"chats\""))
@@ -69,7 +70,7 @@ class WecomHooksTest {
             assertEquals(ToolResultAction.REPLACE, decision.action)
             assertEquals(kind.customType, cardType(decision))
             assertEquals(kind.customType, cardOf(decision)?.kind)
-            assertFalse(decision.result!!.text!!.contains("卡片 id"))
+            assertFalse(guidanceOf(decision).contains("卡片 id"))
             assertNotNull(rawOf(decision))
         }
     }
@@ -151,7 +152,7 @@ class WecomHooksTest {
             result("call-1", wecomFixture("error-unauthorized.json"), isError = true),
         )
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        val text = decision.result!!.text!!
+        val text = guidanceOf(decision)
         assertTrue(text.contains("AuthError"))
         assertTrue(text.contains("该请求需要授权"))
         assertTrue(text.contains("893201"))
@@ -201,22 +202,23 @@ class WecomHooksTest {
         val output = "[wecom] json repair: ok\n${wecomFixture("todo-list.json")}\n\n[exit: 0]"
         val decision = hooks.afterToolExecution(result("call-1", output))
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        assertTrue(decision.result!!.text!!.contains("整理接口文档"))
-        assertTrue(decision.result!!.text!!.contains("退出码：0"))
+        assertTrue(guidanceOf(decision).contains("退出码：0"))
+        assertFalse(guidanceOf(decision).contains("整理接口文档"))
         assertNotNull(cardOf(decision))
     }
 
     @Test
-    fun exitCodeIsPreservedInObservationAndRaw() = runBlocking {
+    fun exitCodeGoesToGuidanceAndRawStaysVerbatimWithoutHostMarker() = runBlocking {
         val host = FakeWecomHost()
         val hooks = bridge.hooks(host)
         hooks.beforeToolCall(request("call-1", "wecom-cli chat groups list"))
         val decision = hooks.afterToolExecution(
             result("call-1", wecomFixture("chat-groups.json") + "\n\n[exit: 0]"),
         )
-        val text = decision.result!!.text!!
-        assertTrue(text.contains("退出码：0"))
-        assertTrue(rawOf(decision)!!.contains("[exit: 0]"))
+        assertEquals("", decision.result!!.text)
+        assertTrue(guidanceOf(decision).contains("退出码：0"))
+        assertTrue(rawOf(decision)!!.contains("\"chats\""))
+        assertFalse(rawOf(decision)!!.contains("[exit: 0]"))
     }
 
     @Test
@@ -227,8 +229,9 @@ class WecomHooksTest {
         val output = """{"name":"大文档","version":2,"file_path":"/tmp/wecom/doc.md"}"""
         val decision = hooks.afterToolExecution(result("call-1", output))
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        val text = decision.result!!.text!!
-        assertTrue(text.contains("第二段正文"))
+        val text = guidanceOf(decision)
+        assertTrue(text.contains("/tmp/wecom/doc.md"))
+        assertFalse(text.contains("第二段正文"))
         assertFalse(text.contains("未能读取文件内容"))
         assertTrue(cardOf(decision)!!.summary!!.contains("第二段正文"))
         assertTrue(rawOf(decision)!!.contains("file_path"))
@@ -249,7 +252,7 @@ class WecomHooksTest {
             }
         """.trimIndent()
         val decision = hooks.afterToolExecution(result("call-1", output))
-        val text = decision.result!!.text!!
+        val text = guidanceOf(decision)
         assertTrue(text.contains("安全提示"))
         assertTrue(text.contains("untrusted external content"))
     }
@@ -260,12 +263,12 @@ class WecomHooksTest {
         val hooks = bridge.hooks(host)
         hooks.beforeToolCall(request("call-1", "wecom-cli calendar schedules list"))
         val schedules = hooks.afterToolExecution(result("call-1", wecomFixture("calendar-schedules.json")))
-        assertTrue(schedules.result!!.text!!.contains("cursor=CURSOR_SCHED_PAGE_2"))
+        assertTrue(guidanceOf(schedules).contains("cursor=CURSOR_SCHED_PAGE_2"))
         assertTrue(cardOf(schedules)!!.note!!.contains("CURSOR_SCHED_PAGE_2"))
 
         hooks.beforeToolCall(request("call-2", "wecom-cli contact users search --keywords 张三"))
         val contacts = hooks.afterToolExecution(result("call-2", wecomFixture("contact-users.json")))
-        assertTrue(contacts.result!!.text!!.contains("cursor=CURSOR_CONTACT_PAGE_2"))
+        assertTrue(guidanceOf(contacts).contains("cursor=CURSOR_CONTACT_PAGE_2"))
         assertTrue(cardOf(contacts)!!.note!!.contains("CURSOR_CONTACT_PAGE_2"))
     }
 
@@ -283,7 +286,8 @@ class WecomHooksTest {
         val card = cardOf(decision)!!
         assertEquals(61, card.items.size)
         assertEquals("群61", card.items.last().title)
-        assertTrue(decision.result!!.text!!.contains("61. 群61"))
+        assertEquals("企业微信群聊会话：共 61 个", cardTitle(decision))
+        assertFalse(guidanceOf(decision).contains("61. 群61"))
     }
 
     @Test
@@ -295,7 +299,7 @@ class WecomHooksTest {
             result("call-1", """{"chats":[],"chats_count":0}"""),
         )
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        assertTrue(decision.result!!.text!!.contains("没有符合条件的群聊会话"))
+        assertTrue(guidanceOf(decision).contains("没有符合条件的群聊会话"))
         val card = cardOf(decision)!!
         assertEquals("empty", card.state.wire)
         assertEquals(0, card.total)
@@ -349,8 +353,8 @@ class WecomHooksTest {
         hooks.beforeToolCall(request("call-1", "wecom-cli todo list"))
         val decision = hooks.afterToolExecution(result("call-1", wecomFixture("todo-list.json")))
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        val text = decision.result!!.text!!
-        assertTrue(text.contains("整理接口文档"))
+        val text = guidanceOf(decision)
+        assertFalse(text.contains("整理接口文档"))
         assertFalse(text.contains("卡片 id"))
         assertFalse(text.contains("call-1"))
         assertFalse(text.contains("\"items\""))
@@ -383,6 +387,9 @@ class WecomHooksTest {
             result = textResult(text, isError = isError),
         )
 
+    private fun guidanceOf(decision: ToolResultDecision): String =
+        (decision.result?.details?.get("deepdeep.guidance") as? JsonPrimitive)?.contentOrNull.orEmpty()
+
     private fun rawOf(decision: ToolResultDecision): String? =
         (decision.result?.details?.get("deepdeep.raw") as? JsonPrimitive)?.content
 
@@ -392,6 +399,10 @@ class WecomHooksTest {
     private fun cardPayload(decision: ToolResultDecision): JsonObject? =
         (decision.result?.details?.get("deepdeep.card") as? JsonObject)
             ?.get("payload") as? JsonObject
+
+    private fun cardTitle(decision: ToolResultDecision): String? =
+        ((decision.result?.details?.get("deepdeep.card") as? JsonObject)
+            ?.get("title") as? JsonPrimitive)?.content
 
     private fun cardType(decision: ToolResultDecision): String? =
         ((decision.result?.details?.get("deepdeep.card") as? JsonObject)

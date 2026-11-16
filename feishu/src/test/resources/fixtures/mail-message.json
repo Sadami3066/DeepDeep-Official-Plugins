@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "message_id": "m_1",
+    "thread_id": "t_1",
+    "subject": "周会改到周四",
+    "head_from": { "mail_address": "alice@example.com", "name": "Alice" },
+    "to": [{ "mail_address": "me@example.com", "name": "黄宇鹏" }],
+    "cc": [{ "mail_address": "bob@example.com", "name": "Bob" }],
+    "date": "Sat, 21 Mar 2026 11:40:00 +0800",
+    "date_formatted": "2026-03-21 11:40",
+    "body_plain_text": "本周周会改到周四下午三点，地点不变。\n请提前准备进度。",
+    "attachments": [{ "id": "att_1", "filename": "进度.docx", "is_inline": false }],
+    "label_ids": ["UNREAD"],
+    "folder_id": "INBOX",
+    "security_level": { "is_risk": true, "risk_banner_level": "DANGER" }
+  }
+}

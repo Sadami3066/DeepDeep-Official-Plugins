@@ -1,39 +1,5 @@
 const client = require('./client');
 
-const WIDE = /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7FF\uF900-\uFAFF\uFE10-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6]/;
-const width = (s) => [...String(s)].reduce((n, c) => n + (WIDE.test(c) ? 2 : 1), 0);
-const pad = (s, n, right = false) => {
-  const fill = ' '.repeat(Math.max(0, n - width(s)));
-  return right ? fill + s : s + fill;
-};
-
-function table(rows, aligns = []) {
-  const widths = rows[0].map((_, i) => Math.max(...rows.map((r) => width(r[i] ?? ''))));
-  return rows
-    .map((row) => row.map((cell, i) => pad(String(cell ?? ''), widths[i], aligns[i] === 'right')).join('  ').trimEnd())
-    .join('\n');
-}
-
-const dim = (s) => `\x1b[2m${s}\x1b[0m`;
-
-function progress(label) {
-  if (!process.stderr.isTTY) return { update() {}, done() {} };
-  const frames = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
-  let text = label;
-  let i = 0;
-  const draw = () => process.stderr.write(`\r\x1b[2K\x1b[2m${frames[i++ % frames.length]} ${text}\x1b[0m`);
-  const timer = setInterval(draw, 90);
-  timer.unref();
-  draw();
-  return {
-    update: (t) => (text = t),
-    done: () => {
-      clearInterval(timer);
-      process.stderr.write('\r\x1b[2K');
-    },
-  };
-}
-
 // 不用 toLocaleDateString：精简版 Node 没有 sv-SE 数据，会退化成 m/d/yyyy
 const today = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 const addDays = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
@@ -45,40 +11,16 @@ async function weekOf(term, date) {
   return current + Math.floor(offset / 7);
 }
 
-const timeOf = (item, times) => (item.type === 'exam' && item.time) || client.sectionTime(item.sections, times);
-
-function printSchedule(days, times = {}) {
-  if (!days.length) return console.log('  （无课）');
-  const label = (i) => `${i.sections} 节 ${timeOf(i, times)}`.trim();
-  const padTo = Math.max(...days.flatMap((d) => d.items.map((i) => width(label(i))))) + 2;
-  for (const [n, day] of days.entries()) {
-    console.log(`${n ? '\n' : ''}${day.weekday} ${day.date.slice(5)}`);
-    for (const item of day.items) {
-      const mark = item.type === 'exam' ? '\x1b[1m[考试]\x1b[0m ' : '';
-      console.log(`  ${pad(label(item), padTo)}${mark}${item.name}`);
-      const meta = [item.teacher, item.place].filter(Boolean).join(' · ');
-      if (meta) console.log(dim(`${' '.repeat(padTo + 2)}${meta}`));
-    }
-  }
-}
-
-async function schedule({ week, today: onlyToday, tomorrow, json }) {
+async function schedule({ week, today: onlyToday, tomorrow }) {
   await client.ensureLogin();
   const { acadYearSemester: term } = await client.getTerm();
 
   const date = onlyToday || tomorrow ? addDays(today(), tomorrow ? 1 : 0) : null;
   const target = week ?? (date ? await weekOf(term, date) : await client.getCurrentWeek(term));
-  const [range, times] = await Promise.all([
-    client.getWeekRange(term, target),
-    client.getSectionTimes(term),
-  ]);
+  const range = await client.getWeekRange(term, target);
   const days = (await client.getSchedule(term, target)).filter((d) => !date || d.date === date);
 
-  if (json) return console.log(JSON.stringify({ term, week: target, ...range, days }, null, 2));
-
-  const title = date ? `${onlyToday ? '今天' : '明天'} ${date}` : `${term} · 第 ${target} 周`;
-  console.log(dim(`${title}（${range.startTime} ~ ${range.endTime.slice(5)}）`));
-  printSchedule(days, times);
+  console.log(JSON.stringify({ term, week: target, ...range, days }, null, 2));
 }
 
 function summarize(semester, courses) {
@@ -89,7 +31,7 @@ function summarize(semester, courses) {
   return { semester, count: courses.length, credit, gpa: total ? points / total : null };
 }
 
-async function scores({ semester, all, json }) {
+async function scores({ semester, all }) {
   await client.ensureLogin();
   const { acadYearSemester: term } = await client.getTerm();
   const pick = async (s) => {
@@ -115,81 +57,20 @@ async function scores({ semester, all, json }) {
     }
   }
 
-  if (json) return console.log(JSON.stringify(results, null, 2));
-  if (!results.length) return console.log(dim('还没有任何成绩'));
-
-  results.forEach((r, i) => {
-    if (i) console.log();
-    if (!r.courses.length) return console.log(dim(`${r.semester} 还没有成绩`));
-    console.log(dim(`${r.semester} · ${r.count} 门 · ${r.credit.toFixed(1)} 学分` +
-      (r.gpa === null ? '' : ` · 加权绩点 ${r.gpa.toFixed(3)}`)));
-    console.log(table(
-      [['课程', '学分', '成绩', '绩点'],
-       ...r.courses.map((c) => [
-         c.scoCourseName,
-         Number(c.scoCredit).toFixed(1),
-         c.scoFinalScore,
-         typeof c.scoPoint === 'number' ? c.scoPoint.toFixed(1) : '-',
-       ])],
-      ['left', 'right', 'right', 'right'],
-    ));
-  });
+  console.log(JSON.stringify({ ok: true, semesters: results }, null, 2));
 }
 
-const fixed = (n) => Number(n || 0).toFixed(1);
-
-const CATEGORIES = [
-  ['专业必修', 'majorMinCredit', 'majorFinishCredit'],
-  ['专业选修', 'majorSelectMinCredit', 'majorSelectFinishCredit'],
-  ['公共必修', 'publicMinGraduationCredit', 'publicFinishCredit'],
-  ['公共选修', 'publicSelectMinCredit', 'publicSelectFinishCredit'],
-  ['荣誉课程', 'honorCourseMinCredit', 'honorCourseFinishCredit'],
-];
-
-async function credits({ json }) {
+async function credits() {
   await client.ensureLogin();
   const plans = await client.getCredits();
-  if (json) return console.log(JSON.stringify(plans, null, 2));
-
-  plans.forEach((p, i) => {
-    if (i) console.log();
-    console.log(dim(`${p.grade} 级 · ${p.professionNumber}`));
-    console.log(table([
-      ['毕业学分', `${fixed(p.finishCredit)} / ${p.minGraduationCredit}`, `${p.finishCreditRate}%`],
-      ...CATEGORIES.filter(([, min]) => p[min]).map(([label, min, done]) => [label, `${fixed(p[done])} / ${p[min]}`, '']),
-    ], ['left', 'right', 'right']));
-  });
+  console.log(JSON.stringify({ ok: true, plans }, null, 2));
 }
 
-const daysFromNow = (date) => Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today()}T00:00:00Z`)) / 864e5);
-
-async function exams({ json }) {
+async function exams() {
   await client.ensureLogin();
   const { acadYearSemester: term } = await client.getTerm();
-  const spin = progress('读取整学期课表');
-  const list = await client.getExams(term, (d, t) => spin.update(`读取整学期课表 ${d}/${t} 周`));
-  spin.done();
-
-  if (json) return console.log(JSON.stringify({ term, exams: list }, null, 2));
-  if (!list.length) return console.log(dim(`${term} 还没有已排期的考试`));
-
-  console.log(dim(`${term} · 共 ${list.length} 场考试（含结课考、缓补考）`));
-  console.log();
-  console.log(table([
-    ['日期', '星期', '节次', '时间', '课程', '地点', '距今天'],
-    ...list.map((e) => {
-      const left = daysFromNow(e.date);
-      return [
-        e.date,
-        e.weekday.replace('星期', '周'),
-        e.sections,
-        e.time,
-        e.name,
-        shortPlace(e.place),
-        left > 0 ? `${left} 天后` : left === 0 ? '就是今天' : '已过',
-      ];
-    }),
-  ]));
+  const list = await client.getExams(term);
+  console.log(JSON.stringify({ term, exams: list }, null, 2));
 }
 
 function leaveDays(begin, end) {
@@ -212,29 +93,16 @@ function parseWhen(input, isBegin) {
   return `${m[1]} ${time}`;
 }
 
-function ask(question) {
-  if (!process.stdin.isTTY) return Promise.resolve(false);
-  const rl = require('node:readline').createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => rl.question(question, (a) => (rl.close(), resolve(/^y(es)?$/i.test(a.trim())))));
-}
-
-async function leave({ apply, from, to, reason, note, days, file, dryRun, yes, json }) {
+async function leave({ apply, from, to, reason, note, days, file, dryRun, yes }) {
   await client.ensureLogin();
-  const [summary, records, reasons, roll] = await Promise.all([
+  const [summary, records, reasons] = await Promise.all([
     client.getLeaveSummary(),
     client.getLeaveRecords(),
     client.getLeaveReasons(),
-    client.getStudentRoll(),
   ]);
 
   if (!apply && !from && !to && !reason) {
-    if (json) return console.log(JSON.stringify({ summary, records: records.rows }, null, 2));
-    console.log(dim(`${roll.basicName} · ${roll.studentNumber} · ${roll.rollGrade} 级 · 已请假 ${summary.curStuLeaveDaysCount} 天`));
-    console.log();
-    console.log(table([
-      ['学年学期', '申请日期', '原因', '类型', '开始', '结束', '天数', '审批'],
-      ...(records.rows || []).map((r) => [r.semester, r.askLeaveApplyDate, r.askLeaveReasonName, r.askLeaveTypeName, r.askLeaveBeginTime, r.askLeaveEndTime, `${r.askLeaveDaysCount} 天`, r.approveStatusName]),
-    ]));
+    console.log(JSON.stringify({ ok: true, summary, records: records.rows }, null, 2));
     return;
   }
 
@@ -244,7 +112,6 @@ async function leave({ apply, from, to, reason, note, days, file, dryRun, yes, j
     );
   }
 
-  const preview = dryRun || json;
   const begin = parseWhen(from, true);
   const end = parseWhen(to, false);
   const count = days === undefined ? leaveDays(new Date(begin.replace(/-/g, '/')), new Date(end.replace(/-/g, '/'))) : Number(days);
@@ -271,9 +138,10 @@ async function leave({ apply, from, to, reason, note, days, file, dryRun, yes, j
   }
 
   const attach = file ? client.checkAttachFile(file) : null;
-  if (!preview && !attach) {
+  if (!dryRun && !attach) {
     throw new Error(`请假必须带附件（学校系统硬性要求）：--file <${client.ATTACH_TYPES.join(' / ')} 文件>`);
   }
+  if (!dryRun && !yes) throw new Error('提交请假要加 --yes；先用 --dry-run 预览');
 
   const payload = {
     semester: semEnd.acadYearSemester,
@@ -287,46 +155,36 @@ async function leave({ apply, from, to, reason, note, days, file, dryRun, yes, j
     whetherStuApply: '1',
   };
 
-  if (json) return console.log(JSON.stringify(payload, null, 2));
-
-  console.log(dim('请假申请（提交前确认）'));
-  console.log(table([
-    ['学年学期', payload.semester],
-    ['时间', `${begin} → ${end}`],
-    ['天数', `${count} 天${days === undefined ? '（自动算）' : ''}`],
-    ['类型', typeName],
-    ['原因', found.dataName],
-    ['说明', note],
-    ['附件', attach ? `${attach.name}（${Math.max(1, Math.round(attach.size / 1024))} KB）` : '未指定'],
-  ], ['left', 'left']));
-
+  const warnings = [];
   const used = summary.curStuLeaveDaysCount + count;
   if (used > summary.curSemesterDaysCount / 3) {
-    console.log(`\n\x1b[33m⚠ 本学期累计请假将达 ${used} 天，超过学期总天数的 1/3，学校规则是要办休学\x1b[0m`);
+    warnings.push(`本学期累计请假将达 ${used} 天，超过学期总天数的 1/3，学校规则是要办休学`);
   }
-
   if (attach && !attach.ascii) {
     const asStored = [...attach.name]
       .map((c) => (/^[\x20-\x7e]$/.test(c) ? c : '?'.repeat(Buffer.byteLength(c))))
       .join('');
-    console.log(
-      `\n\x1b[33m⚠ 附件名不是纯 ASCII，教务系统会把它存成 ${asStored}` +
-        `（服务端只认 ASCII 文件名，网页上传也一样）。想让人看清就先重命名成英文。\x1b[0m`,
-    );
+    warnings.push(`附件名不是纯 ASCII，教务系统会把它存成 ${asStored}；想让人看清就先重命名成英文`);
   }
 
-  if (dryRun) return console.log(`\n${dim('--dry-run：没提交，附件也没上传。')}`);
+  const output = {
+    ok: true,
+    dryRun,
+    ...payload,
+    attachment: attach ? { name: attach.name, size: attach.size, ascii: attach.ascii } : null,
+    warnings,
+  };
 
-  const ok = yes || (await ask('\n提交后会生成一条要老师审批的请假单。确认提交？(y/N) '));
-  if (!ok) return console.log(dim('已取消，什么都没提交，附件也没上传。'));
+  if (dryRun) {
+    console.log(JSON.stringify(output, null, 2));
+    return;
+  }
 
-  const bar = progress('上传附件…');
-  const att = await client.uploadLeaveFile(file).finally(() => bar.done());
+  const att = await client.uploadLeaveFile(file);
   payload.fileName = att.fileName;
   payload.filePath = att.filePath;
-
   await client.applyLeave(payload);
-  console.log('\n✅ 已提交。用 jwxt leave 看审批进度。');
+  console.log(JSON.stringify({ ...output, submitted: true, fileName: att.fileName, filePath: att.filePath }, null, 2));
 }
 
 const stripHtml = (html) =>
@@ -343,24 +201,17 @@ const stripHtml = (html) =>
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
-async function notice({ id, num, json }) {
+async function notice({ id, num }) {
   await client.ensureLogin();
   if (id) {
     const html = await client.getNoticeDetail(id);
     const text = stripHtml(html);
-    if (json) return console.log(JSON.stringify({ id, text }, null, 2));
     if (!text) throw new Error(`公告 ${id} 没有正文（id 对不对？先用 jwxt notice 看列表）`);
-    return console.log(text);
+    console.log(JSON.stringify({ id, text }, null, 2));
+    return;
   }
   const data = await client.getNotices(num);
-  if (json) return console.log(JSON.stringify(data, null, 2));
-  for (const [key, label] of [['education', '教务部公告'], ['college', '院系公告']]) {
-    const rows = data[key] || [];
-    if (!rows.length) continue;
-    console.log(dim(`\n  ${label}`));
-    console.log(table(rows.map((n) => [n.deliveryDate, n.title]), ['left', 'left']));
-  }
-  console.log(dim('\n  jwxt notice <id> 看全文  ·  --num N 控制条数'));
+  console.log(JSON.stringify(data, null, 2));
 }
 
 const SECTIONS = [
@@ -368,27 +219,21 @@ const SECTIONS = [
   'nineSection', 'tenSection', 'elevenSection', 'twelveSection', 'thirteenSection', 'fourteenSection', 'fifteenSection', 'sixteenSection',
 ];
 
-function compress(nums) {
-  const runs = [];
-  for (const n of [...nums].sort((a, b) => a - b)) {
-    const last = runs[runs.length - 1];
-    if (last && n === last[1] + 1) last[1] = n;
-    else runs.push([n, n]);
+function freeRooms(rows, sections, day) {
+  const [a, b] = sections.split('-').map(Number);
+  if (!Number.isInteger(a) || !Number.isInteger(b) || a < 1 || b < a || b > SECTIONS.length) {
+    throw new Error(`--sections 要写成 9-11（1~${SECTIONS.length} 节），收到：${sections}`);
   }
-  return runs.map(([a, b]) => (a === b ? `${a}` : `${a}-${b}`));
+  const want = SECTIONS.slice(a - 1, b);
+  const out = [];
+  for (const row of rows) {
+    if (day && Number(row.dayWeek) !== day) continue;
+    if (want.every((key) => !(row[key] && row[key].occupyReason))) out.push(String(row.classroomNum));
+  }
+  return [...new Set(out)];
 }
 
-function freeRanges(row) {
-  const busy = [];
-  SECTIONS.forEach((k, i) => {
-    const cell = row[k];
-    if (cell && cell.occupyReason) busy.push(i + 1);
-  });
-  const free = SECTIONS.map((_, i) => i + 1).filter((n) => !busy.includes(n));
-  return compress(free);
-}
-
-async function room({ campus, building, room, week, day, sections, json }) {
+async function room({ campus, building, room, week, day, sections }) {
   await client.ensureLogin();
   const term = await client.getTerm();
   const targetWeek = week || (await client.getCurrentWeek(term.acadYearSemester));
@@ -404,11 +249,13 @@ async function room({ campus, building, room, week, day, sections, json }) {
   if (!build) throw new Error(`没找到教学楼「${building}」，本校区有：${buildings.slice(0, 12).map((b) => b.name).join(' / ')} …`);
 
   let roomId;
+  let roomCode;
   if (room) {
     const list = await client.getClassrooms(camp.id, build.id, room);
     const hit = list.find((r) => r.code === room) || list[0];
     if (!hit) throw new Error(`${build.name} 里没有「${room}」这间教室`);
     roomId = hit.id;
+    roomCode = hit.code || room;
   }
 
   const param = {
@@ -424,110 +271,40 @@ async function room({ campus, building, room, week, day, sections, json }) {
   const res = await client.getClassroomOccupancy(param);
   const rows = res.data || [];
 
-  if (json) return console.log(JSON.stringify({ campus: camp, building: build, week: targetWeek, rows }, null, 2));
-  if (!rows.length) return console.log(dim('没查到占用数据（教室或周次不对？）'));
-
-  console.log(dim(`${camp.campusName} · ${build.name}${room ? ` ${room}` : ''} · ${term.acadYearSemester} 第 ${targetWeek} 周`));
-
+  const output = { campus: camp, building: build, week: targetWeek, rows };
+  if (day) output.day = day;
   if (sections) {
-    const [a, b] = sections.split('-').map(Number);
-    const want = SECTIONS.slice(a - 1, b);
-    const byRoom = new Map();
-    for (const r of rows) if (!day || Number(r.dayWeek) === day) {
-      const free = want.every((k) => !(r[k] && r[k].occupyReason));
-      if (free) byRoom.set(r.classroomNum, true);
-    }
-    const freeRooms = [...byRoom.keys()];
-    if (!freeRooms.length) return console.log(dim(`\n  第 ${sections} 节没有空教室`));
-    console.log(`\n  第 ${sections} 节空闲的教室（${freeRooms.length} 间）：`);
-    console.log('  ' + freeRooms.join('  '));
-    return;
+    const visible = roomCode ? rows.filter((r) => String(r.classroomNum) === String(roomCode)) : rows;
+    output.sections = sections;
+    output.freeRooms = freeRooms(visible, sections, day);
   }
-
-  const slots = new Map();
-  for (const r of rows) {
-    if (day && Number(r.dayWeek) !== day) continue;
-    const free = freeRanges(r);
-    const busy = [];
-    SECTIONS.forEach((k, i) => {
-      const reason = r[k] && r[k].occupyReason;
-      if (!reason) return;
-      const last = busy[busy.length - 1];
-      if (last && last.reason === reason && last.end === i) last.end = i + 1;
-      else busy.push({ reason, start: i + 1, end: i + 1 });
-    });
-    const busyText = busy.map((b) => `${b.start === b.end ? b.start : `${b.start}-${b.end}`}节 ${b.reason}`);
-    if (!slots.has(r.classroomNum)) slots.set(r.classroomNum, []);
-    slots.get(r.classroomNum).push({ date: r.date, dayWeek: r.dayWeek, seats: r.seats, free, busyText });
-  }
-  for (const [num, days] of slots) {
-    console.log(`\n  ${num} 教室（${days[0].seats} 座）`);
-    console.log(table(days.map((d) => [
-      `周${'一二三四五六日'[d.dayWeek - 1]} ${d.date.slice(5)}`,
-      d.free.length ? `${d.free.join(', ')} 节空闲` : '全天占满',
-      d.busyText.length ? dim(d.busyText.join(' · ')) : '',
-    ]), ['left', 'left', 'left']));
-    if (!room) break;
-  }
-  if (!room) console.log(dim('\n  加 --room <号> 看指定教室，加 --sections 9-11 反过来找空教室'));
+  console.log(JSON.stringify(output, null, 2));
 }
 
-async function ta({ json }) {
+async function ta() {
   await client.ensureLogin();
   const res = await client.getAssistantInfo();
-  const rows = res.rows || res.data || [];
-  if (json) return console.log(JSON.stringify(res, null, 2));
-  if (!rows.length) return console.log(dim('没有助教信息（没当过助教就是空的）'));
-  console.log(table([
-    ['学年学期', '课程名称', '课程编码', '教学班号', '任课教师', '助教职责'],
-    ...rows.map((r) => [r.semester, r.courseName, r.courseNum, r.classNumber, r.teacherName, r.jobDuty || '-']),
-  ]));
+  console.log(JSON.stringify(res, null, 2));
 }
 
 const normalize = (s) => String(s).replace(/[（(][^）)]*[）)]/g, '').replace(/\s+/g, '').toLowerCase();
 
-function weeksLabel(weeks) {
-  const runs = [];
-  for (const w of [...new Set(weeks)].sort((a, b) => a - b)) {
-    const last = runs[runs.length - 1];
-    if (last && w === last[1] + 1) last[1] = w;
-    else runs.push([w, w]);
-  }
-  return `第 ${runs.map(([a, b]) => (a === b ? a : `${a}-${b}`)).join(', ')} 周`;
-}
-
-const shortPlace = (p) => String(p || '').replace(/^(南|东|北|珠海|深圳)校园/, '');
-
-function para(label, text) {
-  const lines = String(text || '')
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-  if (!lines.length) return;
-  console.log(dim(`\n  ${label}`));
-  for (const line of lines) console.log(`    ${line}`);
-}
-
-async function course({ name, week, syllabus, intro, json }) {
+async function course({ name, week }) {
   if (!name) throw new Error('要查哪门课？课程码或名字都行：jwxt course LN3015 / jwxt course 国际贸易');
   await client.ensureLogin();
   const term = await client.getTerm();
   const keyword = normalize(name);
   const isCode = !/[\u4e00-\u9fff]/.test(name);
 
-  const spin = progress('读取整学期课表与历年成绩');
-  const [timetable, times, allScores] = await Promise.all([
-    client.getSemesterTimetable(term.acadYearSemester, 24, 10, (d, t) => spin.update(`读取课表 ${d}/${t} 周，同时拉历年成绩`)),
-    client.getSectionTimes(term.acadYearSemester),
+  const [timetable, allScores] = await Promise.all([
+    client.getSemesterTimetable(term.acadYearSemester, 24, 10),
     client.getAllScores(term.acadYearSemester),
   ]);
-  spin.done();
   const myScores = allScores.filter(
     (s) => normalize(s.scoCourseName).includes(keyword) || normalize(s.scoCourseName) === keyword,
   );
 
   let outline = null;
-  let info = null;
   let courseNum = null;
   let courseName = name;
   let how = 'given';
@@ -549,11 +326,17 @@ async function course({ name, week, syllabus, intro, json }) {
       ),
     ];
     if (candidates.length > 1) {
-      console.log(`「${name}」在本学期匹配到 ${candidates.length} 门课，说具体一点：\n`);
-      for (const n of candidates) {
+      const options = candidates.map((n) => {
         const hit = timetable.flatMap((d) => d.items).filter((i) => i.name === n);
-        console.log(`  ${n}  ·  ${hit[0].teacher}  ·  共 ${hit.length} 次课`);
-      }
+        return { name: n, teacher: hit[0]?.teacher || null, sessions: hit.length };
+      });
+      console.log(JSON.stringify({
+        ok: true,
+        term: term.acadYearSemester,
+        query: name,
+        ambiguous: true,
+        candidates: options,
+      }, null, 2));
       return;
     }
     courseName = candidates[0] || name;
@@ -568,7 +351,6 @@ async function course({ name, week, syllabus, intro, json }) {
     const exact = library.filter((c) => normalize(c.courseName) === normalize(courseName));
 
     const use = async (row, source) => {
-      info = row;
       courseNum = row.courseNumber;
       how = source;
       outline = await client.getCourseOutline(courseNum).catch(() => null);
@@ -577,7 +359,6 @@ async function course({ name, week, syllabus, intro, json }) {
     if (fromGrade) {
       courseNum = fromGrade.scoCourseNumber;
       how = 'grade';
-      info = exact.find((c) => c.courseNumber === courseNum) || null;
       outline = await client.getCourseOutline(courseNum).catch(() => null);
     } else if (exact.length === 1) {
       await use(exact[0], 'exact');
@@ -587,7 +368,6 @@ async function course({ name, week, syllabus, intro, json }) {
         const names = [o?.outlineInfo?.teacherName, ...(o?.teacherList || []).map((t) => t.name)].filter(Boolean);
         if (names.some((n) => teachers.some((t) => n.includes(t)))) {
           outline = o;
-          info = row;
           courseNum = row.courseNumber;
           how = 'teacher';
           break;
@@ -621,118 +401,27 @@ async function course({ name, week, syllabus, intro, json }) {
     );
   }
 
-  if (json) {
-    return console.log(JSON.stringify({
-      term: term.acadYearSemester,
-      course: courseName,
-      courseNum,
-      outline: outline?.outlineInfo || null,
-      syllabus: outline?.scheduleList || [],
-      sessions: mine,
-      exams: myExams,
-      scores,
-    }, null, 2));
-  }
-
-  const o = outline?.outlineInfo;
-  console.log(`\x1b[1m${courseName}\x1b[0m${o?.courseEngName ? `  ·  ${o.courseEngName}` : ''}`);
-
-  const facts = [
+  const output = {
+    term: term.acadYearSemester,
+    course: courseName,
     courseNum,
-    (o?.credit || info?.credit) && `${Number(o?.credit ?? info?.credit).toFixed(1)} 学分 / ${o?.totalHours ?? info?.totalHours} 学时`,
-    o?.courseTypeName || info?.courseCategoryNumberName,
-    o?.establishUnitNumberName || info?.establishUnitNumberName,
-    o?.languageName,
-    o?.planClassSize && `容量 ${o.planClassSize}`,
-  ].filter(Boolean);
-  if (facts.length) console.log(dim(`  ${facts.join(' · ')}`));
-
-  if (how === 'teacher') console.log(dim('  （课程码是按授课教师对上的）'));
-  if (!courseNum) {
-    console.log(dim('  ⚠ 没能确定课程码，所以查不到大纲'));
-    if (ambiguous.length) {
-      console.log(dim('    课程库里有这些同名课，用课程码查：'));
-      for (const c of ambiguous.slice(0, 6)) {
-        console.log(dim(`      ${c.courseNumber}  ${c.establishUnitNumberName}  ${Number(c.credit).toFixed(1)} 学分  ${c.buildSchoolSemester} 学期开课`));
-      }
-    }
+    how,
+    outline: outline?.outlineInfo || null,
+    syllabus: outline?.scheduleList || [],
+    sessions: mine,
+    exams: myExams,
+    scores,
+  };
+  if (ambiguous.length) {
+    output.ambiguous = ambiguous.map((c) => ({
+      courseNumber: c.courseNumber,
+      courseName: c.courseName,
+      unit: c.establishUnitNumberName,
+      credit: c.credit,
+      semester: c.buildSchoolSemester,
+    }));
   }
-
-  const teach = [
-    o?.teacherName && `教师 ${o.teacherName}`,
-    o?.coursePrincipal && `课程负责人 ${o.coursePrincipal}`,
-    o?.currentFlowNum && `大纲 ${o.currentFlowNum}`,
-    o?.lecturesCreHours && `讲授 ${o.lecturesCreHours} 学时`,
-    o?.tutorialsCreHours && `辅导 ${o.tutorialsCreHours} 学时`,
-  ].filter(Boolean);
-  if (teach.length) console.log(dim(`  ${teach.join(' · ')}`));
-
-  if (mine.length) {
-    console.log(dim(`\n  上课 · ${term.acadYearSemester}`));
-    const slots = new Map();
-    for (const s of mine) {
-      const key = [s.weekday, s.sections, s.place].join('|');
-      if (!slots.has(key)) slots.set(key, { ...s, weeks: [] });
-      slots.get(key).weeks.push(s.week);
-    }
-    console.log(table([...slots.values()]
-      .sort((a, b) => a.weekday.localeCompare(b.weekday) || parseInt(a.sections) - parseInt(b.sections))
-      .map((s) => [
-        `${s.weekday.replace('星期', '周')} ${s.sections} 节`,
-        client.sectionTime(s.sections, times),
-        shortPlace(s.place),
-        weeksLabel(s.weeks),
-      ])));
-  } else {
-    console.log(dim(`\n  本学期${week ? `第 ${week} 周` : ''}没有排课`));
-  }
-
-  if (myExams.length) {
-    console.log(dim('\n  考试'));
-    console.log(table(myExams.map((e) => [e.date, e.weekday.replace('星期', '周'), `${e.sections} 节`, e.time, shortPlace(e.place)])));
-  }
-
-  if (scores.length) {
-    console.log(dim('\n  成绩'));
-    console.log(table(scores.map((s) => [s.semester, s.scoCourseName, s.scoFinalScore, s.scoPoint ?? '-', `${Number(s.scoCredit).toFixed(1)} 学分`])));
-  }
-
-  if (intro) {
-    para('课程简介', o?.courseContentInChinese);
-    para('课程简介（英文）', o?.courseContentInEnglish);
-    para('课程目标与要求', o?.courseObjectiveAndRequirement);
-    para('先修课程', o?.cambrid);
-    para('考核方式', o?.evaluationMethod);
-    para('教学安排', o?.teachArrangement);
-    para('教学方法', o?.teachMethod);
-    para('教材', o?.courseTextBook);
-    para('参考书', o?.referenceBook);
-  }
-
-  const schedule = outline?.scheduleList || [];
-  const byWeek = schedule.some((w) => w.weekNum);
-  if (syllabus && schedule.length) {
-    console.log(dim(`\n  教学进度 · ${schedule.length} ${byWeek ? '周' : '讲'}`));
-    [...schedule]
-      .sort((a, b) => (byWeek ? Number(a.weekNum) - Number(b.weekNum) : Number(a.sort) - Number(b.sort)))
-      .forEach((w, i) => {
-        const no = byWeek ? `第 ${String(w.weekNum).padStart(2)} 周` : `第 ${String(i + 1).padStart(2)} 讲`;
-        console.log(`    ${no}  ${w.sectionDesignation || ''}${w.teachingHours ? `  （${w.teachingHours} 学时）` : ''}`);
-        for (const [label, text] of [['内容', w.teachingMainContent], ['要素', w.courseElements], ['重点', w.keyPoints]]) {
-          if (!text) continue;
-          String(text)
-            .split(/\r?\n/)
-            .map((l) => l.trim())
-            .filter(Boolean)
-            .forEach((line, n) => console.log(dim(`        ${n === 0 ? label : '    '}  ${line}`)));
-        }
-      });
-  }
-
-  const tips = [];
-  if (!intro && o?.courseContentInChinese) tips.push('--intro 看简介/考核方式/教材');
-  if (!syllabus && schedule.length) tips.push(`--syllabus 看逐周进度（${schedule.length} ${byWeek ? '周' : '讲'}）`);
-  if (tips.length) console.log(dim(`\n  ${tips.join('  ·  ')}`));
+  console.log(JSON.stringify(output, null, 2));
 }
 
 const HELP = `sysu jwxt                      本周课表
@@ -740,11 +429,11 @@ sysu jwxt schedule --week N    第 N 周  ·  --today / --tomorrow 只看今天/
 sysu jwxt scores               成绩（默认最近有成绩的学期）· --all 全部 · --semester 2025-2
 sysu jwxt credits              毕业学分进度
 sysu jwxt exams                考试安排
-sysu jwxt course LN3015        某门课（课程码或课名）· --intro 简介/考核/教材 · --syllabus 逐周
+sysu jwxt course LN3015        某门课（课程码或课名；返回大纲、上课、考试与成绩）
 sysu jwxt leave                请假记录
 sysu jwxt leave apply --from "2026-10-08 下午" --to "2026-10-09 上午"
                  --reason 事假|病假|丧假 --note "说明" --file 附件
-                 [--days N] [--dry-run] [--yes]
+                 [--days N] [--dry-run 预览 / --yes 提交]
 sysu jwxt notice [id]          教务/院系公告（给 id 看全文）· --num N
 sysu jwxt room [选项]          空闲教室
 sysu jwxt ta                   助教信息
@@ -755,8 +444,9 @@ sysu login                     统一登录（jwxt 与 lms 共用，一次搞定
   --building <名>   --room <号>   --week N（默认本周）
   --campus <名>     默认南校园
   --day <1-7>       只看某天        --sections 9-11  反过来找这节空着的教室
+  不带 --room 时返回全部教室的占用数据
 
---json  输出 JSON（请假时只预览、不上传附件）
+数据命令默认输出 JSON；--json 只为兼容旧命令保留，不改变输出。
 附件   jpg / jpeg / png / gif / pdf，真提交时必填，交了撤不回来
 会话失效会自动续期；坏了才要 sysu login`;
 

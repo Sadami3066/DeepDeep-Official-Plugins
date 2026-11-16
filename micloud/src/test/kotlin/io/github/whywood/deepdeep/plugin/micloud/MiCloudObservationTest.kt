@@ -1,648 +1,492 @@
 package io.github.whywood.deepdeep.plugin.micloud
 
+import io.github.whywood.deepdeep.plugin.api.PluginTool
 import io.github.whywood.deepdeep.plugin.api.PluginToolResult
+import java.net.SocketTimeoutException
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
-import kotlinx.serialization.json.putJsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MiCloudObservationTest {
     @Test
-    fun capabilityOffTextUsesExactChineseGalleryMessage() {
-        assertEquals(
-            "相册读取未开启，请在插件页打开相册开关",
-            capabilityOffText(MiCloudFeature.GALLERY, chineseText),
-        )
-        assertEquals(
-            "笔记读取未开启，请在插件页打开笔记开关",
-            capabilityOffText(MiCloudFeature.NOTES, chineseText),
-        )
+    fun capabilityOffReturnsGuidanceOnly() {
+        val result = tools(
+            FakeReadApi(emptyList()),
+            settings = FakeSettings(allCapabilities().copy(galleryRead = false)),
+        ).run("mi_cloud_gallery")
+
+        assertTrue(result.isError)
+        assertEquals("", result.text)
+        assertEquals("相册读取未开启，请在插件页打开相册开关", result.guidance())
+        assertNull(result.cardTitle())
+        assertNull(result.rawBody())
     }
 
     @Test
-    fun notesListObservationCarriesIdSubjectTimeCountAndCursor() {
-        val items = listOf(
-            MiCloudNoteItem(id = "n1", subject = "想法", snippet = "第一行摘要", modifyTime = 1763200000000L),
-        )
-        val text = notesListObservation(items, cursor = "tag-2", lastPage = false, t = chineseText)
-        assertTrue(text, text.contains("笔记（本页 1 条）"))
-        assertTrue(text, text.contains("id=n1"))
-        assertTrue(text, text.contains("主题「想法」"))
-        assertTrue(text, text.contains("修改时间"))
-        assertTrue(text, text.contains("第一行摘要"))
-        assertTrue(text, text.contains("下一页用 syncTag=tag-2"))
-        assertFalse(text, text.contains("{"))
-        assertFalse(text, text.contains("<text"))
-    }
+    fun accountProfileReturnsRawAndFullCardPayload() {
+        val raw = json("""{"result":"ok","data":{"nickname":"小明","userId":"12345","email":"a@example.com"}}""")
+        val result = tools(FakeReadApi(listOf("/status/lite/profile" to raw)))
+            .run("mi_cloud_account")
 
-    @Test
-    fun notesListObservationShowsLastPageAndEmptyState() {
-        assertTrue(notesListObservation(emptyList(), "", true, chineseText).contains("没有笔记"))
-        val text = notesListObservation(
-            listOf(MiCloudNoteItem(id = "n1", subject = "a")),
-            cursor = "",
-            lastPage = true,
-            t = chineseText,
-        )
-        assertTrue(text, text.contains("已到最后一页"))
-    }
-
-    @Test
-    fun noteReadObservationContainsPlainBodyWithoutXml() {
-        val text = noteReadObservation(
-            noteId = "n1",
-            item = MiCloudNoteItem(id = "n1", subject = "想法", modifyTime = 1763200000000L),
-            plainText = "第一段\n第二段",
-            t = chineseText,
-        )
-        assertTrue(text, text.contains("笔记 id=n1"))
-        assertTrue(text, text.contains("主题：想法"))
-        assertTrue(text, text.contains("第一段\n第二段"))
-        assertFalse(text, text.contains("<text"))
-    }
-
-    @Test
-    fun todoListObservationCarriesContentDoneReminderCountAndCursor() {
-        val items = listOf(
-            MiCloudTodoItem(
-                id = "t1",
-                content = "买牛奶",
-                done = false,
-                remindTime = 1763200000000L,
-                modifyTime = 1763210000000L,
-            ),
-            MiCloudTodoItem(id = "t2", content = "写周报", done = true),
-        )
-        val text = todoListObservation(items, cursor = "cursor-2", hasMore = true, t = chineseText)
-        assertTrue(text, text.contains("待办（本页 2 条，已完成 1 条）"))
-        assertTrue(text, text.contains("id=t1"))
-        assertTrue(text, text.contains("买牛奶"))
-        assertTrue(text, text.contains("未完成"))
-        assertTrue(text, text.contains("已完成"))
-        assertTrue(text, text.contains("提醒时间"))
-        assertTrue(text, text.contains("修改时间"))
-        assertTrue(text, text.contains("下一页用 cursor=cursor-2"))
-        assertFalse(text, text.contains("contentJson"))
-        assertFalse(text, text.contains("{"))
-    }
-
-    @Test
-    fun accountQuotaToolShowsGiftAndFirstLevelAndCardDetails() = runBlocking {
-        val raw = Json.parseToJsonElement(
-            """
-            {
-              "data": {
-                "Gift": {"total": 1073741824, "used": 0},
-                "FirstLevel": {"total": 21474836480, "used": 5242880}
-              }
-            }
-            """.trimIndent(),
-        )
-        val tools = micloudTools(FakeReadApi(listOf("/status/vip/quota/summary" to raw)))
-        val result = tools.getValue("mi_cloud_account").execute(
-            FakeToolCall(buildJsonObject { put("action", "quota") }),
-        )
-        assertFalse(result.text.orEmpty(), result.isError)
-        val text = result.text.orEmpty()
-        assertTrue(text, text.contains("赠送空间"))
-        assertTrue(text, text.contains("基础空间"))
-        assertTrue(text, text.contains("20.0 GB"))
-        assertTrue(text, text.contains("5.0 MB"))
-        assertFalse(text, text.contains("{"))
-        val card = MiCloudAccountCardData.fromJson(requireNotNull(result.details))
-        assertEquals(ACCOUNT_MODE_QUOTA, card.mode)
-        assertEquals(2, card.entries.size)
-        assertEquals(listOf("Gift", "FirstLevel"), card.entries.map { it.label })
-    }
-
-    @Test
-    fun accountProfileToolTextAndCardDetails() = runBlocking {
-        val raw = Json.parseToJsonElement("""{"data":{"nickname":"小明","userId":"12345","email":"a@example.com"}}""")
-        val tools = micloudTools(FakeReadApi(listOf("/status/lite/profile" to raw)))
-        val result = tools.getValue("mi_cloud_account").execute(FakeToolCall(buildJsonObject {}))
-        assertFalse(result.text.orEmpty(), result.isError)
-        val text = result.text.orEmpty()
-        assertTrue(text, text.contains("小明"))
-        assertTrue(text, text.contains("12345"))
-        assertTrue(text, text.contains("a@example.com"))
-        val card = MiCloudAccountCardData.fromJson(requireNotNull(result.details))
+        assertFalse(result.isError)
+        assertEquals("", result.text)
+        assertEquals(raw.toString(), result.rawBody())
+        val card = MiCloudAccountCardData.fromJson(requireNotNull(result.payload()))
         assertEquals(ACCOUNT_MODE_PROFILE, card.mode)
         assertEquals("小明", card.nickname)
+        assertEquals("12345", card.userId)
+        assertEquals("a@example.com", card.email)
+        assertEquals("a@example.com", card.data?.stringOrNull("email"))
+        assertEquals("小米账号", result.cardTitle())
+        assertNull(result.guidance())
     }
 
     @Test
-    fun notesListToolTextUsesReadableFieldsAndAttachesCard() = runBlocking {
-        val raw = Json.parseToJsonElement(
+    fun accountQuotaCardKeepsRawBucketFields() {
+        val raw = json(
             """
-            {"data":{"entries":[{"id":"n1","subject":"想法","snippet":"摘要内容","modifyDate":1763200000000}],
-            "syncTag":"tag-2","lastPage":false}}
+            {"result":"ok","data":{"list":[
+              {"size":5368709120,"level":"None","category":"Gift","status":"running"},
+              {"size":53687091200,"level":"FirstLevel","category":"Buy","status":"running"}
+            ]}}
             """.trimIndent(),
         )
-        val tools = micloudTools(FakeReadApi(listOf("/note/full/page/" to raw)))
-        val result = tools.getValue("mi_cloud_notes").execute(
-            FakeToolCall(buildJsonObject { put("action", "list") }),
-        )
-        assertFalse(result.text.orEmpty(), result.isError)
-        val text = result.text.orEmpty()
-        assertTrue(text, text.contains("id=n1"))
-        assertTrue(text, text.contains("主题「想法」"))
-        assertTrue(text, text.contains("下一页用 syncTag=tag-2"))
-        assertFalse(text, text.contains("{"))
-        val card = MiCloudNotesCardData.fromJson(requireNotNull(result.details))
-        assertEquals(NOTES_ACTION_LIST, card.action)
-        assertEquals(1, card.total)
-        assertEquals("tag-2", card.cursor)
-        assertEquals("n1", card.rows.single().id)
+        val result = tools(FakeReadApi(listOf("/status/vip/quota/summary" to raw)))
+            .run("mi_cloud_account", buildJsonObject { put("action", "quota") })
+
+        assertFalse(result.isError)
+        assertEquals("", result.text)
+        val card = MiCloudAccountCardData.fromJson(requireNotNull(result.payload()))
+        assertEquals(ACCOUNT_MODE_QUOTA, card.mode)
+        assertEquals(2, card.entries.size)
+        assertEquals(5368709120L, card.entries.first().totalBytes)
+        assertEquals("gift", card.entries.first().label)
+        assertEquals("paid", card.entries.last().label)
+        assertEquals("Gift", card.entries.first().source?.stringOrNull("category"))
+        assertTrue(card.data?.containsKey("list") == true)
+        assertEquals("小米云空间", result.cardTitle())
     }
 
     @Test
-    fun noteReadToolTextIsPlainAndAttachesCard() = runBlocking {
-        val raw = Json.parseToJsonElement(
+    fun notesListReturnsCursorGuidanceAndFullRows() {
+        val raw = json(
             """
-            {"data":{"entry":{"id":"n1","subject":"想法","modifyDate":1763200000000,
+            {"result":"ok","data":{
+              "entries":[
+                {"id":"n1","subject":"想法","snippet":"<text indent=\"1\">摘要内容</text>","modifyDate":1763200000000},
+                {"id":"n2","subject":"","snippet":"第二行","modifyDate":1763210000000}
+              ],
+              "syncTag":"tag-2","lastPage":false}}
+            """.trimIndent(),
+        )
+        val result = tools(FakeReadApi(listOf("/note/full/page/" to raw)))
+            .run("mi_cloud_notes", buildJsonObject { put("action", "list") })
+
+        assertFalse(result.isError)
+        assertEquals("", result.text)
+        assertTrue(result.guidance().orEmpty().contains("syncTag=tag-2"))
+        assertFalse(result.guidance().orEmpty().contains("本页"))
+        val rawBody = requireNotNull(result.rawBody())
+        assertTrue(rawBody.contains("<text"))
+        val card = MiCloudNotesCardData.fromJson(requireNotNull(result.payload()))
+        assertEquals(2, card.total)
+        assertEquals("tag-2", card.cursor)
+        assertFalse(card.lastPage)
+        val first = card.rows.first()
+        assertEquals("n1", first.id)
+        assertEquals("摘要内容", first.snippet)
+        assertTrue(first.source?.stringOrNull("snippet").orEmpty().contains("<text"))
+        assertEquals("我的便签", result.cardTitle())
+    }
+
+    @Test
+    fun notesLastPageWithSyncTagHasNoPagingGuidance() {
+        val raw = json(
+            """{"data":{"entries":[{"id":"n1","subject":"a"}],"syncTag":"52264873542819904","lastPage":true}}""",
+        )
+        val result = tools(FakeReadApi(listOf("/note/full/page/" to raw)))
+            .run("mi_cloud_notes", buildJsonObject { put("action", "list") })
+
+        assertEquals("", result.text)
+        assertTrue(result.guidance().orEmpty().contains("原始数据"))
+        assertEquals("52264873542819904", MiCloudNotesCardData.fromJson(requireNotNull(result.payload())).cursor)
+    }
+
+    @Test
+    fun noteReadKeepsFullOriginalInCardPayload() {
+        val raw = json(
+            """
+            {"data":{"entry":{"id":"n1","subject":"想法","modifyDate":1763200000000,"tag":"t1",
             "content":"<note><text indent=\"0\">第一段</text><text indent=\"1\">第二段</text></note>"}}}
             """.trimIndent(),
         )
-        val tools = micloudTools(FakeReadApi(listOf("/note/note/" to raw)))
-        val result = tools.getValue("mi_cloud_notes").execute(
-            FakeToolCall(buildJsonObject { put("action", "read"); put("id", "n1") }),
-        )
-        assertFalse(result.text.orEmpty(), result.isError)
-        val text = result.text.orEmpty()
-        assertTrue(text, text.contains("第一段\n第二段"))
-        assertFalse(text, text.contains("<text"))
-        val card = MiCloudNotesCardData.fromJson(requireNotNull(result.details))
+        val result = tools(FakeReadApi(listOf("/note/note/" to raw)))
+            .run("mi_cloud_notes", buildJsonObject { put("action", "read"); put("id", "n1") })
+
+        assertFalse(result.isError)
+        assertEquals("", result.text)
+        assertTrue(result.rawBody().orEmpty().contains("<note>"))
+        val card = MiCloudNotesCardData.fromJson(requireNotNull(result.payload()))
         assertEquals(NOTES_ACTION_READ, card.action)
-        assertEquals("n1", card.noteId)
-        assertTrue(card.preview, card.preview.contains("第一段"))
+        assertEquals("第一段\n第二段", card.preview)
+        assertTrue(card.rows.single().source?.stringOrNull("content").orEmpty().contains("<note>"))
     }
 
     @Test
-    fun notesCreateToolReportsIdAndContentAndAttachesCard() = runBlocking {
-        val tools = micloudTools(
-            FakeReadApi(emptyList()),
-            writer = FakeWriteApi("""{"data":{"id":"created-note"}}"""),
-        )
-        val result = tools.getValue("mi_cloud_notes").execute(
-            FakeToolCall(buildJsonObject { put("action", "create"); put("subject", "新想法"); put("content", "内容") }),
-        )
-        assertFalse(result.text.orEmpty(), result.isError)
-        val text = result.text.orEmpty()
-        assertTrue(text, text.contains("已新建笔记（id=created-note）"))
-        assertTrue(text, text.contains("主题：新想法"))
-        val card = MiCloudNotesCardData.fromJson(requireNotNull(result.details))
-        assertEquals(NOTES_ACTION_CREATE, card.action)
-        assertEquals("created-note", card.noteId)
-    }
-
-    @Test
-    fun todoListToolParsesStringContentJsonAndAttachesCard() = runBlocking {
-        val raw = Json.parseToJsonElement(
+    fun todoIncrementalSyncTokenIsNotTreatedAsNextPage() {
+        val raw = json(
             """
             {"data":{"records":[
-              {"id":"t1","eTag":"e1","contentJson":"{\"content\":\"买牛奶\",\"isFinish\":0,\"remindTime\":1763200000000,\"lastModifiedTime\":1763210000000}"},
-              {"id":"t2","eTag":"e2","contentJson":{"content":"写周报","is_finish":true}}
-            ],"syncToken":"cursor-2","hasMore":true}}
+              {"id":"t1","contentJson":{"content":"买牛奶","isFinish":0,"remindTime":1763200000000}}
+            ],"syncToken":{"syncExtraInfo":"FgAWwITQ","watermark":"12486722662367392"},"hasMore":true}}
             """.trimIndent(),
         )
-        val tools = micloudTools(FakeReadApi(listOf("/todo/v1/user/records" to raw)))
-        val result = tools.getValue("mi_cloud_todo").execute(
-            FakeToolCall(buildJsonObject { put("action", "list") }),
+        val result = tools(FakeReadApi(listOf("/todo/v1/user/records" to raw)))
+            .run("mi_cloud_todo", buildJsonObject { put("action", "list") })
+
+        assertFalse(result.isError)
+        assertEquals("", result.text)
+        val guidance = result.guidance().orEmpty()
+        assertTrue(guidance.contains("增量同步"))
+        assertTrue(guidance.contains("没有下一页"))
+        assertFalse(guidance.contains("cursor"))
+        val payload = requireNotNull(result.payload())
+        assertFalse(payload.containsKey("cursor"))
+        assertFalse(payload.containsKey("hasMore"))
+        assertFalse(payload.containsKey("syncToken"))
+        val card = MiCloudTodoCardData.fromJson(payload)
+        assertTrue(card.rows.single().source?.containsKey("contentJson") == true)
+        assertEquals("待办清单", result.cardTitle())
+    }
+
+    @Test
+    fun todoDoneStateAndRowsComeFromEntity() {
+        val raw = json(
+            """
+            {"data":{"records":[{"id":"t1","contentJson":{"entity":{"content":"写周报","is_finish":true}}}]}}
+            """.trimIndent(),
         )
-        assertFalse(result.text.orEmpty(), result.isError)
-        val text = result.text.orEmpty()
-        assertTrue(text, text.contains("买牛奶"))
-        assertTrue(text, text.contains("写周报"))
-        assertTrue(text, text.contains("未完成"))
-        assertTrue(text, text.contains("已完成"))
-        assertTrue(text, text.contains("提醒时间"))
-        assertTrue(text, text.contains("修改时间"))
-        assertTrue(text, text.contains("下一页用 cursor=cursor-2"))
-        assertFalse(text, text.contains("contentJson"))
-        val card = MiCloudTodoCardData.fromJson(requireNotNull(result.details))
-        assertEquals(2, card.total)
+        val result = tools(FakeReadApi(listOf("/todo/v1/user/records" to raw)))
+            .run("mi_cloud_todo", buildJsonObject { put("action", "list") })
+
+        val card = MiCloudTodoCardData.fromJson(requireNotNull(result.payload()))
         assertEquals(1, card.doneCount)
-        assertEquals("cursor-2", card.cursor)
-        assertEquals("买牛奶", card.rows.first().content)
-        assertTrue(card.rows.last().done)
+        assertTrue(card.rows.single().done)
     }
 
     @Test
-    fun todoCreateToolReportsIdAndContentAndAttachesCard() = runBlocking {
-        val tools = micloudTools(
-            FakeReadApi(emptyList()),
-            writer = FakeWriteApi("""{"data":{"id":"created-todo"}}"""),
+    fun smsUnwrapsRealEntryShapeAndWatermarkIntoCard() {
+        val raw = json(
+            """
+            {"result":"ok","data":{"entries":[
+              {"entry":{"snippet":"【向量空间】您的验证码为：532576","threadId":"107987868728198528",
+               "localTime":1792939674826,"total":2,"folder":0,"unread":2,"recipients":"106939502054958",
+               "tag":"227639059700810496","id":"dd53d57e"},"operation":"opNew"},
+              {"entry":{"snippet":"流量提醒","threadId":"90727345956882624","localTime":1792916260114,
+               "total":1402,"folder":0,"unread":0,"recipients":"10086","id":"aaba99d2"},"operation":"opNew"}
+            ],"watermark":{"syncThreadTag":"1792643390601_108035480590761984","syncTag":"227645047649680384"},
+            "phonecall_view":{"entries":[{"date":1794568092995,"type":"missed","duration":67,
+             "number":"02137490026","id":"call1"}]}}}
+            """.trimIndent(),
         )
-        val result = tools.getValue("mi_cloud_todo").execute(
-            FakeToolCall(
-                buildJsonObject {
-                    put("action", "create")
-                    put("content", "买牛奶")
-                    put("remindAt", 1763200000000L)
-                },
-            ),
-        )
-        assertFalse(result.text.orEmpty(), result.isError)
-        val text = result.text.orEmpty()
-        assertTrue(text, text.contains("已新建待办（id=created-todo）"))
-        assertTrue(text, text.contains("内容：买牛奶"))
-        assertTrue(text, text.contains("提醒时间"))
-        val card = MiCloudTodoCardData.fromJson(requireNotNull(result.details))
-        assertEquals(TODO_ACTION_CREATE, card.action)
-        assertEquals("created-todo", card.todoId)
+        val result = tools(FakeReadApi(listOf("/sms/" to raw)))
+            .run("mi_cloud_sms", buildJsonObject { put("limit", 20) })
+
+        assertFalse(result.isError)
+        assertEquals("", result.text)
+        val card = MiCloudSmsCardData.fromJson(requireNotNull(result.payload()))
+        assertEquals(2, card.entries.size)
+        val first = card.entries.first()
+        assertEquals("106939502054958", first.number)
+        assertTrue(first.snippet, first.snippet.contains("532576"))
+        assertEquals(1792939674826L, first.timeMs)
+        assertEquals(2, first.unread)
+        assertEquals("opNew", first.operation)
+        assertEquals("227645047649680384", card.nextSyncTag)
+        assertEquals("1792643390601_108035480590761984", card.nextSyncThreadTag)
+        assertEquals("227645047649680384", card.watermark?.stringOrNull("syncTag"))
+        assertEquals(1, card.calls.size)
+        assertEquals("missed", card.calls.single().type)
+        assertTrue(first.source?.stringOrNull("snippet").orEmpty().contains("验证码"))
+        assertTrue(result.guidance().orEmpty().contains("syncTag=227645047649680384"))
+        assertTrue(result.guidance().orEmpty().contains("syncThreadTag=1792643390601_108035480590761984"))
+        assertEquals("短信与通话（2 条）", result.cardTitle())
     }
 
     @Test
-    fun galleryToolWhenSwitchOffReturnsExactChineseMessage() = runBlocking {
-        val tools = micloudTools(
-            FakeReadApi(emptyList()),
-            settings = FakeSettings(allCapabilities().copy(galleryRead = false)),
+    fun contactsReadNestedContentMapAndKeepCursorsAndGroups() {
+        val raw = json(
+            """
+            {"result":"ok","data":{"lastPage":false,"syncIgnoreTag":"105124175168178688",
+              "letterIndex":{"C":["90193736209827072"]},"syncTag":"104804719951383040",
+              "content":{
+                "90193736209827072":{
+                  "sortkey":"c   he 车 j   ia 佳 y   i 燚 ",
+                  "pinyin":"chejiayi","createTime":1737548370000,"updateTime":1793284849000,
+                  "spinyin":"cjy","type":"contact",
+                  "content":{"starred":false,"displayName":"车佳燚",
+                    "name":{"formatted":"车佳燚","familyName":"车","givenName":"佳燚"},
+                    "organizations":[{"company":"1"}],"id":"90193736209827072","tag":"t1",
+                    "phoneNumbers":[{"type":"mobile","value":"13825368542","primary":false}],
+                    "status":"custom"}
+                }
+              },
+              "group":[{"sortkey":"g   ao 高 z   hong 中","pinyin":"gaozhong","type":"group",
+                "content":{"id":"g1","tag":"g1","title":"高中同学","status":"custom"}}]}}
+            """.trimIndent(),
         )
-        val result = tools.getValue("mi_cloud_gallery").execute(FakeToolCall(buildJsonObject {}))
-        assertTrue(result.isError)
-        assertEquals("相册读取未开启，请在插件页打开相册开关", result.text)
+        val result = tools(FakeReadApi(listOf("/contacts/" to raw)))
+            .run("mi_cloud_contacts", buildJsonObject { put("action", "list") })
+
+        assertFalse(result.isError)
+        assertEquals("", result.text)
+        val card = MiCloudContactsCardData.fromJson(requireNotNull(result.payload()))
+        assertEquals(1, card.contacts.size)
+        val contact = card.contacts.single()
+        assertEquals("车佳燚", contact.name)
+        assertEquals("chejiayi", contact.pinyin)
+        assertEquals(listOf("13825368542"), contact.phones)
+        assertTrue(contact.source?.stringOrNull("sortkey").orEmpty().contains("车"))
+        assertEquals(1, card.groups.size)
+        assertTrue(result.guidance().orEmpty().contains("增量同步"))
+        assertTrue(result.guidance().orEmpty().contains("没有下一页"))
+        assertFalse(result.guidance().orEmpty().contains("syncTag="))
+        assertFalse(result.guidance().orEmpty().contains("sortkey"))
+        assertEquals("联系人", result.cardTitle())
     }
 
     @Test
-    fun galleryAndContactsAndSmsObservationAvoidRawJson() = runBlocking {
-        val galleryRaw = Json.parseToJsonElement(
-            """{"data":{"galleries":[{"id":"g1","fileName":"IMG_001.jpg","size":2048,"mimeType":"image/jpeg","dateTaken":1763200000000}]}}""",
+    fun galleryAlbumsCardKeepsNameCountAndThumbnail() {
+        val raw = json(
+            """
+            {"result":"ok","data":{"albums":[
+              {"mediaCount":210,"name":"微信","albumId":"22485176458480032",
+               "namePinyin":{"sortkey":"w   ei 微 x   in 信 ","pinyin":"weixin"},
+               "thumbnails":[{"orientation":0,"url":"https://example.test/thumb.jpg"}],
+               "userId":2959544619,"lastUpdateTime":1794752051296},
+              {"mediaCount":0,"name":"知乎","albumId":"22816311495501792",
+               "userId":2959544619,"lastUpdateTime":1729443877106}
+            ],"isLastPage":true,"indexHash":-1056692843}}
+            """.trimIndent(),
         )
-        val contactsRaw = Json.parseToJsonElement(
-            """{"data":{"contacts":[{"id":"c1","name":"张三","phone":"13800000000"}]}}""",
-        )
-        val smsRaw = Json.parseToJsonElement(
-            """{"data":{"entries":[{"id":"s1","address":"10086","body":"流量提醒","date":1763200000000,"unread":1}],"watermark":"wm-1"}}""",
-        )
-        val tools = micloudTools(
+        val result = tools(FakeReadApi(listOf("/gallery/" to raw)))
+            .run("mi_cloud_gallery", buildJsonObject { put("action", "albums") })
+
+        assertFalse(result.isError)
+        assertEquals("", result.text)
+        val card = MiCloudGalleryCardData.fromJson(requireNotNull(result.payload()))
+        assertEquals(GALLERY_MODE_ALBUMS, card.mode)
+        assertEquals(2, card.items.size)
+        assertEquals("微信", card.items.first().name)
+        assertEquals(210, card.items.first().itemCount)
+        assertEquals("https://example.test/thumb.jpg", card.items.first().thumbUrl)
+        assertEquals("22485176458480032", card.items.first().source?.stringOrNull("albumId"))
+        assertEquals("相册接口无分页参数，本次全部返回。 正文是上游原始数据：签名链接、拼音/排序索引和内部 id 不需要复述给用户。", result.guidance())
+        assertEquals("我的相册", result.cardTitle())
+    }
+
+    @Test
+    fun galleryTimeoutKeepsRawAndGivesRetryGuidance() {
+        val result = tools(
             FakeReadApi(
-                listOf(
-                    "/gallery/user/galleries" to galleryRaw,
-                    "/contacts/" to contactsRaw,
-                    "/sms/" to smsRaw,
-                ),
+                responses = emptyList(),
+                failures = mapOf("/gallery/" to SocketTimeoutException("timeout")),
             ),
+        ).run("mi_cloud_gallery", buildJsonObject { put("action", "list") })
+
+        assertTrue(result.isError)
+        assertEquals("", result.text)
+        assertEquals("timeout", result.rawBody())
+        assertEquals("小米云相册请求超时，可重试", result.guidance())
+        assertNull(result.cardTitle())
+    }
+
+    @Test
+    fun galleryHttpErrorKeepsUpstreamBody() {
+        val result = tools(
+            FakeReadApi(
+                responses = emptyList(),
+                failures = mapOf("/gallery/" to MiCloudHttpException(status = 500, body = "upstream boom")),
+            ),
+        ).run("mi_cloud_gallery", buildJsonObject { put("action", "albums") })
+
+        assertTrue(result.isError)
+        assertEquals("", result.text)
+        assertEquals("upstream boom", result.rawBody())
+        assertTrue(result.guidance().orEmpty().contains("HTTP 500"))
+        assertNull(result.cardTitle())
+    }
+
+    @Test
+    fun recordingsCardKeepsSourceRowsAndOffset() {
+        val raw = json(
+            """
+            {"data":{"list":[{"id":"r1","name":"录音 1","size":1024,"duration":60,
+              "createTime":1763200000000}]}}
+            """.trimIndent(),
         )
-        val gallery = tools.getValue("mi_cloud_gallery").execute(FakeToolCall(buildJsonObject {}))
-        val galleryText = gallery.text.orEmpty()
-        assertTrue(galleryText, galleryText.contains("IMG_001.jpg"))
-        assertTrue(galleryText, galleryText.contains("g1"))
-        assertFalse(galleryText, galleryText.contains("{"))
+        val result = tools(FakeReadApi(listOf("/sfs/" to raw)))
+            .run(
+                "mi_cloud_recordings",
+                buildJsonObject {
+                    put("action", "list")
+                    put("offset", 10)
+                },
+            )
 
-        val contacts = tools.getValue("mi_cloud_contacts").execute(FakeToolCall(buildJsonObject {}))
-        val contactsText = contacts.text.orEmpty()
-        assertTrue(contactsText, contactsText.contains("张三"))
-        assertTrue(contactsText, contactsText.contains("13800000000"))
-        assertFalse(contactsText, contactsText.contains("{"))
-
-        val sms = tools.getValue("mi_cloud_sms").execute(FakeToolCall(buildJsonObject {}))
-        val smsText = sms.text.orEmpty()
-        assertTrue(smsText, smsText.contains("10086"))
-        assertTrue(smsText, smsText.contains("流量提醒"))
-        assertTrue(smsText, smsText.contains("下一页用 syncTag=wm-1"))
-        assertFalse(smsText, smsText.contains("{"))
+        assertFalse(result.isError)
+        assertEquals("", result.text)
+        val card = MiCloudFileCardData.fromJson(requireNotNull(result.payload()))
+        assertEquals(1, card.files.size)
+        assertEquals(10, card.offset)
+        assertEquals(11, card.nextOffset)
+        assertEquals(60L, card.files.single().durationSeconds)
+        assertEquals("r1", card.files.single().source?.stringOrNull("id"))
+        assertTrue(result.guidance().orEmpty().contains("offset=11"))
+        assertEquals("通话录音", result.cardTitle())
     }
 
     @Test
-    fun accountQuotaToolTextHasNoCardWording() = runBlocking {
-        val raw = Json.parseToJsonElement("""{"data":{"FirstLevel":{"total":1024,"used":512}}}""")
-        val tools = micloudTools(FakeReadApi(listOf("/status/vip/quota/summary" to raw)))
-        val result = tools.getValue("mi_cloud_account").execute(
-            FakeToolCall(buildJsonObject { put("action", "quota") }),
+    fun cardPayloadSupportsNewDescriptorAndLegacyFlatDetails() {
+        val payload = buildJsonObject {
+            put("mode", ACCOUNT_MODE_QUOTA)
+            put("entries", Json.parseToJsonElement("""[{"label":"Gift","totalBytes":10}]"""))
+        }
+        val details = toolResultDetails(raw = "{}", card = MiCloudCard("小米云空间（1 项）", payload))
+        assertEquals("quota", cardPayload(details)?.stringOrNull("mode"))
+        assertEquals(setOf(DEEPDEEP_RAW_KEY, DEEPDEEP_CARD_KEY), details.keys)
+        val descriptor = details[DEEPDEEP_CARD_KEY] as JsonObject
+        assertEquals("小米云空间（1 项）", descriptor.stringOrNull("title"))
+        assertNull(descriptor["customType"])
+        assertTrue(descriptor["payload"] is JsonObject)
+        val legacy = buildJsonObject {
+            put("mode", ACCOUNT_MODE_PROFILE)
+            put("nickname", "小明")
+            put(DEEPDEEP_CARD_KEY, buildJsonObject { put("title", "小米账号") })
+        }
+        assertEquals("小明", cardPayload(legacy)?.stringOrNull("nickname"))
+    }
+
+    private fun json(text: String): JsonObject = Json.parseToJsonElement(text).let { it as JsonObject }
+
+    private fun tools(
+        client: MiCloudReadApi,
+        settings: MiCloudSettings = FakeSettings(allCapabilities()),
+        writer: MiCloudWriteApi = FakeWriteApi(),
+    ): Map<String, PluginTool> = micloudTools(client, settings, writer)
+
+    private fun Map<String, PluginTool>.run(
+        name: String,
+        args: JsonObject = JsonObject(emptyMap()),
+    ): PluginToolResult = runBlocking { getValue(name).execute(FakeToolCall(args)) }
+
+    private fun PluginToolResult.rawBody(): String? =
+        (details?.get(DEEPDEEP_RAW_KEY) as? JsonPrimitive)?.contentOrNull
+
+    private fun PluginToolResult.guidance(): String? =
+        (details?.get(DEEPDEEP_GUIDANCE_KEY) as? JsonPrimitive)?.contentOrNull
+
+    private fun PluginToolResult.payload(): JsonObject? = cardPayload(details)
+
+    private fun PluginToolResult.cardTitle(): String? =
+        ((details?.get(DEEPDEEP_CARD_KEY) as? JsonObject)?.get("title") as? JsonPrimitive)?.contentOrNull
+
+    @Test
+    fun todoRealEntityShapeYieldsContentDoneReminderAndTimes() {
+        val raw = json(
+            """
+            {"data":{"records":[
+              {"id":"14448093760717088","type":"entity","eTag":"14448093760717088",
+               "contentJson":{"assets":[],"entity":{"content":"中微 Part II 讲义：10-29 期中考前看完",
+                 "plainText":"中微 Part II 讲义：10-29 期中考前看完","isFinish":0,"is_finish":false,
+                 "remindTime":1763200000000,"firstRemindTime":0,"lastModifiedTime":1793317173036,
+                 "syncId":"14448093760717088","id":63}}}
+            ],"syncToken":{"syncExtraInfo":"FgAWwITQ","watermark":"14183766482157632"},"hasMore":true}}
+            """.trimIndent(),
         )
-        val text = result.text.orEmpty()
-        assertFalse(text, text.contains("卡片"))
-        assertFalse(text, text.contains("card"))
+        val result = tools(FakeReadApi(listOf("/todo/v1/user/records" to raw)))
+            .run("mi_cloud_todo", buildJsonObject { put("action", "list") })
+
+        assertFalse(result.isError)
+        val card = MiCloudTodoCardData.fromJson(requireNotNull(result.payload()))
+        val item = card.rows.single()
+        assertEquals("中微 Part II 讲义：10-29 期中考前看完", item.content)
+        assertFalse(item.done)
+        assertEquals(1763200000000L, item.remindTime)
+        assertEquals(1793317173036L, item.modifyTime)
+        val entity = ((item.source?.get("contentJson") as? JsonObject)?.get("entity") as? JsonObject)
+        assertEquals("中微 Part II 讲义：10-29 期中考前看完", entity?.stringOrNull("content"))
     }
 
     @Test
-    fun todoContentJsonStringBugFixPreservesNonEmptyContent() {
-        val record = Json.parseToJsonElement(
-            """{"id":"t1","contentJson":"{\"content\":\"真实内容\",\"isFinish\":0}"}""",
-        ).jsonObject
-        val item = todoItem(record)
-        assertEquals("真实内容", item.content)
-    }
-
-    @Test
-    fun notesListToolKeepsAllRowsAndMountsRaw() = runBlocking {
-        val entries = buildJsonArray {
-            repeat(60) { index ->
-                add(
-                    buildJsonObject {
-                        put("id", "n$index")
-                        put("subject", "标题 $index")
-                        put("snippet", "摘要 $index")
-                        put("modifyDate", 1763200000000L + index)
-                    },
-                )
-            }
-        }
-        val raw = buildJsonObject {
-            put(
-                "data",
-                buildJsonObject {
-                    put("entries", entries)
-                    put("syncTag", "tag-60")
-                    put("lastPage", false)
-                },
-            )
-        }
-        val result = micloudTools(FakeReadApi(listOf("/note/full/page/" to raw)))
-            .getValue("mi_cloud_notes")
-            .execute(FakeToolCall(buildJsonObject { put("action", "list") }))
-        val text = result.text.orEmpty()
-        repeat(60) { assertTrue(text, text.contains("id=n$it")) }
-        assertTrue(text, text.contains("笔记（本页 60 条）"))
-        assertTrue(text, text.contains("下一页用 syncTag=tag-60"))
-        val card = MiCloudNotesCardData.fromJson(requireNotNull(result.details))
-        assertEquals(60, card.rows.size)
-        assertEquals("tag-60", card.cursor)
-        assertTrue(result.rawBody().orEmpty().contains("\"syncTag\":\"tag-60\""))
-        assertEquals("我的便签（60 条）", result.cardTitle())
-    }
-
-    @Test
-    fun noteReadToolKeepsFullBodyBeyondFormerLimit() = runBlocking {
-        val body = (1..900).joinToString("\n") { "正文行 $it" }
-        val raw = buildJsonObject {
-            put(
-                "data",
-                buildJsonObject {
-                    put(
-                        "entry",
-                        buildJsonObject {
-                            put("id", "n1")
-                            put("subject", "长笔记")
-                            put("modifyDate", 1763200000000L)
-                            put("content", "<note><text indent=\"0\">$body</text></note>")
-                        },
-                    )
-                },
-            )
-        }
-        val result = micloudTools(FakeReadApi(listOf("/note/note/" to raw)))
-            .getValue("mi_cloud_notes")
-            .execute(FakeToolCall(buildJsonObject { put("action", "read"); put("id", "n1") }))
-        val text = result.text.orEmpty()
-        assertTrue(text, text.contains("正文行 1"))
-        assertTrue(text, text.contains("正文行 900"))
-        val card = MiCloudNotesCardData.fromJson(requireNotNull(result.details))
-        assertTrue(card.preview, card.preview.contains("正文行 900"))
-        assertTrue(card.preview, card.preview.length > 5000)
-        assertTrue(result.rawBody().orEmpty().contains("长笔记"))
-    }
-
-    @Test
-    fun todoListToolKeepsAllRowsAndSyncToken() = runBlocking {
-        val records = buildJsonArray {
-            repeat(60) { index ->
-                add(
-                    buildJsonObject {
-                        put("id", "t$index")
-                        putJsonObject("contentJson") {
-                            put("content", "待办 $index")
-                            put("is_finish", index % 2 == 0)
-                        }
-                    },
-                )
-            }
-        }
-        val raw = buildJsonObject {
-            put(
-                "data",
-                buildJsonObject {
-                    put("records", records)
-                    put("syncToken", "tk-60")
-                    put("hasMore", true)
-                },
-            )
-        }
-        val result = micloudTools(FakeReadApi(listOf("/todo/v1/user/records" to raw)))
-            .getValue("mi_cloud_todo")
-            .execute(FakeToolCall(buildJsonObject { put("action", "list") }))
-        val text = result.text.orEmpty()
-        repeat(60) { assertTrue(text, text.contains("id=t$it")) }
-        assertTrue(text, text.contains("待办（本页 60 条，已完成 30 条）"))
-        assertTrue(text, text.contains("下一页用 cursor=tk-60"))
-        val card = MiCloudTodoCardData.fromJson(requireNotNull(result.details))
-        assertEquals(60, card.rows.size)
-        assertEquals(30, card.doneCount)
-        assertTrue(result.rawBody().orEmpty().contains("\"syncToken\":\"tk-60\""))
-    }
-
-    @Test
-    fun smsToolKeepsAllEntriesFullBodiesAndWatermarkCursor() = runBlocking {
-        val longBody = "完整正文".repeat(40)
-        val entries = buildJsonArray {
-            repeat(60) { index ->
-                add(
-                    buildJsonObject {
-                        put("id", "s$index")
-                        put("address", "10086")
-                        put("body", "短信内容 $index $longBody")
-                        put("date", 1763200000000L + index)
-                    },
-                )
-            }
-        }
-        val raw = buildJsonObject {
-            put(
-                "data",
-                buildJsonObject {
-                    put("entries", entries)
-                    put("watermark", "wm-60")
-                },
-            )
-        }
-        val result = micloudTools(FakeReadApi(listOf("/sms/" to raw)))
-            .getValue("mi_cloud_sms")
-            .execute(FakeToolCall(buildJsonObject {}))
-        val text = result.text.orEmpty()
-        repeat(60) { assertTrue(text, text.contains("id=s$it")) }
-        assertTrue(text, text.contains("短信与通话（本页 60 条）"))
-        assertTrue(text, text.contains(longBody))
-        assertTrue(text, text.contains("下一页用 syncTag=wm-60"))
-        assertTrue(result.rawBody().orEmpty().contains("\"watermark\":\"wm-60\""))
-    }
-
-    @Test
-    fun contactsToolKeepsDeepArraysAndSyncTags() = runBlocking {
-        val phones = buildJsonArray {
-            repeat(15) { index ->
-                add(
-                    buildJsonObject {
-                        put("number", "138000000" + index.toString().padStart(2, '0'))
-                        put("type", "mobile")
-                    },
-                )
-            }
-        }
-        val raw = buildJsonObject {
-            put(
-                "data",
-                buildJsonObject {
-                    putJsonArray("contacts") {
-                        add(
-                            buildJsonObject {
-                                put("id", "c1")
-                                put("name", "张三")
-                                put("organization", "小米")
-                                put("note", "深层备注")
-                                put("phoneNumbers", phones)
-                                putJsonArray("emails") {
-                                    add(
-                                        buildJsonObject {
-                                            put("address", "a@example.com")
-                                            put("type", "home")
-                                        },
-                                    )
-                                }
-                            },
-                        )
-                    }
-                    put("syncTag", "ct-2")
-                    put("syncIgnoreTag", "ci-2")
-                },
-            )
-        }
-        val result = micloudTools(FakeReadApi(listOf("/contacts/" to raw)))
-            .getValue("mi_cloud_contacts")
-            .execute(FakeToolCall(buildJsonObject {}))
-        val text = result.text.orEmpty()
-        assertTrue(text, text.contains("联系人（本页 1 位）"))
-        assertTrue(text, text.contains("13800000014"))
-        assertTrue(text, text.contains("a@example.com"))
-        assertTrue(text, text.contains("下一页用 syncTag=ct-2"))
-        assertTrue(text, text.contains("syncIgnoreTag=ci-2"))
-        assertTrue(result.rawBody().orEmpty().contains("深层备注"))
-        assertTrue(result.rawBody().orEmpty().contains("13800000014"))
-    }
-
-    @Test
-    fun recordingsToolKeepsAllRowsAndOffsetCursor() = runBlocking {
-        val raw = buildJsonObject {
-            put(
-                "data",
-                buildJsonObject {
-                    putJsonArray("list") {
-                        repeat(55) { index ->
-                            add(
-                                buildJsonObject {
-                                    put("id", "r$index")
-                                    put("name", "录音 $index")
-                                    put("size", 1024L + index)
-                                    put("duration", 60L + index)
-                                    put("createTime", 1763200000000L + index)
-                                },
-                            )
-                        }
-                    }
-                },
-            )
-        }
-        val result = micloudTools(FakeReadApi(listOf("/sfs/" to raw)))
-            .getValue("mi_cloud_recordings")
-            .execute(
-                FakeToolCall(
-                    buildJsonObject {
-                        put("action", "list")
-                        put("offset", 10)
-                    },
-                ),
-            )
-        val text = result.text.orEmpty()
-        repeat(55) { assertTrue(text, text.contains("id=r$it")) }
-        assertTrue(text, text.contains("录音（本页 55 条）"))
-        assertTrue(text, text.contains("下一页参数：offset=65"))
-        val card = MiCloudFileCardData.fromJson(requireNotNull(result.details))
-        assertEquals(55, card.files.size)
-        assertTrue(result.rawBody().orEmpty().contains("\"id\":\"r54\""))
-        assertEquals("通话录音（55 条）", result.cardTitle())
-    }
-
-    @Test
-    fun galleryAndAlbumsReturnAllRowsWithoutPagination() = runBlocking {
-        val raw = buildJsonObject {
-            put(
-                "data",
-                buildJsonObject {
-                    putJsonArray("galleries") {
-                        repeat(60) { index ->
-                            add(
-                                buildJsonObject {
-                                    put("id", "g$index")
-                                    put("fileName", "IMG_$index.jpg")
-                                    put("size", 1024)
-                                    put("dateTaken", 1763200000000L)
-                                },
-                            )
-                        }
-                    }
-                    putJsonArray("albums") {
-                        repeat(30) { index ->
-                            add(
-                                buildJsonObject {
-                                    put("id", "a$index")
-                                    put("name", "相册 $index")
-                                    put("photoCount", index)
-                                },
-                            )
-                        }
-                    }
-                },
-            )
-        }
-        val tools = micloudTools(FakeReadApi(listOf("/gallery/" to raw)))
-        val gallery = tools.getValue("mi_cloud_gallery").execute(FakeToolCall(buildJsonObject {}))
-        val galleryText = gallery.text.orEmpty()
-        repeat(60) { assertTrue(galleryText, galleryText.contains("id=g$it")) }
-        assertTrue(galleryText, galleryText.contains("相册内容（本页 60 项）"))
-        assertTrue(galleryText, galleryText.contains("无分页参数"))
-        assertTrue(gallery.rawBody().orEmpty().contains("\"id\":\"g59\""))
-
-        val albums = tools.getValue("mi_cloud_gallery").execute(
-            FakeToolCall(buildJsonObject { put("action", "albums") }),
+    fun todoDuplicateRowsProduceDuplicateGuidanceAndKeepIds() {
+        val raw = json(
+            """
+            {"data":{"records":[
+              {"id":"t1","contentJson":{"entity":{"content":"同一件事","is_finish":false}}},
+              {"id":"t2","contentJson":{"entity":{"content":"同一件事","is_finish":false}}},
+              {"id":"t3","contentJson":{"entity":{"content":"另一件事","is_finish":false}}}
+            ],"hasMore":false}}
+            """.trimIndent(),
         )
-        val albumText = albums.text.orEmpty()
-        repeat(30) { assertTrue(albumText, albumText.contains("id=a$it")) }
-        assertTrue(albumText, albumText.contains("相册（本页 30 个）"))
-        assertTrue(albumText, albumText.contains("无分页参数"))
-        assertTrue(albums.rawBody().orEmpty().contains("\"id\":\"a29\""))
+        val result = tools(FakeReadApi(listOf("/todo/v1/user/records" to raw)))
+            .run("mi_cloud_todo", buildJsonObject { put("action", "list") })
+
+        assertTrue(result.guidance().orEmpty().contains("1 条内容重复"))
+        val card = MiCloudTodoCardData.fromJson(requireNotNull(result.payload()))
+        assertEquals(3, card.total)
+        assertEquals(1, card.duplicateCount)
+        assertEquals(2, card.rows.size)
+        assertEquals(listOf("t1", "t3"), card.rows.map { it.id })
+        assertEquals(listOf("t2"), card.rows.first().duplicateIds)
     }
 
     @Test
-    fun accountToolsMountRawAndCardTitle() = runBlocking {
-        val quotaRaw = buildJsonObject {
-            put(
-                "data",
+    fun contactsSearchFiltersCardWhileRawStaysUpstream() {
+        val raw = json(
+            """
+            {"result":"ok","data":{"content":{
+              "c1":{"pinyin":"chejiayi","spinyin":"cjy","type":"contact",
+                "content":{"displayName":"车佳燚","phoneNumbers":[{"value":"13825368542"}],"id":"c1"}},
+              "c2":{"pinyin":"shitang","spinyin":"st","type":"contact",
+                "content":{"displayName":"食堂经理","phoneNumbers":[{"value":"13700000000"}],"id":"c2"}}
+            },"syncTag":"104804719951383040","hasMore":true}}
+            """.trimIndent(),
+        )
+        val result = tools(FakeReadApi(listOf("/contacts/" to raw)))
+            .run(
+                "mi_cloud_contacts",
                 buildJsonObject {
-                    put("Gift", buildJsonObject { put("total", 1073741824); put("used", 0) })
-                    put("FirstLevel", buildJsonObject { put("total", 21474836480L); put("used", 5242880) })
+                    put("action", "search")
+                    put("query", "食堂")
                 },
             )
-        }
-        val result = micloudTools(FakeReadApi(listOf("/status/vip/quota/summary" to quotaRaw)))
-            .getValue("mi_cloud_account")
-            .execute(FakeToolCall(buildJsonObject { put("action", "quota") }))
-        assertTrue(result.rawBody().orEmpty().contains("\"FirstLevel\""))
-        assertEquals("小米云空间（2 项）", result.cardTitle())
+
+        assertFalse(result.isError)
+        val card = MiCloudContactsCardData.fromJson(requireNotNull(result.payload()))
+        assertEquals(1, card.contacts.size)
+        assertEquals("食堂经理", card.contacts.single().name)
+        val body = requireNotNull(result.rawBody())
+        assertTrue(body.contains("食堂经理"))
+        assertTrue(body.contains("车佳燚"))
+        val guidance = result.guidance().orEmpty()
+        assertTrue(guidance.contains("增量同步"))
+        assertFalse(guidance.contains("syncTag="))
+    }
+
+    @Test
+    fun noteDeleteFormCarriesTagAndPurge() {
+        assertEquals(mapOf("tag" to "t1", "purge" to "1"), noteDeleteForm("t1", true))
+        assertEquals(mapOf("tag" to "t1", "purge" to "0"), noteDeleteForm("t1", false))
     }
 }
-
-private fun PluginToolResult.rawBody(): String? =
-    (details?.get(DEEPDEEP_RAW_KEY) as? JsonPrimitive)?.contentOrNull
-
-private fun PluginToolResult.cardTitle(): String? =
-    ((details?.get(DEEPDEEP_CARD_KEY) as? JsonObject)?.get("title") as? JsonPrimitive)?.contentOrNull

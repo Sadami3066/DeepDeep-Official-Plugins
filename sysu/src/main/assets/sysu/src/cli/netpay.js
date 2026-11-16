@@ -1,10 +1,7 @@
 // sysu netpay —— 网费在线系统
 const netpay = require('../netpay');
-const { red, dim, bold, width, pad, cut } = require('../style');
 const { downloadDir } = require('../paths');
 const path = require('node:path');
-
-const C = { red, dim, bold };
 
 const HELP = `sysu netpay               账户信息 + 网络服务（到期、状态）
 sysu netpay orders        订单记录（--num N，默认 10）
@@ -14,11 +11,12 @@ sysu netpay cancel <单号>  取消未付款订单
 sysu netpay login [--code N] 重新登录（会话坏了时）
 
 数据来自 netpay.sysu.edu.cn；登录复用 sysu login 的 CAS 身份。
-名下没有网络服务时，服务列表会显示“无”。`;
+数据命令默认输出 JSON；--json 只为兼容旧命令保留，不改变输出。
+名下没有网络服务时，服务列表为空。`;
 
 async function main(argvIn = []) {
-  const argv = argvIn.slice();
-  const opts = { json: argv.includes('--json'), num: 10, months: 1, money: 30, yes: argv.includes('--yes') };
+  const argv = argvIn.slice().filter((arg) => arg !== '--json');
+  const opts = { num: 10, months: 1, money: 30, yes: argv.includes('--yes') };
   const ni = argv.indexOf('--num');
   if (ni >= 0) {
     opts.num = Number(argv[ni + 1]);
@@ -30,10 +28,8 @@ async function main(argvIn = []) {
     argv.splice(ci, 2);
     if (!/^\d{4,8}$/.test(String(opts.code || ''))) throw new Error('--code 要跟 4~8 位数字');
   }
-  for (const f of ['--json', '--yes']) {
-    const i = argv.indexOf(f);
-    if (i >= 0) argv.splice(i, 1);
-  }
+  const yi = argv.indexOf('--yes');
+  if (yi >= 0) argv.splice(yi, 1);
   for (const k of ['--months', '--money', '--out']) {
     const i = argv.indexOf(k);
     if (i >= 0) { opts[k.slice(2)] = k === '--out' ? argv[i + 1] : Number(argv[i + 1]); argv.splice(i, 2); }
@@ -44,39 +40,33 @@ async function main(argvIn = []) {
 
   if (cmd === 'login') {
     await netpay.login({ code: opts.code });
-    if (opts.json) return console.log(JSON.stringify({ ok: true }, null, 2));
-    console.log('✓ 网费已登录');
-    return undefined;
+    return console.log(JSON.stringify({ ok: true }, null, 2));
   }
 
   if (cmd === 'info') {
-    const [info, services] = await Promise.all([netpay.info(), netpay.services()]);
-    if (opts.json) return console.log(JSON.stringify({ info, services }, null, 2));
-    console.log(`${bold(info.xm || info.netid)}  ·  ${info.sn || ''}  ·  ${info.bmmc || ''}`);
-    if (!services.length) {
-      console.log(C.red('名下没有网络服务'));
-      return undefined;
-    }
-    console.log('');
-    for (const s of services) {
-      console.log(`${cut(s.service, 26)}  ${s.status}  到期 ${s.expire}`);
-      console.log(C.dim(`  ${s.address || ''}  ${s.mac || ''}`));
-    }
-    return undefined;
+    const info = await netpay.info();
+    const services = await netpay.services();
+    return console.log(JSON.stringify({ info, services }, null, 2));
   }
 
   if (cmd === 'renew') {
     const svc = (await netpay.services())[0];
-    if (!svc) return console.log('名下没有可续费的网络服务');
-    if (!svc.id) return console.log('服务没有可续费 ID（可能还没进续费窗口）');
+    if (!svc) {
+      return console.log(JSON.stringify({ ok: true, renewable: false, message: '名下没有可续费的网络服务' }, null, 2));
+    }
+    if (!svc.id) {
+      return console.log(JSON.stringify({
+        ok: true,
+        renewable: false,
+        service: svc.service,
+        message: '服务没有可续费 ID（可能还没进续费窗口）',
+      }, null, 2));
+    }
     const months = Number(opts.months || 1);
     const money = Number(opts.money || 30) * months;
     const payload = { ok: true, service: svc.service, expire: svc.expire, months, money, dryRun: !opts.yes };
     if (!opts.yes) {
-      if (opts.json) return console.log(JSON.stringify(payload, null, 2));
-      console.log(`${svc.service}  到期 ${svc.expire}  续 ${months} 个月  ${money} 元`);
-      console.log(dim('\nDRY-RUN：确认后加 --yes 建单（只生成未付款订单）'));
-      return undefined;
+      return console.log(JSON.stringify(payload, null, 2));
     }
     const r = await netpay.prepareRenew({ serviceId: svc.id, months, money });
     const fs = require('node:fs');
@@ -85,28 +75,27 @@ async function main(argvIn = []) {
       r.inputs.map(([k, v]) => `<input type="hidden" name="${k}" value="${String(v).replace(/"/g, '&quot;')}">`).join('') +
       `</form><script>document.getElementById('f').submit()</script>`;
     fs.writeFileSync(file, form);
-    if (opts.json) return console.log(JSON.stringify({ ...payload, dryRun: false, payPage: file }, null, 2));
-    console.log(`${svc.service}  到期 ${svc.expire}  续 ${months} 个月  ${money} 元`);
-    console.log(`订单已生成（未付款），支付页：${file}`);
-    console.log(dim('用 Chrome 打开它即可付款；不付会自动关闭。'));
-    return undefined;
+    return console.log(JSON.stringify({ ...payload, dryRun: false, payPage: file }, null, 2));
   }
   if (cmd === 'cancel') {
     const id = argv[1];
     if (!id) throw new Error('用法：sysu netpay cancel <订单号>');
     const st = await netpay.cancelOrder(id);
-    console.log(st === 200 ? '已取消' : `HTTP ${st}`);
-    return undefined;
+    const cancelled = st === 200;
+    const output = { ok: cancelled, order: id, status: st, cancelled };
+    if (!cancelled) {
+      output.error = { message: `取消失败（HTTP ${st}）` };
+      process.exitCode = 1;
+    }
+    return console.log(JSON.stringify(output, null, 2));
   }
   if (cmd === 'orders') {
     const list = await netpay.orders();
-    if (opts.json) return console.log(JSON.stringify(list, null, 2));
-    if (!list.length) return console.log('没有订单');
-    for (const o of list.slice(0, opts.num)) {
-      console.log(`${o.time}  ${cut(o.service || '', 22)}  ${o.amount}  ${o.status}  ${dim(o.id)}`);
-    }
-    console.log(C.dim(`\n共 ${list.length} 条  ·  --num N 看更多`));
-    return undefined;
+    return console.log(JSON.stringify({
+      ok: true,
+      total: list.length,
+      orders: list.slice(0, opts.num),
+    }, null, 2));
   }
 
   throw new Error(`未知命令：${cmd}\n\n${HELP}`);

@@ -64,13 +64,11 @@ class SysuCardCodecTest {
 
     @Test
     fun emptyAndErrorStatesSurviveRoundTrip() {
-        val empty = rendered(SysuCommandKind.LmsTodo, "lms_courses.json").let {
-            SysuObservation.render(
-                SysuCommandKind.LmsTodo,
-                CliJsonEnvelope.LENIENT.element("[]")!!,
-                ChineseStrings,
-            )!!
-        }
+        val empty = SysuObservation.render(
+            SysuCommandKind.LmsTodo,
+            CliJsonEnvelope.LENIENT.element("""{"ok":true,"items":[]}""")!!,
+            ChineseStrings,
+        )!!
         val emptyDecoded = roundTrip(empty.card!!)
         assertEquals(CliCardState.EMPTY, emptyDecoded?.state)
         assertTrue(emptyDecoded?.note.orEmpty().contains("没有待办"))

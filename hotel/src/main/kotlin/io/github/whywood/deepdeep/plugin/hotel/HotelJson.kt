@@ -12,18 +12,6 @@ import kotlinx.serialization.json.contentOrNull
 
 internal val HotelJson = Json { ignoreUnknownKeys = true; isLenient = true }
 
-internal const val DEEPDEEP_RAW_KEY = "deepdeep.raw"
-
-internal fun withHotelRaw(details: JsonObject, raw: String?): JsonObject {
-    val text = raw?.let(::stripAnsi)?.trim().orEmpty()
-    if (text.isEmpty()) return details
-    return JsonObject(details + (DEEPDEEP_RAW_KEY to JsonPrimitive(text)))
-}
-
-internal fun stripAnsi(value: String): String = value.replace(ANSI_PATTERN, "")
-
-private val ANSI_PATTERN = Regex("\u001B\\[[;\\d]*[ -/]*[@-~]")
-
 internal fun extractJsonElement(raw: String?): JsonElement? = extractJsonElements(raw).firstOrNull()
 
 internal fun extractJsonElements(raw: String?): List<JsonElement> {
@@ -90,15 +78,19 @@ internal fun parseHotelSearch(
     val hotels = list.mapNotNull { element ->
         val item = element as? JsonObject ?: return@mapNotNull null
         val name = item.string("name", "hotelName") ?: return@mapNotNull null
+        val price = item.hotelPrice()
         HotelSummary(
             name = name,
             nameEn = item.string("nameEn", "name_en"),
             starRating = item.starRating(),
-            priceText = item.hotelPrice(),
+            priceText = price?.text,
+            lowestPrice = price?.amount,
+            currency = price?.currency,
             address = item.string("address", "addressAll"),
             tags = item.stringList("tags"),
             amenities = item.stringList("hotelAmenities", "amenities"),
             bookingUrl = item.string("bookingUrl", "booking_url"),
+            imageUrl = item.string("imageUrl", "image_url", "image"),
             distance = item.string("distanceText", "distance_text"),
             distanceMeters = item.number("distanceInMeters", "distance_in_meters")?.toInt(),
             hotelId = item.number("hotelId", "hotel_id")?.toLong(),
@@ -143,13 +135,15 @@ internal fun parseHotelDetail(raw: String, fallbackName: String): HotelDetailDet
         val averagePrice = item.number("averagePrice", "average_price", "totalSalesRate", "total_sales_rate")
         val explicitTotal = item.number("totalPrice", "total_price")
         val totalPrice = explicitTotal ?: averagePrice?.let { price -> price * nights }
+        val bedRaw = item.string("bedTypeDescription", "bedType")
+            ?: roomInfo?.string("bedTypeDescription", "bedType")
+        val bed = bedRaw?.let { hotelCleanBed(it, name) }
         val cancelable = item.boolean("cancelable")
         val cancellations = item.cancellationTexts()
         HotelRoomPlan(
             name = name.trim(),
             ratePlanName = item.string("ratePlanName", "rate_plan_name"),
-            bed = item.string("bedTypeDescription", "bedType")
-                ?: roomInfo?.string("bedTypeDescription", "bedType"),
+            bed = bed,
             priceText = money(totalPrice, currency),
             avgPriceText = money(averagePrice, currency),
             cancellation = cancellations.firstOrNull(),
@@ -193,10 +187,49 @@ internal fun parseHotelDetail(raw: String, fallbackName: String): HotelDetailDet
     )
 }
 
+internal fun hotelCleanBed(raw: String, roomName: String): String? {
+    val cleaned = raw.trim().trim(',', '，', '|', ' ')
+    if (cleaned.isEmpty()) return null
+    val normalized = cleaned.replace(Regex("""\s+"""), " ")
+    val doubleRoom = roomName.contains("双床")
+    val singleBed = normalized.contains("单人床") || normalized.contains("单人")
+    if (doubleRoom && singleBed && !normalized.contains("2") && !normalized.contains("两")) return null
+    if (normalized.contains("|")) {
+        hotelDisplayRatePlanName(normalized)?.let { return it }
+    }
+    return normalized
+}
+
+internal fun groupHotelPlanVariants(plans: List<HotelRoomPlan>): List<HotelPlanVariant> {
+    val groups = LinkedHashMap<String, MutableList<HotelRoomPlan>>()
+    plans.forEach { plan ->
+        val key = listOf(
+            plan.bed.orEmpty(),
+            plan.meal.orEmpty(),
+            plan.priceText.orEmpty(),
+            plan.avgPriceText.orEmpty(),
+        ).joinToString("|")
+        groups.getOrPut(key) { mutableListOf() }.add(plan)
+    }
+    return groups.values.map { members ->
+        val policies = members.flatMap { plan ->
+            plan.cancellations.ifEmpty { listOfNotNull(plan.cancellation) }
+        }.distinct()
+        val requestFlags = members.map { it.onRequest == true }.distinct()
+        HotelPlanVariant(
+            plan = members.first(),
+            count = members.size,
+            policies = policies,
+            hasOnRequest = requestFlags.any { it },
+            mixedOnRequest = requestFlags.size > 1,
+        )
+    }.sortedWith(compareBy(nullsLast()) { variant: HotelPlanVariant -> variant.plan.totalPrice })
+}
+
 internal fun groupHotelRooms(plans: List<HotelRoomPlan>): List<HotelRoomGroup> {
     val groups = LinkedHashMap<String, MutableList<HotelRoomPlan>>()
     plans.forEach { plan ->
-        val key = plan.name.trim().lowercase(Locale.ROOT).replace(WHITESPACE, " ")
+        val key = hotelRoomBaseName(plan.name).lowercase(Locale.ROOT).replace(WHITESPACE, " ")
         groups.getOrPut(key) { mutableListOf() }.add(plan)
     }
     return groups.values.map { members ->
@@ -204,11 +237,17 @@ internal fun groupHotelRooms(plans: List<HotelRoomPlan>): List<HotelRoomGroup> {
         val cheapest = sorted.firstOrNull { it.priceText != null } ?: sorted.first()
         val beds = sorted.mapNotNull { it.bed?.trim()?.takeIf(String::isNotEmpty) }.distinct()
         HotelRoomGroup(
-            name = cheapest.name.trim(),
+            name = hotelRoomBaseName(cheapest.name),
             bed = beds.singleOrNull(),
             lowestPriceText = cheapest.priceText,
             planCount = sorted.size,
             cheapestCancellation = cheapest.cancellation,
+            roomSize = sorted.firstNotNullOfOrNull { it.roomSize?.trim()?.takeIf(String::isNotEmpty) },
+            floor = sorted.firstNotNullOfOrNull { it.floor?.trim()?.takeIf(String::isNotEmpty) },
+            maxOccupancy = sorted.firstNotNullOfOrNull { it.maxOccupancy },
+            hasWindow = sorted.firstNotNullOfOrNull { it.hasWindow },
+            hasWifi = sorted.firstNotNullOfOrNull { it.hasWifi },
+            images = sorted.firstNotNullOfOrNull { it.images.takeIf(List<String>::isNotEmpty) }.orEmpty(),
             plans = sorted,
         )
     }
@@ -460,6 +499,115 @@ internal fun hotelDistanceText(meters: Int?): String? {
     }
 }
 
+internal val ROOM_SUFFIX = Regex("""\s*[（(][^（）()]*[)）]\s*$""")
+
+internal val ROOM_CAPTURE_SUFFIX = Regex("""\s*[（(]([^（）()]*)[)）]\s*$""")
+
+internal fun hotelRoomSuffixes(raw: String): List<String> {
+    val suffixes = mutableListOf<String>()
+    var base = raw.trim()
+    while (true) {
+        val match = ROOM_CAPTURE_SUFFIX.find(base) ?: break
+        val suffix = match.groupValues[1].trim()
+        if (suffix.isNotEmpty()) suffixes.add(0, suffix)
+        base = base.removeRange(match.range).trim()
+        if (base.isEmpty()) break
+    }
+    return suffixes
+}
+
+internal fun hotelRoomBaseName(raw: String): String {
+    var base = raw.trim()
+    while (true) {
+        val next = base.replace(ROOM_SUFFIX, "").trim()
+        if (next == base || next.isEmpty()) break
+        base = next
+    }
+    return base.ifEmpty { raw.trim() }
+}
+
+internal fun sortHotelResults(details: HotelSearchDetails): HotelSearchDetails {
+    if (details.hotels.size < 2) return details
+    val sortedBy = when {
+        details.maxPrice != null && details.hotels.any { it.lowestPrice != null } -> "price"
+        details.hotels.all { it.distanceMeters != null } -> "distance"
+        else -> null
+    } ?: return details
+    val hotels = when (sortedBy) {
+        "price" -> details.hotels.sortedWith(compareBy(nullsLast()) { it.lowestPrice })
+        else -> details.hotels.sortedWith(compareBy(nullsLast()) { it.distanceMeters })
+    }
+    return details.copy(hotels = hotels, sortedBy = sortedBy)
+}
+
+internal fun parseHotelSearchTags(raw: String): HotelSearchTags? {
+    val root = extractJsonElements(raw).filterIsInstance<JsonObject>()
+        .firstOrNull { it["tags"] is JsonArray } ?: return null
+    val tags = (root["tags"] as? JsonArray).orEmpty().mapNotNull { element ->
+        val item = element as? JsonObject ?: return@mapNotNull null
+        val name = item.string("name", "tagName", "tag_name") ?: return@mapNotNull null
+        val category = item.string("category", "categoryName", "group") ?: "其他"
+        HotelSearchTag(name = name, category = category)
+    }
+    val categories = LinkedHashMap<String, MutableList<String>>()
+    tags.forEach { tag -> categories.getOrPut(tag.category) { mutableListOf() }.add(tag.name) }
+    return HotelSearchTags(
+        categories = categories.map { (category, names) -> HotelTagCategory(category, names.distinct()) },
+        fetchedAt = System.currentTimeMillis(),
+    )
+}
+
+internal fun parseHotelCancelQuote(raw: String, fallbackOrderNo: String): HotelCancelQuote? {
+    val root = extractJsonElements(raw).filterIsInstance<JsonObject>()
+        .firstOrNull {
+            it["canCancel"] != null || it["can_cancel"] != null || it["confirmId"] != null ||
+                it["confirm_id"] != null || it["cancelFee"] != null || it["bookingId"] != null ||
+                it["orderNo"] != null || it["success"] != null || it["message"] != null
+        } ?: return null
+    val feeInfo = root["cancelFeeInfo"] as? JsonObject ?: root["feeInfo"] as? JsonObject
+    val currency = root.string("currency", "currencyCode") ?: feeInfo?.string("currency")
+    val feeAmount = root.number(
+        "cancelFee", "cancelFeeAmount", "cancellationFee", "penaltyAmount", "cancelAmount",
+        "feeAmount", "deductAmount", "penalty", "fee",
+    ) ?: feeInfo?.number("amount", "fee", "cancelFee")
+    val feeText = root.string("cancelFeeText", "feeText", "cancelFeeDesc", "penaltyDesc", "cancelDescription")
+        ?: money(feeAmount, currency)
+    val success = root.boolean("success")
+    val canCancel = root.boolean("canCancel", "can_cancel") ?: success ?: true
+    return HotelCancelQuote(
+        orderNo = root.string("orderNo", "order_no") ?: fallbackOrderNo,
+        hotelName = root.string("hotelName", "hotel_name"),
+        canCancel = canCancel,
+        feeText = feeText,
+        currency = currency,
+        policy = root.string("cancelPolicy", "cancelPolicyDesc", "policy", "cancelRule", "description"),
+        message = root.string("message", "msg"),
+        bookingId = root.string("bookingId", "booking_id"),
+        confirmId = root.string("confirmId", "confirm_id", "confirmToken"),
+        expiresAt = root.string("expireTime", "expiresAt", "expireAt", "validUntil", "deadline", "expireIn"),
+        fetchedAt = System.currentTimeMillis(),
+    )
+}
+
+internal fun parseHotelCancelResult(raw: String, orderNo: String, hotelName: String?): HotelCancelResult? {
+    val root = extractJsonElements(raw).filterIsInstance<JsonObject>()
+        .firstOrNull {
+            it["success"] != null || it["orderStatus"] != null || it["order_status"] != null ||
+                it["orderNo"] != null || it["message"] != null
+        } ?: return null
+    val status = root.string("orderStatus", "order_status", "status")
+    val success = root.boolean("success")
+    val cancelled = success == true || status?.contains("cancel", ignoreCase = true) == true
+    return HotelCancelResult(
+        orderNo = root.string("orderNo", "order_no") ?: orderNo,
+        cancelled = cancelled,
+        hotelName = root.string("hotelName", "hotel_name") ?: hotelName,
+        orderStatus = status,
+        message = root.string("message", "msg"),
+        fetchedAt = System.currentTimeMillis(),
+    )
+}
+
 private val WHITESPACE = Regex("\\s+")
 
 private fun money(value: Double?, currency: String?): String? {
@@ -559,13 +707,16 @@ private fun JsonObject.starRating(): String? {
     } ?: text
 }
 
-private fun JsonObject.hotelPrice(): String? {
+private data class HotelPrice(val text: String, val amount: Double?, val currency: String?)
+
+private fun JsonObject.hotelPrice(): HotelPrice? {
     val price = this["price"] as? JsonObject
-    if (price != null) {
-        money(price.number("lowestPrice", "lowest_price"), price.string("currency"))?.let { return it }
-        price.string("message")?.let { return it }
+    val amount = price?.number("lowestPrice", "lowest_price") ?: number("lowestPrice", "lowest_price")
+    val currency = price?.string("currency") ?: string("currency")
+    if (amount != null) {
+        money(amount, currency)?.let { return HotelPrice(it, amount, currency) }
     }
-    return money(number("lowestPrice", "lowest_price"), string("currency"))
+    return price?.string("message")?.let { HotelPrice(it, null, currency) }
 }
 
 private fun JsonObject.cancellationTexts(): List<String> {

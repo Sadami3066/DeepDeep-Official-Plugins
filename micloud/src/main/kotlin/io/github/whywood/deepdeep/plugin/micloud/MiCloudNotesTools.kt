@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 
 private const val MAX_SNIPPET_CHARS = 200
@@ -27,7 +28,7 @@ internal fun notesTool(
     parameters = notesParameters,
 ) { call ->
     call.signal?.throwIfCancelled()
-    miCloudToolResult {
+    miCloudToolResult(MiCloudFeature.NOTES, text) {
         val args = call.args
         when (val action = args.argString("action") ?: "list") {
             "list" -> {
@@ -47,11 +48,17 @@ internal fun notesTool(
                     rows = entries,
                 )
                 textResult(
-                    notesListObservation(entries, cursor, lastPage, text),
-                    details = cardResultDetails(
-                        card = card.toJson(),
+                    text = "",
+                    details = toolResultDetails(
                         raw = response.body,
-                        title = text.fmt("我的便签（%d 条）", "My notes (%d)", entries.size),
+                        guidance = listOf(
+                            notesListGuidance(entries.size, cursor, lastPage, text),
+                            rawNoiseNote(text),
+                        ).filter(String::isNotBlank).joinToString(" "),
+                        card = MiCloudCard(
+                            title = text("我的便签", "My notes"),
+                            payload = card.toJson(),
+                        ),
                     ),
                 )
             }
@@ -69,13 +76,20 @@ internal fun notesTool(
                     subject = item.subject,
                     preview = plain,
                     modifyTime = item.modifyTime,
+                    rows = listOf(item),
                 )
                 textResult(
-                    noteReadObservation(id, item, plain, text),
-                    details = cardResultDetails(
-                        card = card.toJson(),
+                    text = "",
+                    details = toolResultDetails(
                         raw = response.body,
-                        title = text.fmt("便签 · %s", "Note · %s", item.subject.ifBlank { text("（无主题）", "(No subject)") }),
+                        card = MiCloudCard(
+                            title = text.fmt(
+                                "便签 · %s",
+                                "Note · %s",
+                                item.subject.ifBlank { text("（无主题）", "(No subject)") },
+                            ),
+                            payload = card.toJson(),
+                        ),
                     ),
                 )
             }
@@ -102,13 +116,16 @@ internal fun notesTool(
                     subject = subject,
                     preview = content,
                     modifyTime = timestamp,
+                    response = response,
                 )
                 textResult(
-                    noteWriteObservation(NOTES_ACTION_CREATE, noteId, subject, content, timestamp, text),
-                    details = cardResultDetails(
-                        card = card.toJson(),
+                    text = "",
+                    details = toolResultDetails(
                         raw = responseBody,
-                        title = text("已新建便签", "Note created"),
+                        card = MiCloudCard(
+                            title = text("已新建便签", "Note created"),
+                            payload = card.toJson(),
+                        ),
                     ),
                 )
             }
@@ -125,7 +142,7 @@ internal fun notesTool(
                 val timestamp = now()
                 val updated = updatedNoteEntry(existing.json as JsonObject, subject, content, timestamp)
                 val responseBody = writer.post(noteUpdatePath(id), noteUpdateForm(updated))
-                parseResponseObject(responseBody)
+                val response = parseResponseObject(responseBody)
                 val updatedSubject = updated.stringOrNull("subject").orEmpty()
                 val updatedContent = notePlainText(updated.stringOrNull("content"))
                 val card = MiCloudNotesCardData(
@@ -135,13 +152,16 @@ internal fun notesTool(
                     subject = updatedSubject,
                     preview = updatedContent,
                     modifyTime = timestamp,
+                    response = response,
                 )
                 textResult(
-                    noteWriteObservation(NOTES_ACTION_UPDATE, id, updatedSubject, updatedContent, timestamp, text),
-                    details = cardResultDetails(
-                        card = card.toJson(),
+                    text = "",
+                    details = toolResultDetails(
                         raw = responseBody,
-                        title = text("已修改便签", "Note updated"),
+                        card = MiCloudCard(
+                            title = text("已修改便签", "Note updated"),
+                            payload = card.toJson(),
+                        ),
                     ),
                 )
             }
@@ -155,19 +175,22 @@ internal fun notesTool(
                     ?: throw IllegalArgumentException("Note has no tag; cannot delete")
                 val purge = args.argBool("purge") ?: true
                 val responseBody = writer.post(noteDeletePath(id), noteDeleteForm(tag, purge))
-                parseResponseObject(responseBody)
+                val response = parseResponseObject(responseBody)
                 val card = MiCloudNotesCardData(
                     action = NOTES_ACTION_DELETE,
                     total = 1,
                     noteId = id,
                     subject = subject,
+                    response = response,
                 )
                 textResult(
-                    noteWriteObservation(NOTES_ACTION_DELETE, id, subject, "", 0L, text),
-                    details = cardResultDetails(
-                        card = card.toJson(),
+                    text = "",
+                    details = toolResultDetails(
                         raw = responseBody,
-                        title = text("已删除便签", "Note deleted"),
+                        card = MiCloudCard(
+                            title = text("已删除便签", "Note deleted"),
+                            payload = card.toJson(),
+                        ),
                     ),
                 )
             }

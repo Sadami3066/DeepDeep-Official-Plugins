@@ -35,153 +35,119 @@ class AmapToolsTest {
     private fun raw(result: PluginToolResult): String =
         (result.details?.get("deepdeep.raw") as JsonPrimitive).content
 
+    private fun guidance(result: PluginToolResult): String =
+        (result.details?.get("deepdeep.guidance") as JsonPrimitive).content
+
     private fun card(result: PluginToolResult): JsonObject =
         result.details?.get("deepdeep.card") as JsonObject
 
+    private fun items(result: PluginToolResult): JsonArray =
+        result.details?.get("items") as JsonArray
+
     @Test
-    fun placeSearchMountsFullRawAllRowsFieldsAndCardTitle() = runTest {
-        val network = FakeMcpNetwork(
-            searchProperties = setOf("keywords", "city", "types", "page_size", "page_num"),
-            payload = {
-                """
-                {
-                  "status": "1",
-                  "count": "126",
-                  "pois": [
-                    {"name": "西湖", "address": "龙井路1号", "cityname": "杭州市", "tel": "0571-87179617", "biz_ext": {"rating": "4.7"}, "business_area": "西湖风景区", "photos": [{"url": "https://a/1.jpg"}], "location": "120.145,30.256"},
-                    {"name": "断桥残雪", "location": "120.150,30.260"},
-                    {"name": "苏堤春晓", "location": "120.140,30.250"},
-                    {"name": "曲院风荷", "location": "120.135,30.255"},
-                    {"name": "平湖秋月", "location": "120.148,30.252"},
-                    {"name": "柳浪闻莺", "location": "120.155,30.240"},
-                    {"name": "花港观鱼", "location": "120.138,30.235"},
-                    {"name": "雷峰夕照", "location": "120.149,30.231"},
-                    {"name": "南屏晚钟", "location": "120.147,30.228"},
-                    {"name": "三潭印月", "location": "120.142,30.238"}
-                  ]
-                }
-                """.trimIndent()
-            },
-        )
+    fun placeSearchReturnsInnerRawGuidanceAndCardPayload() = runTest {
+        val payload = """
+            {"suggestion":{"keywords":"","ciytes":{"suggestion":[]}},"pois":[
+              {"id":"B00141IHRZ","name":"中山大学(广州校区南校园)","address":"新港西路135号","typecode":"141201","photo":"http://store.is.autonavi.com/showpic/1"},
+              {"id":"B001403454","name":"中山大学(广州校区北校园)","address":"中山二路74号","typecode":"141201","photo":null}
+            ]}
+        """.trimIndent()
+        val network = FakeMcpNetwork(payload = { payload })
         val result = run(
             host = host(network),
             name = "amap_place_search",
-            arguments = args("""{"keywords":"西湖","city":"杭州","page_size":20,"page_num":2}"""),
+            arguments = args("""{"keywords":"中山大学","city":"广州市"}"""),
         )
 
         assertFalse(result.isError)
-        assertTrue(result.text.orEmpty().contains("共 126 条"))
-        assertTrue(result.text.orEmpty().contains("用 page_num=3 继续"))
-        assertEquals(10, (result.details?.get("items") as JsonArray).size)
-        val first = ((result.details?.get("items") as JsonArray)[0]) as JsonObject
-        assertEquals("0571-87179617", (first["tel"] as JsonPrimitive).content)
-        assertEquals(4.7, (first["rating"] as JsonPrimitive).content.toDouble(), 0.001)
-        assertEquals("西湖风景区", (first["businessArea"] as JsonPrimitive).content)
-        assertEquals("https://a/1.jpg", ((first["photos"] as JsonArray)[0] as JsonPrimitive).content)
-        assertEquals(126, (result.details?.get("count") as JsonPrimitive).int)
-        assertTrue(card(result)["title"].toString().contains("西湖"))
-        assertTrue(raw(result).contains("\"jsonrpc\":\"2.0\""))
-        assertTrue(raw(result).contains("\"count\":\"126\""))
-        assertEquals(10, (AmapJson.parseToJsonElement(raw(result)) as JsonObject)
-            .let { envelope -> (envelope["result"] as JsonObject) }
-            .let { resultObject -> (resultObject["structuredContent"] as JsonObject)["pois"] as JsonArray }
-            .size)
-        val call = network.toolCalls.last()
-        assertEquals("maps_text_search", call.first)
-        assertEquals(20, (call.second["page_size"] as JsonPrimitive).int)
-        assertEquals(2, (call.second["page_num"] as JsonPrimitive).int)
-    }
-
-    @Test
-    fun placeSearchExplainsLimitsWhenServiceHasNoPagingArguments() = runTest {
-        val network = FakeMcpNetwork(
-            searchProperties = setOf("keywords", "city"),
-            payload = { """{"pois":[{"name":"西湖"},{"name":"断桥残雪"}]}""" },
-        )
-        val result = run(
-            host = host(network),
-            name = "amap_place_search",
-            arguments = args("""{"keywords":"西湖","page_num":2}"""),
-        )
-
-        assertTrue(result.text.orEmpty().contains("接口不支持 page_size/page_num"))
+        assertEquals("", result.text)
+        assertEquals(payload, raw(result))
+        assertTrue(guidance(result).contains("2 个地点"))
+        assertTrue(guidance(result).contains("没有坐标"))
+        assertEquals(setOf("title"), card(result).keys)
+        assertEquals("地点：中山大学（2 处）", (card(result)["title"] as JsonPrimitive).content)
+        assertEquals(2, items(result).size)
+        val first = items(result)[0] as JsonObject
+        assertEquals("B00141IHRZ", (first["id"] as JsonPrimitive).content)
+        assertEquals("141201", (first["typecode"] as JsonPrimitive).content)
+        assertEquals("高等院校", (first["typeName"] as JsonPrimitive).content)
+        assertEquals("https://store.is.autonavi.com/showpic/1", (first["photo"] as JsonPrimitive).content)
+        assertEquals("https://store.is.autonavi.com/showpic/1", ((first["photos"] as JsonArray)[0] as JsonPrimitive).content)
+        assertEquals("广州市", (result.details?.get("city") as JsonPrimitive).content)
+        assertEquals("maps_text_search", network.toolCalls.last().first)
+        assertNull(network.toolCalls.last().second["page_size"])
         assertNull(network.toolCalls.last().second["page_num"])
-        assertTrue(raw(result).contains("\"pois\""))
     }
 
     @Test
-    fun routeToolDetailsCarryEveryPathAndRaw() = runTest {
-        val network = FakeMcpNetwork(
-            payload = {
-                """
-                {
-                  "route": {
-                    "origin": "120.1,30.2",
-                    "destination": "120.3,30.4",
-                    "paths": [
-                      {"distance": "12345", "duration": "1500", "steps": [{"instruction": "向北行驶", "road": "文一西路", "distance": "500", "duration": "60"}]},
-                      {"distance": "15600", "duration": "2100", "steps": [{"instruction": "沿文一西路向西", "distance": "900", "duration": "120"}]}
-                    ]
-                  }
-                }
-                """.trimIndent()
-            },
-        )
+    fun searchSchemasHaveNoPagingArgumentsOrFalsePromises() {
+        val host = host(FakeMcpNetwork())
+        val tools = amapTools(host).associateBy { it.name }
+
+        listOf("amap_place_search", "amap_around_search").forEach { name ->
+            val properties = ((tools.getValue(name).parameters["properties"]) as JsonObject).keys
+            assertFalse("$name must not expose page_size", "page_size" in properties)
+            assertFalse("$name must not expose page_num", "page_num" in properties)
+        }
+        val descriptions = tools.values.joinToString("\n") { it.description }
+        assertFalse(descriptions.contains("总条数"))
+        assertFalse(descriptions.contains("page_num"))
+        assertTrue(descriptions.contains("不支持翻页"))
+        assertTrue(tools.getValue("amap_place_search").description.contains("数量有限"))
+        assertTrue(tools.getValue("amap_around_search").description.contains("数量有限"))
+        assertFalse(tools.getValue("amap_around_search").description.contains("12 条"))
+        assertTrue(tools.getValue("amap_regeo").description.contains("区县"))
+        assertTrue(tools.getValue("amap_route_transit").description.contains("轨迹"))
+        assertTrue(tools.getValue("amap_route_driving").description.contains("1 条备选"))
+        assertTrue(tools.getValue("amap_weather").description.contains("白天"))
+    }
+
+    @Test
+    fun aroundSearchKeepsCenterMapWithoutFakePoiMarkers() = runTest {
+        val payload = """
+            {"pois":[
+              {"id":"B0MUTOMQJG","name":"拌壹桶干拌冒菜","address":"新港西路135号","typecode":"050100","photo":null},
+              {"id":"B0FFGCANBL","name":"第一寄宿舍","address":"新港西路135号","typecode":"120303","photo":"https://store.is.autonavi.com/showpic/2"}
+            ]}
+        """.trimIndent()
+        val network = FakeMcpNetwork(payload = { payload })
         val result = run(
             host = host(network),
-            name = "amap_route_driving",
-            arguments = args(
-                """{"origin_longitude":120.1,"origin_latitude":30.2,"destination_longitude":120.3,"destination_latitude":30.4,"origin_name":"公司","destination_name":"机场"}""",
-            ),
+            name = "amap_around_search",
+            arguments = args("""{"longitude":113.2981,"latitude":23.0965,"radius":300}"""),
         )
 
         assertFalse(result.isError)
-        assertTrue(result.text.orEmpty().contains("另有 1 条备选"))
-        assertEquals(2, (result.details?.get("paths") as JsonArray).size)
-        val second = ((result.details?.get("paths") as JsonArray)[1]) as JsonObject
-        assertEquals(15600, (second["distanceMeters"] as JsonPrimitive).int)
-        assertEquals(1, (second["steps"] as JsonArray).size)
-        assertEquals(1500, (result.details?.get("durationSeconds") as JsonPrimitive).int)
-        assertTrue(card(result)["title"].toString().contains("驾车路线"))
-        assertTrue(card(result)["title"].toString().contains("公司"))
-        assertTrue(raw(result).contains("\"paths\""))
-        assertEquals("maps_direction_driving", network.toolCalls.last().first)
+        assertEquals(2, items(result).size)
+        val map = result.details?.get("map") as JsonObject
+        assertEquals(0, (map["markers"] as JsonArray).size)
+        assertEquals("113.2981,23.0965", ((map["center"] as JsonObject).let {
+            "${(it["longitude"] as JsonPrimitive).content},${(it["latitude"] as JsonPrimitive).content}"
+        }))
+        assertTrue(guidance(result).contains("2 个周边地点"))
+        assertTrue(guidance(result).contains("关键词由高德匹配"))
+        val aroundCall = network.toolCalls.last { (name, _) -> name == "maps_around_search" }.second
+        assertEquals("300", (aroundCall["radius"] as JsonPrimitive).content)
+        assertNull(aroundCall["page_num"])
     }
 
     @Test
-    fun weatherToolKeepsEveryForecastDayAndRaw() = runTest {
-        val network = FakeMcpNetwork(
-            payload = {
-                """
-                {
-                  "forecasts": [
-                    {"city": "杭州市", "casts": [
-                      {"date": "2026-11-15", "dayweather": "晴", "nightweather": "多云", "daytemp": "20", "nighttemp": "12"},
-                      {"date": "2026-11-16", "dayweather": "小雨", "nightweather": "阴", "daytemp": "18", "nighttemp": "11"}
-                    ]},
-                    {"city": "杭州市", "casts": [
-                      {"date": "2026-11-17", "dayweather": "多云", "nightweather": "晴", "daytemp": "21", "nighttemp": "13"}
-                    ]}
-                  ]
-                }
-                """.trimIndent()
-            },
-        )
+    fun aroundSearchWithKeywordsBuildsCountAndKeywordTitle() = runTest {
+        val payload = """{"pois":[{"name":"咖啡店","address":"新港西路","typecode":"050500","photo":null}]}"""
+        val network = FakeMcpNetwork(payload = { payload })
         val result = run(
             host = host(network),
-            name = "amap_weather",
-            arguments = args("""{"city":"杭州"}"""),
+            name = "amap_around_search",
+            arguments = args("""{"longitude":113.2981,"latitude":23.0965,"radius":800,"keywords":"咖啡"}"""),
         )
 
         assertFalse(result.isError)
-        assertEquals(3, (result.details?.get("days") as JsonArray).size)
-        assertTrue(result.text.orEmpty().contains("11/17"))
-        assertTrue(card(result)["title"].toString().contains("3 天"))
-        assertTrue(raw(result).contains("\"casts\""))
+        assertEquals("附近 1 处「咖啡」", (card(result)["title"] as JsonPrimitive).content)
+        assertEquals("咖啡", network.toolCalls.last().second["keywords"]?.let { (it as JsonPrimitive).content })
     }
 
     @Test
-    fun upstreamErrorKeepsDetailAndRedactsKey() = runTest {
+    fun httpErrorKeepsUpstreamRawAndClassifiesInvalidKey() = runTest {
         val network = FakeMcpNetwork(
             failure = NetworkResponse(
                 statusCode = 400,
@@ -195,51 +161,199 @@ class AmapToolsTest {
         )
 
         assertTrue(result.isError)
-        assertTrue(result.text.orEmpty().contains("INVALID_USER_KEY"))
-        assertTrue(result.text.orEmpty().contains("上游返回"))
-        assertFalse(result.text.orEmpty().contains("secret-key"))
-        val detailsRaw = (result.details?.get("deepdeep.raw") as JsonPrimitive).content
-        assertTrue(detailsRaw.contains("INVALID_USER_KEY"))
-        assertFalse(detailsRaw.contains("secret-key"))
-        assertTrue(detailsRaw.contains("***"))
-        assertTrue(result.details?.get("deepdeep.card") == null)
+        assertEquals("", result.text)
+        assertTrue(raw(result).contains("INVALID_USER_KEY"))
+        assertFalse(raw(result).contains("secret-key"))
+        assertTrue(raw(result).contains("***"))
+        assertTrue(guidance(result).contains("Key"))
+        assertNull(result.details?.get("deepdeep.card"))
+        assertNull(result.details?.get("kind"))
     }
 
     @Test
-    fun regeoDetailsCarryStreetAndCard() = runTest {
+    fun serverErrorsAreServiceNotNetwork() = runTest {
         val network = FakeMcpNetwork(
-            payload = {
-                """
-                {
-                  "status": "1",
-                  "regeocode": {
-                    "formatted_address": "浙江省杭州市西湖区北山街道北山街1号",
-                    "addressComponent": {
-                      "province": "浙江省",
-                      "city": "杭州市",
-                      "district": "西湖区",
-                      "township": "北山街道",
-                      "street": "北山街",
-                      "number": "1号",
-                      "location": "120.14,30.26"
-                    }
-                  }
-                }
-                """.trimIndent()
-            },
+            failure = NetworkResponse(statusCode = 503, body = ""),
         )
         val result = run(
             host = host(network),
-            name = "amap_regeo",
-            arguments = args("""{"longitude":120.14,"latitude":30.26}"""),
+            name = "amap_weather",
+            arguments = args("""{"city":"广州市"}"""),
+        )
+
+        assertTrue(result.isError)
+        assertEquals("HTTP 503", raw(result))
+        assertTrue(guidance(result).contains("服务"))
+        assertFalse(guidance(result).contains("没有到达"))
+    }
+
+    @Test
+    fun jsonRpcParameterErrorGetsParameterGuidance() = runTest {
+        val network = FakeMcpNetwork(
+            failure = NetworkResponse(
+                statusCode = 200,
+                body = """{"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"Invalid params"}}""",
+            ),
+        )
+        val result = run(
+            host = host(network),
+            name = "amap_around_search",
+            arguments = args("""{"longitude":113.2981,"latitude":23.0965,"radius":800,"keywords":"咖啡"}"""),
+        )
+
+        assertTrue(result.isError)
+        assertTrue(raw(result).contains("Invalid params"))
+        assertTrue(guidance(result).contains("参数"))
+        assertNull(result.details?.get("deepdeep.card"))
+    }
+
+    @Test
+    fun upstreamStatusZeroBecomesParameterErrorWithRaw() = runTest {
+        val payload = """{"status":"0","info":"INVALID_PARAMS","message":"radius out of range"}"""
+        val network = FakeMcpNetwork(payload = { payload })
+        val result = run(
+            host = host(network),
+            name = "amap_around_search",
+            arguments = args("""{"longitude":113.2981,"latitude":23.0965,"radius":800,"keywords":"咖啡"}"""),
+        )
+
+        assertTrue(result.isError)
+        assertEquals(payload, raw(result))
+        assertTrue(guidance(result).contains("参数"))
+    }
+
+    @Test
+    fun structuredContentIsAppendedToRaw() = runTest {
+        val payload = """{"pois":[{"name":"西湖"}]}"""
+        val network = FakeMcpNetwork(payload = { payload }, includeStructuredContent = true)
+        val result = run(
+            host = host(network),
+            name = "amap_place_search",
+            arguments = args("""{"keywords":"西湖"}"""),
         )
 
         assertFalse(result.isError)
-        assertEquals("西湖区", (result.details?.get("district") as JsonPrimitive).contentOrNull)
-        assertEquals("北山街", (result.details?.get("street") as JsonPrimitive).contentOrNull)
-        assertEquals("1号", (result.details?.get("streetNumber") as JsonPrimitive).contentOrNull)
-        assertTrue(result.text.orEmpty().contains("街道 北山街1号"))
-        assertTrue(card(result)["title"].toString().contains("位置"))
-        assertTrue(raw(result).contains("\"regeocode\""))
+        assertTrue(raw(result).contains(payload))
+        assertTrue(raw(result).contains("structuredContent:"))
     }
+
+    @Test
+    fun regeoReturnsDistrictAndNotesPrecision() = runTest {
+        val payload = """{"country":"中国","province":"广东省","city":"广州市","district":"海珠区"}"""
+        val network = FakeMcpNetwork(payload = { payload })
+        val result = run(
+            host = host(network),
+            name = "amap_regeo",
+            arguments = args("""{"longitude":113.2981,"latitude":23.0965}"""),
+        )
+
+        assertFalse(result.isError)
+        assertEquals("广东省广州市海珠区", (result.details?.get("formattedAddress") as JsonPrimitive).content)
+        assertEquals("中国", (result.details?.get("country") as JsonPrimitive).content)
+        assertEquals("海珠区", (result.details?.get("district") as JsonPrimitive).contentOrNull)
+        assertEquals("district", (result.details?.get("precision") as JsonPrimitive).content)
+        assertEquals(113.2981, (result.details?.get("longitude") as JsonPrimitive).content.toDouble(), 0.0001)
+        assertTrue(guidance(result).contains("只到区县"))
+        assertEquals("位置：广东省广州市海珠区", (card(result)["title"] as JsonPrimitive).content)
+        assertEquals(payload, raw(result))
+    }
+
+    @Test
+    fun transitRouteKeepsEveryOptionAndOnlyBestDistance() = runTest {
+        val payload = """
+            {
+              "origin":"113.2981,23.0965",
+              "destination":"113.3245,23.1065",
+              "distance":"3812",
+              "transits":[
+                {"duration":"2189","walking_distance":"1546","segments":[
+                  {"walking":{"distance":"1297","duration":"1222"},"bus":{"buslines":[
+                    {"name":"地铁8号线(滘心--万胜围)","distance":"1250","duration":"270","departure_stop":{"name":"鹭江"},"arrival_stop":{"name":"客村"}}
+                  ]},"entrance":{"name":"B口"},"exit":{"name":""}},
+                  {"walking":{"distance":"195","duration":"261"},"bus":{"buslines":[]},"entrance":{"name":""},"exit":{"name":""}}
+                ]},
+                {"duration":"2309","walking_distance":"1290","segments":[
+                  {"walking":{"distance":"873","duration":"794"},"bus":{"buslines":[
+                    {"name":"69路","distance":"1703","duration":"666","departure_stop":{"name":"康乐村1"},"arrival_stop":{"name":"珠影"}},
+                    {"name":"226路","distance":"1723","duration":"631","departure_stop":{"name":"康乐村1"},"arrival_stop":{"name":"珠影"}}
+                  ]},"entrance":{"name":""},"exit":{"name":"出入口"}}
+                ]}
+              ]
+            }
+        """.trimIndent()
+        val network = FakeMcpNetwork(payload = { payload })
+        val result = run(
+            host = host(network),
+            name = "amap_route_transit",
+            arguments = args(
+                """{"origin_longitude":113.2981,"origin_latitude":23.0965,"destination_longitude":113.3245,"destination_latitude":23.1065,"city":"广州市","cityd":"广州市"}""",
+            ),
+        )
+
+        assertFalse(result.isError)
+        val paths = result.details?.get("paths") as JsonArray
+        assertEquals(2, paths.size)
+        assertEquals(3812, ((paths[0] as JsonObject)["distanceMeters"] as JsonPrimitive).int)
+        assertNull((paths[1] as JsonObject)["distanceMeters"])
+        val firstLines = (paths[0] as JsonObject)["transitLines"] as JsonArray
+        assertEquals(2, firstLines.size)
+        val secondPathLines = (paths[1] as JsonObject)["transitLines"] as JsonArray
+        val secondOptions = (secondPathLines[0] as JsonObject)["options"] as JsonArray
+        assertEquals(2, secondOptions.size)
+        assertEquals("226路", (secondOptions[1] as JsonObject)["name"]?.let { (it as JsonPrimitive).content })
+        assertTrue(guidance(result).contains("不含轨迹"))
+        assertTrue((card(result)["title"] as JsonPrimitive).content.contains("公交路线"))
+        assertEquals(payload, raw(result))
+    }
+
+    @Test
+    fun weatherKeepsDayNightFieldsAndWeek() = runTest {
+        val payload = """
+            {"city":"广州市","forecasts":[
+              {"date":"2026-11-16","week":"1","dayweather":"多云","nightweather":"多云","daytemp":"26","nighttemp":"18","daywind":"北","nightwind":"北","daypower":"1-3","nightpower":"1-3","daytemp_float":"26.0","nighttemp_float":"18.0"},
+              {"date":"2026-11-17","week":"2","dayweather":"小雨","nightweather":"阴","daytemp":"23","nighttemp":"15","daywind":"北","nightwind":"东北","daypower":"1-3","nightpower":"3-4"}
+            ]}
+        """.trimIndent()
+        val network = FakeMcpNetwork(payload = { payload })
+        val result = run(
+            host = host(network),
+            name = "amap_weather",
+            arguments = args("""{"city":"广州市"}"""),
+        )
+
+        assertFalse(result.isError)
+        val days = result.details?.get("days") as JsonArray
+        assertEquals(2, days.size)
+        val first = days[0] as JsonObject
+        assertEquals("1", (first["week"] as JsonPrimitive).content)
+        assertEquals("多云", (first["dayWeather"] as JsonPrimitive).content)
+        assertEquals("多云", (first["nightWeather"] as JsonPrimitive).content)
+        assertEquals(26, (first["dayTemp"] as JsonPrimitive).int)
+        assertEquals(18, (first["nightTemp"] as JsonPrimitive).int)
+        assertEquals("北", (first["dayWind"] as JsonPrimitive).content)
+        assertEquals("1-3", (first["dayPower"] as JsonPrimitive).content)
+        assertEquals(26.0, (first["dayTempFloat"] as JsonPrimitive).content.toDouble(), 0.001)
+        assertTrue(guidance(result).contains("天数由上游决定"))
+        assertEquals("广州市天气（2 天）", (card(result)["title"] as JsonPrimitive).content)
+    }
+
+    @Test
+    fun localInputErrorsReturnActionableGuidanceOnly() = runTest {
+        val result = run(
+            host = host(FakeMcpNetwork()),
+            name = "amap_place_search",
+            arguments = args("""{"keywords":""}"""),
+        )
+
+        assertTrue(result.isError)
+        assertTrue(guidance(result).contains("关键词"))
+        assertNull(result.details?.get("deepdeep.raw"))
+        assertNull(result.details?.get("deepdeep.card"))
+    }
+
+
+
+
+
+
 }

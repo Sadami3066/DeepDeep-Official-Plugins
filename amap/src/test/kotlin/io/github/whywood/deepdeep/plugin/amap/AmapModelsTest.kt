@@ -27,9 +27,12 @@ class AmapModelsTest {
         val places = parsePlaces(payload)
 
         assertEquals(2, places.size)
+        assertEquals("B000A8UIN8", places[0].id)
         assertEquals("西湖风景名胜区", places[0].name)
         assertEquals("龙井路1号", places[0].address)
-        assertNull(places[0].typeName)
+        assertEquals("110000", places[0].typecode)
+        assertEquals("风景名胜", places[0].typeName)
+        assertTrue(places[0].photos.isEmpty())
     }
 
     @Test
@@ -57,8 +60,7 @@ class AmapModelsTest {
 
         assertEquals(1, places.size)
         assertEquals("120.145,30.256", places[0].location?.wire)
-        assertEquals(850, places[0].distanceMeters)
-        assertEquals("杭州市", places[0].cityName)
+        assertEquals("风景名胜", places[0].typeName)
     }
 
     @Test
@@ -141,12 +143,29 @@ class AmapModelsTest {
 
     @Test
     fun parsesRegeoFromNormalizedShape() {
-        val payload = objectOf("""{"provice":"浙江省","city":"杭州市","district":"西湖区"}""")
+        val payload = objectOf(
+            """{"country":"中国","province":"广东省","city":"广州市","district":"海珠区"}""",
+        )
 
         val regeo = parseRegeo(payload)
 
-        assertEquals("浙江省杭州市西湖区", regeo?.formattedAddress)
-        assertEquals("浙江省", regeo?.province)
+        assertEquals("广东省广州市海珠区", regeo?.formattedAddress)
+        assertEquals("中国", regeo?.country)
+        assertEquals("广东省", regeo?.province)
+        assertEquals("海珠区", regeo?.district)
+        assertNull(regeo?.street)
+        assertNull(regeo?.location)
+    }
+
+    @Test
+    fun regeoDeduplicatesMunicipalityProvinceAndCity() {
+        val payload = objectOf(
+            """{"country":"中国","province":"北京市","city":"北京市","district":"朝阳区"}""",
+        )
+
+        val regeo = parseRegeo(payload)
+
+        assertEquals("北京市朝阳区", regeo?.formattedAddress)
     }
 
     @Test
@@ -339,7 +358,11 @@ class AmapModelsTest {
         assertEquals(AmapFailure.INVALID_KEY, classifyAmapFailure(401, ""))
         assertEquals(AmapFailure.INVALID_KEY, classifyAmapFailure(200, """{"status":"0","info":"INVALID_USER_KEY"}"""))
         assertEquals(AmapFailure.QUOTA, classifyAmapFailure(200, """{"info":"DAILY_QUERY_OVER_LIMIT"}"""))
+        assertEquals(AmapFailure.QUOTA, classifyAmapFailure(429, ""))
+        assertEquals(AmapFailure.PARAMETER, classifyAmapFailure(400, """{"status":"0","info":"INVALID_PARAMS"}"""))
+        assertEquals(AmapFailure.PARAMETER, classifyAmapFailure(422, ""))
         assertEquals(AmapFailure.SERVICE, classifyAmapFailure(503, ""))
+        assertEquals(AmapFailure.PROTOCOL, classifyAmapFailure(404, ""))
         assertEquals(AmapFailure.UNKNOWN, classifyAmapFailure(200, "something else"))
     }
 
@@ -404,7 +427,7 @@ class AmapModelsTest {
               "query": "西湖",
               "city": "杭州",
               "items": [
-                {"name": "西湖", "address": "西湖区", "typeName": "风景名胜", "distanceMeters": 850, "longitude": 120.14, "latitude": 30.25}
+                {"id": "B000A8UIN8", "name": "西湖", "address": "西湖区", "typecode": "110000", "typeName": "050500", "photos": ["http://a/1.jpg"], "longitude": 120.14, "latitude": 30.25}
               ]
             }
             """.trimIndent(),
@@ -414,8 +437,10 @@ class AmapModelsTest {
 
         assertEquals("西湖", decoded.query)
         assertEquals(1, decoded.items.size)
+        assertEquals("B000A8UIN8", decoded.items[0].id)
         assertEquals("西湖", decoded.items[0].name)
-        assertEquals(850, decoded.items[0].distanceMeters)
+        assertEquals("咖啡厅", decoded.items[0].typeName)
+        assertEquals(listOf("https://a/1.jpg"), decoded.items[0].photos)
         assertEquals(120.14, decoded.items[0].location?.longitude ?: 0.0, 0.0001)
     }
 
@@ -535,12 +560,13 @@ class AmapModelsTest {
     }
 
     @Test
-    fun hidesNumericTypeCodesWhenParsingPlaces() {
+    fun mapsNumericTypeCodesToChineseLabelsWhenParsingPlaces() {
         val payload = objectOf(
             """
             {
               "pois": [
                 {"name": "瑞幸咖啡", "typecode": "050500", "location": "120.1,30.2"},
+                {"name": "中山大学", "typecode": "141201", "location": "120.1,30.2"},
                 {"name": "西湖", "type": "风景名胜", "location": "120.1,30.2"}
               ]
             }
@@ -549,19 +575,20 @@ class AmapModelsTest {
 
         val places = parsePlaces(payload)
 
-        assertEquals(2, places.size)
-        assertNull(places[0].typeName)
-        assertEquals("风景名胜", places[1].typeName)
+        assertEquals(3, places.size)
+        assertEquals("咖啡厅", places[0].typeName)
+        assertEquals("高等院校", places[1].typeName)
+        assertEquals("风景名胜", places[2].typeName)
     }
 
     @Test
-    fun hidesNumericTypeNameWhenDecodingPlaceDetails() {
+    fun mapsNumericTypeNameWhenDecodingPlaceDetails() {
         val details = objectOf(
             """
             {
               "kind": "places",
               "items": [
-                {"name": "瑞幸咖啡", "typeName": "050500"},
+                {"name": "瑞幸咖啡", "typecode": "050500", "typeName": "050500"},
                 {"name": "西湖", "typeName": "风景名胜"}
               ]
             }
@@ -571,31 +598,37 @@ class AmapModelsTest {
         val decoded = decodePlacesDetails(details)
 
         assertEquals(2, decoded.items.size)
-        assertNull(decoded.items[0].typeName)
+        assertEquals("咖啡厅", decoded.items[0].typeName)
+        assertEquals("050500", decoded.items[0].typecode)
         assertEquals("风景名胜", decoded.items[1].typeName)
     }
 
 
     @Test
-    fun parsesPoiPhoneRatingBusinessAreaPhotosAndCount() {
+    fun parsesPoiIdTypecodePhotoAndHttpsUpgrade() {
         val payload = objectOf(
             """
             {
               "status": "1",
-              "count": "126",
               "pois": [
                 {
-                  "name": "西湖风景名胜区",
-                  "address": "龙井路1号",
-                  "cityname": "杭州市",
-                  "tel": ["0571-87179617", "0571-87977767"],
-                  "biz_ext": {"rating": "4.7"},
-                  "business_area": "西湖风景区",
+                  "id": "B00141IHRZ",
+                  "name": "中山大学(广州校区南校园)",
+                  "address": "新港西路135号",
+                  "typecode": "141201",
+                  "photo": "http://store.is.autonavi.com/showpic/1"
+                },
+                {
+                  "name": "断桥残雪",
+                  "typecode": "110000",
+                  "photo": null
+                },
+                {
+                  "name": "苏堤春晓",
                   "photos": [
-                    {"title": "断桥", "url": "https://store.is.autonavi.com/showpic/1"},
-                    {"url": "https://store.is.autonavi.com/showpic/2"}
-                  ],
-                  "location": "120.145,30.256"
+                    {"url": "https://store.is.autonavi.com/showpic/2"},
+                    {"url": "http://store.is.autonavi.com/showpic/3"}
+                  ]
                 }
               ]
             }
@@ -604,14 +637,18 @@ class AmapModelsTest {
 
         val places = parsePlaces(payload)
 
-        assertEquals(1, places.size)
-        assertEquals("0571-87179617, 0571-87977767", places[0].tel)
-        assertEquals("杭州市", places[0].cityName)
-        assertEquals(4.7, places[0].rating ?: 0.0, 0.001)
-        assertEquals("西湖风景区", places[0].businessArea)
-        assertEquals(2, places[0].photos.size)
-        assertEquals("https://store.is.autonavi.com/showpic/2", places[0].photos[1])
-        assertEquals(126, parsePlaceCount(payload))
+        assertEquals(3, places.size)
+        assertEquals("B00141IHRZ", places[0].id)
+        assertEquals("https://store.is.autonavi.com/showpic/1", places[0].photos.single())
+        assertEquals("高等院校", places[0].typeName)
+        assertTrue(places[1].photos.isEmpty())
+        assertEquals(
+            listOf(
+                "https://store.is.autonavi.com/showpic/2",
+                "https://store.is.autonavi.com/showpic/3",
+            ),
+            places[2].photos,
+        )
     }
 
     @Test
@@ -712,6 +749,8 @@ class AmapModelsTest {
         val route = parseRoute(payload, AmapRouteMode.TRANSIT)
 
         assertEquals(2, route?.paths?.size)
+        assertEquals(8600, route?.paths?.get(0)?.distanceMeters)
+        assertNull(route?.paths?.get(1)?.distanceMeters)
         assertEquals(600, route?.paths?.get(0)?.walkingDistanceMeters)
         val first = route?.paths?.get(0)?.transitLines?.first()
         assertEquals("地铁1号线(湘湖--萧山机场) / 公交 12 路", first?.lineName)
@@ -744,7 +783,7 @@ class AmapModelsTest {
                 {
                   "city": "杭州市",
                   "casts": [
-                    {"date": "2026-11-15", "dayweather": "晴", "nightweather": "多云", "daytemp": "20", "nighttemp": "12"},
+                    {"date": "2026-11-15", "week": "1", "dayweather": "晴", "nightweather": "多云", "daytemp": "20", "nighttemp": "12", "daytemp_float": "20.0", "nighttemp_float": "12.0"},
                     {"date": "2026-11-16", "dayweather": "小雨", "nightweather": "阴", "daytemp": "18", "nighttemp": "11"}
                   ]
                 },
@@ -763,6 +802,8 @@ class AmapModelsTest {
 
         assertEquals("杭州市", weather?.city)
         assertEquals(3, weather?.days?.size)
+        assertEquals("1", weather?.days?.get(0)?.week)
+        assertEquals(20.0, weather?.days?.get(0)?.dayTempFloat ?: 0.0, 0.001)
         assertEquals("2026-11-17", weather?.days?.get(2)?.date)
         assertEquals(21, weather?.days?.get(2)?.dayTemp)
     }
@@ -774,14 +815,12 @@ class AmapModelsTest {
                 """
                 {
                   "kind": "places",
-                  "count": 126,
                   "items": [
                     {
+                      "id": "B000A8UIN8",
                       "name": "西湖",
-                      "cityName": "杭州市",
-                      "tel": "0571-87179617",
-                      "rating": 4.7,
-                      "businessArea": "西湖风景区",
+                      "typecode": "110000",
+                      "typeName": "风景名胜",
                       "photos": ["https://a/1.jpg"]
                     }
                   ]
@@ -789,9 +828,9 @@ class AmapModelsTest {
                 """.trimIndent(),
             ),
         )
-        assertEquals(126, places.totalCount)
-        assertEquals("杭州市", places.items[0].cityName)
-        assertEquals(4.7, places.items[0].rating ?: 0.0, 0.001)
+        assertEquals("B000A8UIN8", places.items[0].id)
+        assertEquals("110000", places.items[0].typecode)
+        assertEquals("风景名胜", places.items[0].typeName)
         assertEquals(listOf("https://a/1.jpg"), places.items[0].photos)
 
         val route = decodeRouteDetails(
@@ -815,4 +854,13 @@ class AmapModelsTest {
         assertEquals(720, route?.allPaths?.get(1)?.durationSeconds)
         assertEquals(600, route?.steps?.first()?.durationSeconds)
     }
+
+    @Test
+    fun readableTypeTakesFirstSegment() {
+        assertEquals("商务住宅", readablePlaceType("商务住宅;楼宇;商务写字楼"))
+        assertEquals("高等院校", readablePlaceType("141201"))
+        assertEquals("风景名胜", readablePlaceType("风景名胜"))
+    }
+
+
 }

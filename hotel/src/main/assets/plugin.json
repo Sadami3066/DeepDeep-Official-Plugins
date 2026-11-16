@@ -1,11 +1,12 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.hotel",
-  "version": "1.2.0",
+  "version": "1.4.1",
   "apiLevel": 6,
-  "minHostVersion": "1.3.0",
+  "minHostVersion": "1.4.0",
   "capabilities": [
     "clipboard",
     "files",
+    "images",
     "linux",
     "logs",
     "settings",
@@ -18,14 +19,14 @@
     "en": "RollingGo Hotels"
   },
   "summary": {
-    "default": "搜索 RollingGo 酒店、查看房型与订单，创建待支付订单",
-    "zh": "搜索 RollingGo 酒店、查看房型与订单，创建待支付订单",
-    "en": "Search RollingGo hotels, view rooms and orders, create a pending booking"
+    "default": "搜索 RollingGo 酒店、查看房型与订单、创建待支付订单与取消订单",
+    "zh": "搜索 RollingGo 酒店、查看房型与订单、创建待支付订单与取消订单",
+    "en": "Search RollingGo hotels, view rooms and orders, create or cancel a booking"
   },
   "description": {
-    "default": "连接 RollingGo 后，在对话里搜索酒店、查看实时房型、创建待支付订单并查看订单；结果以卡片展示，支付在 RollingGo 官方页面完成。插件页管理服务安装与登录，不需要 API Key。",
-    "zh": "连接 RollingGo 后，在对话里搜索酒店、查看实时房型、创建待支付订单并查看订单；结果以卡片展示，支付在 RollingGo 官方页面完成。插件页管理服务安装与登录，不需要 API Key。",
-    "en": "Connect RollingGo to search hotels, view live rooms, create a pending booking and check orders from chat. Results appear as cards; payment happens on the official RollingGo page. The plugin page manages installation and sign-in, with no API key."
+    "default": "连接 RollingGo 后，在对话里按预算、距离、标签和品牌筛选酒店，查看实时房型、创建待支付订单、查订单与取消订单；结果以卡片展示，支付在 RollingGo 官方页面完成。插件页管理服务安装、更新与登录，不需要 API Key。",
+    "zh": "连接 RollingGo 后，在对话里按预算、距离、标签和品牌筛选酒店，查看实时房型、创建待支付订单、查订单与取消订单；结果以卡片展示，支付在 RollingGo 官方页面完成。插件页管理服务安装、更新与登录，不需要 API Key。",
+    "en": "Connect RollingGo to filter hotels by budget, distance, tags and brand, view live rooms, create a pending booking, check orders and cancel a booking from chat. Results appear as cards; payment happens on the official RollingGo page. The plugin page manages installation, updates and sign-in, with no API key."
   },
   "publisher": {
     "name": "milous"
@@ -39,7 +40,9 @@
       "hotel_detail",
       "hotel_book",
       "hotel_orders",
-      "hotel_order_detail"
+      "hotel_order_detail",
+      "hotel_cancel",
+      "hotel_tags"
     ],
     "skills": [
       "deepdeep-hotel"
@@ -49,7 +52,9 @@
       "tool.card.content:hotel_detail",
       "tool.card.content:hotel_orders",
       "tool.card.content:hotel_order_detail",
-      "tool.card.content:hotel_book"
+      "tool.card.content:hotel_book",
+      "tool.card.content:hotel_cancel",
+      "tool.card.content:hotel_tags"
     ],
     "pages": [
       "main"

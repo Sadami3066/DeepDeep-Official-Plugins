@@ -206,6 +206,7 @@ internal data class SysuNetpayService(
     val user: String? = null,
     val status: String? = null,
     val expire: String? = null,
+    val expireText: String? = null,
     val paused: String? = null,
     val id: String? = null,
     val daysLeft: JsonElement? = null,
@@ -219,15 +220,15 @@ internal object SysuJson {
 
     fun schedule(payload: JsonElement): SysuSchedule? = decode(payload)
 
-    fun scores(payload: JsonElement): List<SysuScoreSemester>? = decode(payload)
+    fun scores(payload: JsonElement): List<SysuScoreSemester>? = decodeField(payload, "semesters")
 
     fun exams(payload: JsonElement): SysuExamTerm? = decode(payload)
 
-    fun credits(payload: JsonElement): List<SysuCreditPlan>? = decode(payload)
+    fun credits(payload: JsonElement): List<SysuCreditPlan>? = decodeField(payload, "plans")
 
-    fun lmsCourses(payload: JsonElement): List<SysuLmsCourse>? = decode(payload)
+    fun lmsCourses(payload: JsonElement): List<SysuLmsCourse>? = decodeField(payload, "courses")
 
-    fun lmsTodo(payload: JsonElement): List<SysuLmsTodo>? = decode(payload)
+    fun lmsTodo(payload: JsonElement): List<SysuLmsTodo>? = decodeField(payload, "items")
 
     fun gymSlots(payload: JsonElement): SysuGymSlots? = decode(payload)
 
@@ -235,6 +236,11 @@ internal object SysuJson {
 
     private inline fun <reified T> decode(payload: JsonElement): T? =
         runCatching { json.decodeFromJsonElement<T>(payload) }.getOrNull()
+
+    private inline fun <reified T> decodeField(payload: JsonElement, field: String): T? {
+        val value = (payload as? JsonObject)?.get(field) ?: return null
+        return decode(value)
+    }
 }
 
 internal fun JsonElement?.scalarText(): String? {

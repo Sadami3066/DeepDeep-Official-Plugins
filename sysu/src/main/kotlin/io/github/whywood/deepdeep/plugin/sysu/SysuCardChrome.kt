@@ -580,7 +580,7 @@ private fun sysuLoadingText(host: PluginHost, kind: String): String = when (Sysu
 
 private fun sysuEmptyTitle(host: PluginHost, kind: String): String = when (SysuCardKind.fromWire(kind)) {
     SysuCardKind.Schedule -> host.t("本周没有课程", "No classes this week")
-    SysuCardKind.Grades -> host.t("还没有成绩记录", "No grades recorded")
+    SysuCardKind.Grades -> host.t("成绩尚未公布", "Grades not published")
     SysuCardKind.Exams -> host.t("还没有排期考试", "No exams scheduled")
     SysuCardKind.Lms -> host.t("没有选课记录", "No enrolled courses")
     SysuCardKind.Todo -> host.t("没有待办事项", "No assignments")

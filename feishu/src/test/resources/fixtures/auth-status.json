@@ -1,0 +1,16 @@
+{
+  "appId": "cli_aa69cbaf67b8dc11",
+  "brand": "feishu",
+  "identities": {
+    "bot": { "status": "ready", "available": true, "message": "Bot identity: ready" },
+    "user": {
+      "status": "ready",
+      "available": true,
+      "message": "User identity: ready",
+      "openId": "ou_fee4e8967f3639053570a75ba9ec3d5d",
+      "userName": "黄宇鹏",
+      "tokenStatus": "valid",
+      "scope": "calendar:calendar:read im:chat:read mail:user_mailbox:readonly task:task:read search:message"
+    }
+  }
+}

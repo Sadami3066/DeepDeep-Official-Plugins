@@ -12,8 +12,13 @@ object CliText {
     private val HTML_TAG = Regex("""<[^>]{0,400}>""")
     private val BLOCK_BREAK = Regex("""</(?:p|h[1-6]|li|tr|div|blockquote)>""", RegexOption.IGNORE_CASE)
     private val WHITESPACE = Regex("""\s+""")
+    private val HOST_NOTICE = Regex(
+        """(?:\n+\s*(?:\[exit:\s*-?\d+]|\[Showing lines [^\]]*]|\[Full output:[^\]]*]|\[Output incomplete[^\]]*]|\[Command timed out[^\]]*]|Command terminated without an exit code)\s*)+$""",
+    )
 
     fun stripAnsi(text: String): String = text.replace(ANSI_ESCAPE, "")
+
+    fun stripHostNotices(text: String): String = text.replace(HOST_NOTICE, "")
 
     fun isDotenvLine(line: String): Boolean = DOTENV_LINE.matches(line.trim())
 

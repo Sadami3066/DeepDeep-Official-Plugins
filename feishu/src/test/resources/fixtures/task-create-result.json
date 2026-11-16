@@ -1,0 +1,8 @@
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "guid": "guid_created_1",
+    "url": "https://applink.larkoffice.com/client/todo/detail?guid=guid_created_1"
+  }
+}

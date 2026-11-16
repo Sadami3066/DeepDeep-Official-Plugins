@@ -33,6 +33,15 @@ class CliCommandLineTest {
     }
 
     @Test
+    fun ignoresShellOperatorsInsideQuotes() {
+        assertFalse(CliCommandLine.hasShellOperators("lark-cli mail +send --body '<p>hi there</p>'"))
+        assertFalse(CliCommandLine.hasShellOperators("lark-cli mail +send --body \"a | b; c > d\""))
+        assertTrue(CliCommandLine.hasShellOperators("lark-cli mail +send --body \"$(whoami)\""))
+        assertFalse(CliCommandLine.hasShellOperators("lark-cli im +chat-list 'unterminated"))
+        assertFalse(CliCommandLine.hasShellOperators("lark-cli im +chat-list --query 修复'bug'"))
+    }
+
+    @Test
     fun findsBinaryAfterEnvironmentAssignments() {
         val tokens = CliCommandLine.tokenize(
             "LARKSUITE_CLI_NO_UPDATE_NOTIFIER=1 LARKSUITE_CLI_NO_SKILLS_NOTIFIER=1 lark-cli im +chat-list",
@@ -109,6 +118,31 @@ class CliTextTest {
     fun detectsDotenvLines() {
         assertTrue(CliText.isDotenvLine("LARKSUITE_CLI_NO_UPDATE_NOTIFIER=1"))
         assertFalse(CliText.isDotenvLine("some log line"))
+    }
+
+    @Test
+    fun stripsAnsiAndExitMarker() {
+        val raw = "\u001B[2m  file.pdf\u001B[0m\n\n[exit: 0]"
+        assertEquals("  file.pdf", CliText.stripHostNotices(CliText.stripAnsi(raw)).trimEnd())
+    }
+
+    @Test
+    fun preservesFirstLineIndentWhenStrippingHostNotices() {
+        val raw = "  LN336E_Lec1.pdf\n  LN336E_Lec2.pdf\n\n[exit: 0]"
+        assertEquals("  LN336E_Lec1.pdf\n  LN336E_Lec2.pdf", CliText.stripHostNotices(raw))
+    }
+
+    @Test
+    fun stripsTruncationNoticesAndTimeoutLines() {
+        val raw = "tail line\n\n[Showing lines 10-20 of 40]\n\n[Full output: /tmp/log]\n\n[exit: 1]"
+        assertEquals("tail line", CliText.stripHostNotices(raw))
+        assertEquals("out", CliText.stripHostNotices("out\n\nCommand terminated without an exit code"))
+    }
+
+    @Test
+    fun leavesInnerBracketsAlone() {
+        val raw = "line\n[1]\nline2"
+        assertEquals(raw, CliText.stripHostNotices(raw))
     }
 }
 

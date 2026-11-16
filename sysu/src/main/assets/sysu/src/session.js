@@ -78,7 +78,7 @@ async function ensureLogin() {
   if (read()?.tgc) {
     try {
       await renew();
-      if (await isLoggedIn()) return void console.error('（会话已用 TGC 静默续期）');
+      if (await isLoggedIn()) return;
     } catch (err) {
       throw new Error(`会话失效，自动续期失败（${err.message}）。重新登录：sysu login`);
     }

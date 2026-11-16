@@ -1,36 +1,39 @@
-[
-  {
-    "professionNumber": "n020109T00",
-    "gradeProfessionCode": "24n020109T00",
-    "grade": "2024",
-    "trainCateCode": "01",
-    "teachPlanNumber": "1916673867646238720",
-    "minGraduationCredit": 151,
-    "finishCredit": 83.5,
-    "publicMinGraduationCredit": 39,
-    "publicFinishCredit": 33,
-    "majorMinCredit": 80,
-    "majorFinishCredit": 42,
-    "majorSelectMinCredit": 24,
-    "majorSelectFinishCredit": 0,
-    "publicSelectMinCredit": 8,
-    "publicSelectFinishCredit": 8.5,
-    "honorCourseMinCredit": 0,
-    "honorCourseFinishCredit": 0,
-    "finishCreditRate": 55.3
-  },
-  {
-    "professionNumber": "n07010102",
-    "gradeProfessionCode": "24n07010102",
-    "grade": "2024",
-    "trainCateCode": "05",
-    "teachPlanNumber": "1813037828674334720",
-    "minGraduationCredit": 12,
-    "publicMinGraduationCredit": 0,
-    "majorMinCredit": 0,
-    "majorSelectMinCredit": 0,
-    "publicMinCredit": 0,
-    "honorCourseMinCredit": 0,
-    "finishCreditRate": 0
-  }
-]
+{
+  "ok": true,
+  "plans": [
+    {
+      "professionNumber": "n020109T00",
+      "gradeProfessionCode": "24n020109T00",
+      "grade": "2024",
+      "trainCateCode": "01",
+      "teachPlanNumber": "1916673867646238720",
+      "minGraduationCredit": 151,
+      "finishCredit": 83.5,
+      "publicMinGraduationCredit": 39,
+      "publicFinishCredit": 33,
+      "majorMinCredit": 80,
+      "majorFinishCredit": 42,
+      "majorSelectMinCredit": 24,
+      "majorSelectFinishCredit": 0,
+      "publicSelectMinCredit": 8,
+      "publicSelectFinishCredit": 8.5,
+      "honorCourseMinCredit": 0,
+      "honorCourseFinishCredit": 0,
+      "finishCreditRate": 55.3
+    },
+    {
+      "professionNumber": "n07010102",
+      "gradeProfessionCode": "24n07010102",
+      "grade": "2024",
+      "trainCateCode": "05",
+      "teachPlanNumber": "1813037828674334720",
+      "minGraduationCredit": 12,
+      "publicMinGraduationCredit": 0,
+      "majorMinCredit": 0,
+      "majorSelectMinCredit": 0,
+      "publicMinCredit": 0,
+      "honorCourseMinCredit": 0,
+      "finishCreditRate": 0
+    }
+  ]
+}

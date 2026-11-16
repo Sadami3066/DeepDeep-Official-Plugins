@@ -43,6 +43,16 @@ class SysuPlugin : DeepDeepPlugin {
 
     override suspend fun onEnable(host: PluginHost) {
         runCatching { loadStatus(host) }
+        runCatching { ensureInstalled(host) {} }.onFailure {
+            host.logs().warn("sysu.cli ensure-failed on enable: ${it.message}", it)
+        }
+    }
+
+    override suspend fun onUpgrade(host: PluginHost, fromVersion: String) {
+        runCatching { loadStatus(host) }
+        runCatching { ensureInstalled(host) {} }.onFailure {
+            host.logs().warn("sysu.cli ensure-failed on upgrade: ${it.message}", it)
+        }
     }
 
     override suspend fun uninstall(host: PluginHost) {
@@ -238,7 +248,7 @@ class SysuPlugin : DeepDeepPlugin {
         val result = linux.exec(SysuCli.loginCodeCommand(code), timeoutMs = LOGIN_TIMEOUT_MS)
         val output = loginOutput(result)
         if (result.timedOut) throw SysuException(host.text(TEXT_ERROR_LOGIN_TIMEOUT))
-        if (result.exitCode != 0) throw loginError(host, output)
+        if (result.exitCode != 0 || !SysuCli.loginSucceeded(output)) throw loginError(host, output)
         if (!loadStatus(host).loggedIn) throw loginError(host, output)
         notifySignedIn(host)
     }
@@ -256,8 +266,8 @@ class SysuPlugin : DeepDeepPlugin {
         val output = loginOutput(result)
         if (result.timedOut) return SysuSiteLogin.Failed(host.text(TEXT_ERROR_LOGIN_TIMEOUT))
         if (SysuCli.needsCode(output)) return SysuSiteLogin.NeedsCode
-        if (result.exitCode != 0) {
-            val detail = output.takeLast(ERROR_TAIL).trim()
+        if (result.exitCode != 0 || !SysuCli.loginSucceeded(output)) {
+            val detail = (SysuCli.loginErrorText(output) ?: output.takeLast(ERROR_TAIL)).trim()
             val message = if (detail.isEmpty()) {
                 host.text(TEXT_ERROR_LOGIN_EMPTY)
             } else {
@@ -351,7 +361,7 @@ class SysuPlugin : DeepDeepPlugin {
         )
 
     private fun loginError(host: PluginHost, output: String): SysuException {
-        val detail = output.takeLast(ERROR_TAIL).trim()
+        val detail = (SysuCli.loginErrorText(output) ?: output.takeLast(ERROR_TAIL)).trim()
         return SysuException(
             if (detail.isEmpty()) host.text(TEXT_ERROR_LOGIN_EMPTY) else host.text(TEXT_ERROR_LOGIN, detail),
         )

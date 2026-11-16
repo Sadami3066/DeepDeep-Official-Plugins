@@ -54,10 +54,14 @@ internal object FeishuCardTypes {
     const val CHAT_CARD = "feishu.card"
     const val KIND_CHAT_LIST = "chat_list"
     const val KIND_MESSAGES = "messages"
+    const val KIND_MESSAGES_SEARCH = "messages_search"
     const val KIND_AGENDA = "agenda"
     const val KIND_DOCS_SEARCH = "docs_search"
     const val KIND_DOCS_READ = "docs_read"
     const val KIND_TASKS = "tasks"
+    const val KIND_MAIL_LIST = "mail_list"
+    const val KIND_MAIL_READ = "mail_read"
+    const val KIND_ACTION = "action"
 }
 
 internal typealias FeishuCardItem = CliCardItem
@@ -72,16 +76,22 @@ internal fun decodeFeishuCardPayload(payload: JsonObject): FeishuCardModel? =
 internal val SUPPORTED_CARD_KINDS = setOf(
     FeishuCardTypes.KIND_CHAT_LIST,
     FeishuCardTypes.KIND_MESSAGES,
+    FeishuCardTypes.KIND_MESSAGES_SEARCH,
     FeishuCardTypes.KIND_AGENDA,
     FeishuCardTypes.KIND_DOCS_SEARCH,
     FeishuCardTypes.KIND_DOCS_READ,
     FeishuCardTypes.KIND_TASKS,
+    FeishuCardTypes.KIND_MAIL_LIST,
+    FeishuCardTypes.KIND_MAIL_READ,
+    FeishuCardTypes.KIND_ACTION,
 )
 
 internal const val FEISHU_CHAT_PREVIEW_ROWS = 5
 internal const val FEISHU_AGENDA_PREVIEW_ROWS = 5
 internal const val FEISHU_DOC_PREVIEW_ROWS = 4
 internal const val FEISHU_TASK_PREVIEW_ROWS = 5
+internal const val FEISHU_MAIL_PREVIEW_ROWS = 5
+internal const val FEISHU_SEARCH_PREVIEW_ROWS = 5
 internal const val FEISHU_MESSAGE_PREVIEW_LINES = 3
 
 private val QUERY_PREFIXES = listOf("搜索：", "搜索:", "search: ", "search:")
@@ -393,10 +403,14 @@ private fun FeishuKindCard(host: PluginHost, model: CliCardModel) {
     when (model.kind) {
         FeishuCardTypes.KIND_CHAT_LIST -> FeishuChatListCard(host, model)
         FeishuCardTypes.KIND_MESSAGES -> FeishuMessagesCard(host, model)
+        FeishuCardTypes.KIND_MESSAGES_SEARCH -> FeishuMessagesSearchCard(host, model)
         FeishuCardTypes.KIND_AGENDA -> FeishuAgendaCard(host, model)
         FeishuCardTypes.KIND_DOCS_SEARCH -> FeishuDocsSearchCard(host, model)
         FeishuCardTypes.KIND_DOCS_READ -> FeishuDocsReadCard(host, model)
         FeishuCardTypes.KIND_TASKS -> FeishuTasksCard(host, model)
+        FeishuCardTypes.KIND_MAIL_LIST -> FeishuMailListCard(host, model)
+        FeishuCardTypes.KIND_MAIL_READ -> FeishuMailReadCard(host, model)
+        FeishuCardTypes.KIND_ACTION -> FeishuActionResultCard(host, model)
         else -> FeishuCardFallback(host)
     }
 }

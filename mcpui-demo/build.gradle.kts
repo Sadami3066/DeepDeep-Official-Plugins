@@ -38,8 +38,8 @@ kotlin {
 }
 
 dependencies {
-    compileOnly("io.github.sadami3066.deepdeep:plugin-api:1.3.0")
-    compileOnly("io.github.sadami3066.deepdeep:design:0.9.0")
+    compileOnly("io.github.sadami3066.deepdeep:plugin-api:1.3.1")
+    compileOnly("io.github.sadami3066.deepdeep:design:0.11.0")
 }
 
 apply(from = rootProject.file("gradle/plugin-bundle.gradle.kts"))

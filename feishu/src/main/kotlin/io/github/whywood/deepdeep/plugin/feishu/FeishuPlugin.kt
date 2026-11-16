@@ -40,7 +40,7 @@ class FeishuPlugin : DeepDeepPlugin {
     }
 
     override suspend fun onEnable(host: PluginHost) {
-        host.feishuBridgeLog("plugin-enabled version=${host.manifest.version} build=bridge-2.5.0")
+        host.feishuBridgeLog("plugin-enabled version=${host.manifest.version} build=bridge-2.6.0")
         host.scope.launch { runtime.refresh(host) }
     }
 

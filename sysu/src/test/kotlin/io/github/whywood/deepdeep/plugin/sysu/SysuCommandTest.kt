@@ -19,32 +19,40 @@ class SysuCommandTest {
     }
 
     @Test
-    fun matchesSupportedReadCommands() {
+    fun matchesSupportedReadCommandsWithoutJsonFlag() {
+        assertEquals(SysuCommandKind.Schedule, supported("sysu jwxt").kind)
+        assertEquals(SysuCommandKind.Schedule, supported("sysu jwxt schedule").kind)
+        assertEquals(SysuCommandKind.Schedule, supported("sysu jwxt --week 8").kind)
+        assertEquals(SysuCommandKind.Schedule, supported("sysu jwxt schedule --today").kind)
+        assertEquals(SysuCommandKind.Scores, supported("sysu jwxt scores").kind)
+        assertEquals(SysuCommandKind.Scores, supported("sysu jwxt scores --all").kind)
+        assertEquals(SysuCommandKind.Scores, supported("sysu jwxt scores --semester 2025-2").kind)
+        assertEquals(SysuCommandKind.Exams, supported("sysu jwxt exams").kind)
+        assertEquals(SysuCommandKind.Credits, supported("sysu jwxt credits").kind)
+        assertEquals(SysuCommandKind.LmsCourses, supported("sysu lms").kind)
+        assertEquals(SysuCommandKind.LmsCourses, supported("sysu lms courses").kind)
+        assertEquals(SysuCommandKind.LmsTodo, supported("sysu lms todo").kind)
+        assertEquals(SysuCommandKind.LmsTodo, supported("sysu lms todo --days 30").kind)
+        assertEquals(SysuCommandKind.GymSlots, supported("sysu gym slots 乒乓球").kind)
+        assertEquals(SysuCommandKind.GymSlots, supported("sysu gym slots 健身房 --days 2").kind)
+        assertEquals(SysuCommandKind.GymSlots, supported("sysu gym slots 健身房 --date 2026-11-16").kind)
+        assertEquals(SysuCommandKind.Netpay, supported("sysu netpay").kind)
+        assertEquals(SysuCommandKind.Netpay, supported("sysu netpay info").kind)
+    }
+
+    @Test
+    fun acceptsLegacyJsonFlagWithoutAppendingIt() {
         assertEquals(SysuCommandKind.Schedule, supported("sysu jwxt --json").kind)
-        assertEquals(SysuCommandKind.Schedule, supported("sysu jwxt schedule --json").kind)
-        assertEquals(SysuCommandKind.Schedule, supported("sysu jwxt --week 8 --json").kind)
-        assertEquals(SysuCommandKind.Schedule, supported("sysu jwxt schedule --today --json").kind)
-        assertEquals(SysuCommandKind.Scores, supported("sysu jwxt scores --json").kind)
-        assertEquals(SysuCommandKind.Scores, supported("sysu jwxt scores --all --json").kind)
-        assertEquals(SysuCommandKind.Scores, supported("sysu jwxt scores --semester 2025-2 --json").kind)
-        assertEquals(SysuCommandKind.Exams, supported("sysu jwxt exams --json").kind)
-        assertEquals(SysuCommandKind.Credits, supported("sysu jwxt credits --json").kind)
-        assertEquals(SysuCommandKind.LmsCourses, supported("sysu lms --json").kind)
-        assertEquals(SysuCommandKind.LmsCourses, supported("sysu lms courses --json").kind)
-        assertEquals(SysuCommandKind.LmsTodo, supported("sysu lms todo --json").kind)
-        assertEquals(SysuCommandKind.LmsTodo, supported("sysu lms todo --days 30 --json").kind)
-        assertEquals(SysuCommandKind.GymSlots, supported("sysu gym slots 乒乓球 --json").kind)
-        assertEquals(SysuCommandKind.GymSlots, supported("sysu gym slots 健身房 --days 2 --json").kind)
-        assertEquals(SysuCommandKind.GymSlots, supported("sysu gym slots 健身房 --date 2026-11-16 --json").kind)
-        assertEquals(SysuCommandKind.Netpay, supported("sysu netpay --json").kind)
-        assertEquals(SysuCommandKind.Netpay, supported("sysu netpay info --json").kind)
+        assertEquals("sysu jwxt --week 8", supported("sysu jwxt --week 8 --json").commandLine)
+        assertEquals("sysu gym slots 乒乓球", supported("sysu gym slots 乒乓球 --json").commandLine)
+        assertEquals("sysu netpay", supported("sysu netpay --json").commandLine)
     }
 
     @Test
     fun acceptsQuotedArgumentsAndAbsoluteExecutable() {
-        assertEquals(SysuCommandKind.GymSlots, supported("sysu gym slots '乒乓球' --json").kind)
-        assertEquals(SysuCommandKind.Schedule, supported("/usr/local/bin/sysu jwxt --json").kind)
-        assertEquals(SysuCommandKind.Netpay, supported("  sysu   netpay   --json  ").kind)
+        assertEquals(SysuCommandKind.GymSlots, supported("sysu gym slots '乒乓球'").kind)
+        assertEquals(SysuCommandKind.Schedule, supported("/usr/local/bin/sysu jwxt").kind)
+        assertEquals(SysuCommandKind.Netpay, supported("  sysu   netpay  ").kind)
     }
 
     @Test
@@ -60,34 +68,33 @@ class SysuCommandTest {
     }
 
     @Test
-    fun rejectsCommandsWithoutJson() {
-        assertEquals(SysuInvocation.Other("sysu jwxt"), SysuCommandParser.parse("sysu jwxt"))
-        assertEquals(SysuInvocation.Other("sysu jwxt schedule"), SysuCommandParser.parse("sysu jwxt schedule"))
-        assertEquals(SysuInvocation.Other("sysu lms todo --days 30"), SysuCommandParser.parse("sysu lms todo --days 30"))
-        assertEquals(SysuInvocation.Other("sysu gym slots 乒乓球"), SysuCommandParser.parse("sysu gym slots 乒乓球"))
+    fun keepsIncompleteOrUnsupportedCommandsAsOther() {
+        assertEquals(SysuInvocation.Other("sysu gym slots"), SysuCommandParser.parse("sysu gym slots"))
+        assertEquals(SysuInvocation.Other("sysu gym slots 乒乓球 --bogus"), SysuCommandParser.parse("sysu gym slots 乒乓球 --bogus"))
+        assertEquals(SysuInvocation.Other("sysu lms course 1005339"), SysuCommandParser.parse("sysu lms course 1005339"))
     }
 
     @Test
     fun keepsUnsupportedReadsAsOther() {
-        other("sysu jwxt course LN3015 --json")
-        other("sysu jwxt notice --json")
-        other("sysu jwxt room --json")
-        other("sysu lms course 1005339 --json")
-        other("sysu lms files 1005339 --json")
-        other("sysu gym --json")
-        other("sysu gym types --json")
-        other("sysu netpay orders --json")
+        other("sysu jwxt course LN3015")
+        other("sysu jwxt notice")
+        other("sysu jwxt room --sections 9-11")
+        other("sysu lms course 1005339")
+        other("sysu lms files 1005339")
+        other("sysu gym")
+        other("sysu gym types")
+        other("sysu netpay orders")
         other("sysu login --send-code")
-        other("sysu gym slots --json")
+        other("sysu gym slots")
         other("sysu")
     }
 
     @Test
     fun rejectsUnknownFlagsAndDanglingValues() {
-        assertEquals(SysuInvocation.Other("sysu jwxt schedule --json --future"), SysuCommandParser.parse("sysu jwxt schedule --json --future"))
-        assertEquals(SysuInvocation.Other("sysu jwxt schedule --week --json"), SysuCommandParser.parse("sysu jwxt schedule --week --json"))
-        assertEquals(SysuInvocation.Other("sysu jwxt exams --all --json"), SysuCommandParser.parse("sysu jwxt exams --all --json"))
-        assertEquals(SysuInvocation.Other("sysu lms courses --days 3 --json"), SysuCommandParser.parse("sysu lms courses --days 3 --json"))
+        assertEquals(SysuInvocation.Other("sysu jwxt schedule --future"), SysuCommandParser.parse("sysu jwxt schedule --future"))
+        assertEquals(SysuInvocation.Other("sysu jwxt schedule --week"), SysuCommandParser.parse("sysu jwxt schedule --week"))
+        assertEquals(SysuInvocation.Other("sysu jwxt exams --all"), SysuCommandParser.parse("sysu jwxt exams --all"))
+        assertEquals(SysuInvocation.Other("sysu lms courses --days 3"), SysuCommandParser.parse("sysu lms courses --days 3"))
     }
 
     @Test

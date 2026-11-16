@@ -87,24 +87,28 @@ class MiCloudCardDtoTest {
     }
 
     @Test
-    fun todoCardRoundTripsRowsDoneCountAndCursor() {
+    fun todoCardRoundTripsRowsDuplicatesAndDoneCount() {
         val data = MiCloudTodoCardData(
             action = TODO_ACTION_LIST,
-            total = 2,
+            total = 3,
             doneCount = 1,
-            cursor = "cursor-2",
-            hasMore = true,
+            duplicateCount = 1,
             rows = listOf(
-                MiCloudTodoItem(id = "t1", content = "买牛奶", remindTime = 1763200000000L),
-                MiCloudTodoItem(id = "t2", content = "写周报", done = true),
+                MiCloudTodoItem(
+                    id = "t1",
+                    content = "买牛奶",
+                    remindTime = 1763200000000L,
+                    duplicateIds = listOf("t2"),
+                ),
+                MiCloudTodoItem(id = "t3", content = "写周报", done = true),
             ),
         )
         val decoded = MiCloudTodoCardData.fromJson(data.toJson())
         assertEquals(TODO_ACTION_LIST, decoded.action)
-        assertEquals(2, decoded.total)
+        assertEquals(3, decoded.total)
         assertEquals(1, decoded.doneCount)
-        assertEquals("cursor-2", decoded.cursor)
-        assertTrue(decoded.hasMore)
+        assertEquals(1, decoded.duplicateCount)
+        assertEquals(listOf("t2"), decoded.rows.first().duplicateIds)
         assertEquals("买牛奶", decoded.rows.first().content)
         assertEquals(1763200000000L, decoded.rows.first().remindTime)
         assertTrue(decoded.rows.last().done)
@@ -147,7 +151,7 @@ class MiCloudCardDtoTest {
         val emptyTodo = MiCloudTodoCardData.fromJson(Json.parseToJsonElement("""{}""").jsonObject)
         assertEquals(TODO_ACTION_LIST, emptyTodo.action)
         assertEquals(0, emptyTodo.total)
-        assertFalse(emptyTodo.hasMore)
+        assertEquals(0, emptyTodo.duplicateCount)
     }
 
     @Test

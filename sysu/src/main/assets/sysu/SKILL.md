@@ -28,7 +28,7 @@ sysu lms get <id>              # 下载全部到 /storage/emulated/0/Download/lm
 sysu lms whoami                # 当前 LMS 账号
 
 sysu gym                       # 体育场馆：账户 / 类型 / 时段 / 我的预约
-sysu gym slots 乒乓球 --days 2  # 空位（余N = 剩余容量；超出窗口会自动收窄）
+sysu gym slots 乒乓球            # 空位（默认 1 天，最多 2 天；一次只查一个类型）
 sysu gym mine                  # 我的预约
 
 sysu netpay                    # 校园网服务状态与到期日
@@ -39,18 +39,18 @@ sysu netpay login [--code N]   # 会话失效且要 MFA 时
 sysu sso <站点地址>            # 用统一认证换任意站点的登录态
 ```
 
-全部选项看 `sysu jwxt --help` / `sysu lms --help`；`gym` 子命令支持 `--json`。
+全部选项看 `sysu jwxt --help` / `sysu lms --help`。站点数据命令默认输出 JSON；`--json` 只为兼容旧命令保留，不改变输出。
 
 ## 要记住的
 
-- **`sysu jwxt leave apply` 是唯一的写操作，交了就撤不回来**——撤单只能找辅导员驳回。三重闸：先打印 → 敲 `y` 才提交 → 非交互终端一律当取消。`--dry-run` / `--json` 只预览。
+- **`sysu jwxt leave apply` 是唯一的写操作，交了就撤不回来**——撤单只能找辅导员驳回。先 `--dry-run` 预览，确认后再加 `--yes` 提交。
 - 请假**必须带附件**（jpg/jpeg/png/gif/pdf），**附件名只能是 ASCII**，中文会被存成一串 `?`。
 - **课名会撞车**：同名课各学院各有一份。课程码最可靠；用课名时只在能唯一确定时才给大纲，否则列候选、不猜——这时候问用户要课程码，别自己指定一个。
 - **绩点是自算口径**（只算有绩点的课，缓考与 P/F 不计），**不是学校官方口径**，别当权威数字汇报。
 - `exams` 和 `course` 要几秒才出结果（有转圈提示），不是卡死。
-- 登录只用 `sysu login`；成功输出「统一认证已登录」，场馆 token 会自动获取，不需要再跑 `gym login`。
+- 登录只用 `sysu login`；成功时 JSON 的 `ok` 为 `true`，场馆 token 会自动获取，不需要再跑 `gym login`。
 - 需要验证码时第一次会把 CAS 会话存进 `~/.config/sysu/jwxt/mfa.json`（10 分钟），
-  拿到码用 `sysu login --code 1234` 续上。不要向用户索要验证码，让他在插件页/终端自己输。
+  拿到码用 `sysu login --code 1234` 续上。不要向用户索要验证码，让他在插件页自己输。
 - 验证码错误时 CAS 会写「NetID 或验证码错误」，但账号密码这一步已经通过；`--send-code` 会发新码。
 - 会话失效会自动静默续期；`sysu lms` 靠同一个 CAS TGC 免密进入。
 - **LMS 首次登录要一次企业微信验证码**（站点级 MFA），之后 CAS 记住设备，自动重登不再要码；真过期了跑 `sysu login`。
@@ -62,10 +62,10 @@ sysu sso <站点地址>            # 用统一认证换任意站点的登录态
 
 - 纯 Node，无外部依赖；WAF 的 PoW 挑战由 CLI 自动处理。
 - token 一小时过期，`sysu gym` 会自动用 TGC 续；要企微验证码时用 `sysu gym login --code 1234`。
-- `slots --json` 的 `types[].fee.CreditFee` 是每小时积分价，`venues[].shortName` 是场地短名，`slots[].available` 是剩余容量；脚本和 Agent 优先解析 JSON。
-- 没有空位时文本会带「公告：…」，来自场馆 Description，不是结构化状态，别当保证。
+- `slots` 的 `types[].fee.CreditFee` 是每小时积分价，`venues[].shortName` 是场地短名，`slots[].available` 是剩余容量；脚本和 Agent 直接解析 JSON。
+- 没有空位时 JSON 的 `types[].notice` 来自场馆 Description，不是结构化状态，别当保证。
 - `book` 默认按用户身份和时段从费用模板选价，`--charge` 只做显式覆盖。
-- **预约是写操作**：`sysu gym book` 默认 dry-run 只打印一行摘要，必须用户明确同意后才能加 `--yes`；取消用 `sysu gym cancel <预约号> --yes`，积分原路退回。
+- **预约是写操作**：`sysu gym book` 默认 dry-run 只返回预览 JSON，必须用户明确同意后才能加 `--yes`；取消用 `sysu gym cancel <预约号> --yes`，积分原路退回。
 
 ## 凭据
 

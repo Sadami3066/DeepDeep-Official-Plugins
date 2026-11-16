@@ -178,7 +178,7 @@ async function login({ code } = {}) {
   }
   if (!service) throw new Error('gym 登录跳转异常：没拿到 CAS service');
 
-  const t = await sso.ticket(service, { code, interactive: false });
+  const t = await sso.ticket(service, { code });
   let url = `${service}${service.includes('?') ? '&' : '?'}ticket=${encodeURIComponent(t.ticket)}`;
   for (let i = 0; i < 8; i += 1) {
     const r = await request(url, { headers: { Accept: 'text/html' } });

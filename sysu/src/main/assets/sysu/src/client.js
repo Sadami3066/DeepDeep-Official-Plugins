@@ -59,18 +59,6 @@ const getWeekRange = async (term, week) => {
   return data;
 };
 
-async function getSectionTimes(term) {
-  const list = await api(`/base-info/AcadyeartermSet/minorName?schoolYear=${term}`);
-  return Object.fromEntries((list || []).map((s) => [s.sectionNumber, { start: s.startTime, end: s.endTime }]));
-}
-
-function sectionTime(sections, times) {
-  const nums = String(sections).match(/\d+/g)?.map(Number) || [];
-  const first = times[nums[0]];
-  const last = times[nums[nums.length - 1]];
-  return first && last ? `${first.start}~${last.end}` : '';
-}
-
 function parseCell(cell) {
   const text = String(cell);
   const field = (key) => (text.match(new RegExp(`${key}:([^;]*)`)) || [, ''])[1].trim();
@@ -197,7 +185,6 @@ const getLeaveRecords = () =>
     body: { param: {}, pageNo: 1, pageSize: 50, total: true },
   });
 
-const getStudentRoll = () => api('/student-status/countrystu/studentRollView');
 const applyLeave = (payload) => call('/reports-register/askLeaveAgg/applyLeave', { method: 'POST', body: payload });
 
 function checkAttachFile(file) {
@@ -274,8 +261,6 @@ module.exports = {
   getTermByDate,
   getCurrentWeek,
   getWeekRange,
-  getSectionTimes,
-  sectionTime,
   getSchedule,
   getSemesterTimetable,
   getExams,
@@ -294,7 +279,6 @@ module.exports = {
   getLeaveReasons,
   getLeaveSummary,
   getLeaveRecords,
-  getStudentRoll,
   applyLeave,
   ATTACH_TYPES,
   checkAttachFile,

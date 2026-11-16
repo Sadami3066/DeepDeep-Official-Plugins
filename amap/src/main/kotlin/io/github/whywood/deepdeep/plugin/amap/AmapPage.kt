@@ -58,8 +58,8 @@ internal fun AmapPage(host: PluginHost) {
 
     fun errorText(throwable: Throwable): String = when (throwable) {
         is AmapException -> throwable.message.orEmpty()
-        else -> host.t("网络连接失败，请检查网络后重试", "Network unavailable. Check your connection and try again.")
-    }.ifBlank { host.t("连接失败，请稍后重试", "Connection failed. Try again.") }
+        else -> host.t("连接失败，请稍后重试", "Connection failed. Try again later.")
+    }.ifBlank { host.t("连接失败，请稍后重试", "Connection failed. Try again later.") }
 
     suspend fun connect(candidate: String?, persist: Boolean) {
         if (busy) return

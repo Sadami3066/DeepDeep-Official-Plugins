@@ -1,6 +1,7 @@
 # sysu — 中山大学校园服务 CLI
 
 一个入口，多个站点：`sysu <站点> <命令>`。纯 Node 实现，零第三方依赖，只用内置模块。
+站点数据命令默认输出 JSON；`--json` 只为兼容旧命令保留，不改变输出。`--help` 与 `--version` 仍是文本。
 
 ```sh
 sysu login             # 一次登录，所有站点共用
@@ -87,7 +88,7 @@ sysu jwxt ta                   # 助教信息
 sysu jwxt leave                # 请假记录与审批状态
 ```
 
-`sysu jwxt --help` 看全部选项；`gym` 子命令支持 `--json`。
+`sysu jwxt --help` 看全部选项；输出统一是 JSON。
 
 ## 在线教学平台（`sysu lms`）
 
@@ -124,7 +125,7 @@ sysu gym login [--code 1234] # token 过期且要 MFA 时；--force 强制刷新
 
 登录是三层：`sysu login` 拿 TGC → `sysu gym` 用 TGC 换本站 OAuth token（1 小时，自动续）→ 业务命令调 `/api/*`。
 
-`gym slots --json` 会给出 `fee.CreditFee`、`venues[].shortName` 和 `slots[].available`；文本里的「余N」是剩余容量，费用按身份和时段自动选。
+`gym slots` 输出 `types[].fee.CreditFee`、`venues[].shortName` 和 `slots[].available`；`available` 是剩余容量，费用按身份和时段自动选。
 
 ## 网费（`sysu netpay`）
 
@@ -144,11 +145,10 @@ sysu netpay login        # 会话坏了时重登
 
 ```sh
 sysu sso https://lms.sysu.edu.cn/login/index.php?authCAS=CAS
-sysu sso --ticket https://example.sysu.edu.cn/cas      # 只打印 ST
-sysu sso ... --json                                    # 机器可读
+sysu sso --ticket https://example.sysu.edu.cn/cas      # 只返回 ST
 ```
 
-输出会列出换到的 Cookie（值默认脱敏）。给新站点写模块时，用它先确认「这个站到底吃不吃 CAS」。
+输出的 JSON 会列出换到的 Cookie（值默认脱敏）。给新站点写模块时，用它先确认「这个站到底吃不吃 CAS」。
 
 ## 目录
 
@@ -156,7 +156,7 @@ sysu sso ... --json                                    # 机器可读
 |---|---|
 | `bin/sysu` | 入口，`sysu <命令|站点>` 分发 |
 | `src/sysu.js` | 站点注册表 + 顶层帮助 |
-| `src/cli/*.js` | 各命令的参数解析与排版（jwxt / lms / gym / netpay / sso / login）|
+| `src/cli/*.js` | 各命令的参数解析与 JSON 输出（jwxt / lms / gym / netpay / sso / login）|
 | `src/cmds.js` `src/client.js` | 教务各子命令与接口封装 |
 | `src/lms.js` | Moodle 客户端（ajax + HTML 回退）|
 | `src/gym.js` | 体育场馆（WAF PoW、OAuth、预约、wasm token）|
@@ -165,7 +165,7 @@ sysu sso ... --json                                    # 机器可读
 | `src/login.js` | 统一登录、MFA 状态机（mfa.json）|
 | `src/session.js` | 教务会话票据读写与续期 |
 | `src/http.js` `src/ca.js` | 请求与证书链处理 |
-| `src/paths.js` `src/style.js` | 下载目录（跨平台）与终端排版 |
+| `src/paths.js` | 下载目录（跨平台）|
 | `assets/wasm_token.wasm` | 预约 token 的 WebAssembly |
 | `SKILL.md` `PROGRESS.md` | AI 调用说明 / 开发记录 |
 

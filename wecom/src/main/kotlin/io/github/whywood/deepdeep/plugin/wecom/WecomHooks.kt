@@ -20,6 +20,7 @@ import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
 import io.github.whywood.deepdeep.plugin.cli.stringValue
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 internal const val UNAUTHORIZED_ADVICE = "请打开「企业微信」插件页，扫码连接后重试。"
 
@@ -67,10 +68,10 @@ private fun buildWecomObservation(
 ): CliObservation<CliCardModel>? {
     val payload = WecomCliOutputParser.payload(envelope) ?: return null
     val parsed = WecomParsedParser.parse(command.kind, payload) ?: return null
-    val text = WecomObservation.build(command, parsed).takeIf { it.isNotBlank() } ?: return null
+    val guidance = WecomObservation.build(command, parsed).takeIf { it.isNotBlank() } ?: return null
     return CliObservation(
-        summary = text.lineSequence().firstOrNull().orEmpty().take(120),
-        text = text,
+        summary = WecomObservation.summary(command, parsed),
+        text = guidance,
         card = WecomChatCards.build(host, command, parsed),
         customType = command.kind.customType,
     )
@@ -92,6 +93,15 @@ private suspend fun mapWecomError(request: ToolExecutionResult): ToolResultDecis
 private fun withExitCode(decision: ToolResultDecision, exitCode: Int?): ToolResultDecision {
     if (exitCode == null || decision.action != ToolResultAction.REPLACE) return decision
     val result = decision.result ?: return decision
+    val details = result.details
+    val guidance = (details?.get("deepdeep.guidance") as? JsonPrimitive)?.contentOrNull
+    if (guidance != null) {
+        if (guidance.contains(EXIT_LABEL)) return decision
+        val updated = JsonObject(
+            details + ("deepdeep.guidance" to JsonPrimitive("${guidance.trimEnd()}\n$EXIT_LABEL$exitCode")),
+        )
+        return resultReplace(textResult(result.text.orEmpty(), details = updated, isError = result.isError))
+    }
     val text = result.text ?: return decision
     if (text.contains(EXIT_LABEL)) return decision
     return resultReplace(
@@ -107,7 +117,7 @@ private fun restoreRaw(decision: ToolResultDecision, original: ToolExecutionResu
     if (decision.action != ToolResultAction.REPLACE) return decision
     val result = decision.result ?: return decision
     val text = result.text ?: return decision
-    val raw = CliText.stripAnsi(original.result.text.orEmpty()).trim()
+    val raw = CliText.stripHostNotices(CliText.stripAnsi(original.result.text.orEmpty())).trimEnd()
     if (raw.isEmpty()) return decision
     val details = JsonObject(
         (result.details ?: JsonObject(emptyMap())) + ("deepdeep.raw" to JsonPrimitive(raw)),

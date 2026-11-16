@@ -67,23 +67,78 @@ async function get(pathname, jar, referer = `${BASE}/netpay/index.jsp`, retried 
 
 const strip = (h) => String(h || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 
+const EXPIRED_TEXT = /无法检验您的登陆信息|重新登陆系统|登录已失效|会话已失效/;
+
+function isoDate(value) {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function expiredJson(json) {
+  if (!json || typeof json !== 'object') return false;
+  if (json.success === false || String(json.success) === 'false') return true;
+  return EXPIRED_TEXT.test(String(json.msg || json.message || json.det || ''));
+}
+
+function expiredBody(body) {
+  const text = String(body || '').trim();
+  if (!text) return false;
+  if (EXPIRED_TEXT.test(text)) return true;
+  if (!/^[{[]/.test(text)) return false;
+  try {
+    return expiredJson(JSON.parse(text));
+  } catch {
+    return false;
+  }
+}
+
+function parseInfo(body) {
+  const text = String(body || '');
+  const end = text.indexOf('\n===');
+  const raw = (end > 0 ? text.slice(0, end) : text).trim();
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error(`网费服务返回异常（不是 JSON，可能会话已失效）：${strip(raw).slice(0, 80)}`);
+  }
+}
+
+function expiredError(json) {
+  const message = String(json?.msg || json?.message || '无法检验您的登陆信息').trim().replace(/[。.!！]+$/, '');
+  return new Error(`网费会话已失效：${message}。重新登录：sysu netpay login`);
+}
+
 async function info() {
-  const jar = await ensure();
-  const body = await get('/netpay/c/site/info', jar);
-  const end = body.indexOf('\n===');
-  const json = JSON.parse((end > 0 ? body.slice(0, end) : body).trim());
+  let jar = await ensure();
+  let body = await get('/netpay/c/site/info', jar);
+  if (expiredBody(body)) {
+    jar = await login();
+    body = await get('/netpay/c/site/info', jar);
+  }
+  const json = parseInfo(body);
+  if (expiredJson(json)) throw expiredError(json);
   return json;
 }
 
 async function services() {
-  const jar = await ensure();
-  const html = await get('/netpay/c/site/stopAndResumeList?personal=1', jar);
+  let jar = await ensure();
+  let html = await get('/netpay/c/site/stopAndResumeList?personal=1', jar);
+  if (expiredBody(html)) {
+    jar = await login();
+    html = await get('/netpay/c/site/stopAndResumeList?personal=1', jar);
+    if (expiredBody(html)) throw new Error('网费会话已失效（返回登录页）。重新登录：sysu netpay login');
+  }
   const rows = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)].map((m) => m[1]);
   const out = [];
   for (const r of rows) {
     const cells = [...r.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((m) => strip(m[1]));
     if (cells.length < 8 || /序号|没有查询到/.test(cells[0] + cells[1])) continue;
     const idMatch = r.match(/stop\(['"]([^'"]+)['"]\s*,\s*([^)]+)\)/);
+    const expireText = cells[7];
     out.push({
       no: cells[0],
       service: cells[1],
@@ -92,7 +147,8 @@ async function services() {
       dept: cells[4],
       user: cells[5],
       status: cells[6],
-      expire: cells[7],
+      expire: isoDate(expireText),
+      expireText,
       paused: cells[8] || '',
       id: idMatch ? idMatch[1] : null,
       daysLeft: idMatch ? Number(idMatch[2]) : null,

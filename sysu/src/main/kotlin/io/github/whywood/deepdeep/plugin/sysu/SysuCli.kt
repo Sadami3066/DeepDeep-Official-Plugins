@@ -1,6 +1,10 @@
 package io.github.whywood.deepdeep.plugin.sysu
 
+import io.github.whywood.deepdeep.plugin.cli.CliJsonEnvelope
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 
@@ -22,7 +26,7 @@ internal enum class SysuSite(val key: String) {
 }
 
 internal object SysuCli {
-    const val VERSION = "3.4.3"
+    const val VERSION = "3.5.0"
     const val MIN_NODE_MAJOR = 22
     const val SKILL_ID = "deepdeep-sysu"
 
@@ -161,10 +165,17 @@ internal object SysuCli {
 
     fun cleanOutput(output: String?): String = ANSI.replace(output.orEmpty(), "").trim()
 
-    fun needsCode(output: String): Boolean = CODE_NEEDED.any { output.contains(it) }
+    fun needsCode(output: String): Boolean = loginPayload(output)?.bool("needMfa") == true
 
-    fun loginSucceeded(output: String): Boolean =
-        output.contains("登录态正常") || output.contains("不需要验证码")
+    fun loginSucceeded(output: String): Boolean = loginPayload(output)?.bool("ok") == true
+
+    fun loginErrorText(output: String): String? =
+        (loginPayload(output)?.get("error") as? JsonObject)?.get("message").scalarText()
+
+    private fun loginPayload(output: String): JsonObject? =
+        CliJsonEnvelope.LENIENT.element(output) as? JsonObject
+
+    private fun JsonObject.bool(key: String): Boolean? = (this[key] as? JsonPrimitive)?.booleanOrNull
 
     fun hasCookies(json: String?): Boolean {
         if (json.isNullOrBlank()) return false
@@ -180,14 +191,6 @@ internal object SysuCli {
         }.getOrDefault(false)
     }
 
-    private val CODE_NEEDED = listOf(
-        "login --code",
-        "--code <4 位>",
-        "需要企业微信二次验证",
-        "验证码已推送",
-        "验证码已发送",
-        "验证码已发到企业微信",
-    )
     private val STATUS_MARKERS = listOf("node", "cli", "session", "lms", "gym", "netpay", "credentials", "end")
     private val NODE_VERSION = Regex("""v?\d+\.\d+\.\d+""")
     private val SEMVER = Regex("""\b\d+\.\d+\.\d+\b""")

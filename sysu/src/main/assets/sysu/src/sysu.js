@@ -55,53 +55,47 @@ ${rows.join('\n')}
   sysu netpay            校园网服务与网费订单
   sysu sso <地址>        换任意站点的登录态
 
-gym 子命令加 --json 出结构化数据。`);
+站点数据命令默认输出 JSON；--json 只为兼容旧命令保留，不改变输出。`);
+}
+
+function errorJson(err) {
+  const raw = err && err.message ? String(err.message) : String(err || '未知错误');
+  const message = raw.replace(/\u001B\[[0-9;]*[A-Za-z]/g, '').trim() || '未知错误';
+  const payload = { ok: false, error: { message } };
+  if (err && err.code != null) payload.error.code = err.code;
+  if (err && err.needMfa) {
+    payload.needMfa = true;
+    if (err.hint) payload.hint = String(err.hint);
+  }
+  console.log(JSON.stringify(payload, null, 2));
+  process.exitCode = 1;
+}
+
+function dispatch(run, argv) {
+  try {
+    const out = run(argv);
+    if (out && typeof out.catch === 'function') return out.catch(errorJson);
+    return out;
+  } catch (err) {
+    errorJson(err);
+    return undefined;
+  }
 }
 
 function main(argvIn = []) {
-  const argv = argvIn.slice();
+  const argv = argvIn.slice().filter((arg) => arg !== '--json');
   if (!argv.length) return usage();
   if (argv[0] === '--version' || argv[0] === '-v') return console.log(VERSION);
   if (argv[0] === '--help' || argv[0] === '-h' || argv[0] === 'help') return usage();
 
   const name = argv.shift();
-  if (TOP[name]) {
-    const run = TOP[name].main();
-    try {
-      const out = run(argv);
-      if (out && typeof out.catch === 'function') {
-        out.catch((err) => {
-          console.error(`\x1b[31m${err.message}\x1b[0m`);
-          process.exitCode = 1;
-        });
-      }
-      return out;
-    } catch (err) {
-      console.error(`\x1b[31m${err.message}\x1b[0m`);
-      process.exitCode = 1;
-      return undefined;
-    }
-  }
+  if (TOP[name]) return dispatch(TOP[name].main(), argv);
   const site = SITES[name];
   if (!site) {
-    console.error(`\x1b[31m未知站点：${name}\x1b[0m\n`);
-    return usage();
-  }
-  const run = site.main();
-  try {
-    const out = run(argv);
-    if (out && typeof out.catch === 'function') {
-      out.catch((err) => {
-        console.error(`\x1b[31m${err.message}\x1b[0m`);
-        process.exitCode = 1;
-      });
-    }
-    return out;
-  } catch (err) {
-    console.error(`\x1b[31m${err.message}\x1b[0m`);
-    process.exitCode = 1;
+    errorJson(Object.assign(new Error(`未知站点：${name}（用 sysu --help 看可用站点）`), { code: 'UNKNOWN_SITE' }));
     return undefined;
   }
+  return dispatch(site.main(), argv);
 }
 
 module.exports = { main, usage, SITES, VERSION };

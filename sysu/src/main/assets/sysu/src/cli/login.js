@@ -1,15 +1,14 @@
 // sysu login —— 一次登录，所有站点共用
 //
 // 流程沿用插件页那套：账密 → 需要 MFA 时把 CAS 会话存进 mfa.json（10 分钟）
-// → 页面/终端提示输入 4 位码 → sysu login --code 1234 续上。
-// 登录完顺手把各站点会话预热：jwxt 续期、lms 换票。
+// → 页面提示输入 4 位码 → sysu login --code 1234 续上。
+// 登录完顺手把各站点会话预热：lms 换票。
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { login } = require('../login');
 const session = require('../session');
 const lms = require('../lms');
-const { red, dim } = require('../style');
 
 const MFA_PATH = path.join(os.homedir(), '.config/sysu/jwxt/mfa.json');
 
@@ -18,7 +17,8 @@ sysu login --code 1234    验证码已发时，用它续上（10 分钟内有效
 sysu login --force        强制重新登录（即使当前会话还活着）
 sysu login --send-code    强制登录并发送验证码（插件页用的就是它）
 
-  登录后 jwxt / lms 共用同一份 CAS 票据，不用分别登录。`;
+  登录后 jwxt / lms 共用同一份 CAS 票据，不用分别登录。
+  输出 JSON：{ok, needMfa, hint, jwxt, lms, lmsNote}；--json 兼容保留，不改变输出。`;
 
 async function main(argvIn = []) {
   const argv = argvIn.slice();
@@ -28,7 +28,6 @@ async function main(argvIn = []) {
     argv.splice(i, 1);
     return true;
   };
-  const json = take('--json');
   const sendCode = take('--send-code');
   const force = take('--force') || sendCode;
   let code = null;
@@ -41,17 +40,15 @@ async function main(argvIn = []) {
   if (code && !/^\d{4}$/.test(String(code))) throw new Error(`验证码要是 4 位数字，收到：${code}`);
 
   const already = !force && !code && (await session.isLoggedIn());
-  if (already) {
-    if (!json) console.log('已登录');
-  } else {
+  if (!already) {
     await login({ code: code || undefined, sendCode });
   }
 
   // 刚发出验证码：mfa.json 还在，等用户把码填回来
   if (fs.existsSync(MFA_PATH)) {
     const hint = '验证码已发到企业微信，10 分钟内执行：sysu login --code <4 位>';
-    if (json) return console.log(JSON.stringify({ ok: false, needMfa: true, hint }, null, 2));
-    return console.log(dim(hint));
+    console.log(JSON.stringify({ ok: false, needMfa: true, hint }, null, 2));
+    return;
   }
 
   // 预热各站点
@@ -67,14 +64,7 @@ async function main(argvIn = []) {
     status.lmsNote = err.message;
   }
 
-  if (json) {
-    return console.log(JSON.stringify({ ok: status.jwxt, needMfa: false, ...status }, null, 2));
-  }
-  if (!already) console.log('  ✓ 统一认证已登录');
-  if (status.jwxt) console.log('  ✓ 教务系统');
-  else console.log(dim('  · 教务系统：未连接'));
-  if (status.lms) console.log('  ✓ 在线教学');
-  else console.log(dim(`  · 在线教学平台：${status.lmsNote}`));
+  console.log(JSON.stringify({ ok: status.jwxt, needMfa: false, already, ...status }, null, 2));
 }
 
 module.exports = { main, HELP };

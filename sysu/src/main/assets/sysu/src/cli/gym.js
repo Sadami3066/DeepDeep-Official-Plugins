@@ -1,11 +1,10 @@
 // sysu gym —— 体育场馆预订（gym.sysu.edu.cn）
 const gym = require('../gym');
-const { red, green, dim, bold, cut } = require('../style');
 
 const HELP = `sysu gym                  我的账户 + 校区
 sysu gym types            场馆类型（--campus / --all）
-sysu gym venues <类型>     某类型下的场地
-sysu gym slots <类型>      可预约时段（--days 3 / --date 2026-11-10）
+sysu gym venues <类型>     某类型下的场地（--venue 过滤）
+sysu gym slots <类型>      可预约时段（默认 1 天，--days 2 / --date 2026-11-10 / --venue 场地）
 sysu gym mine             我的预约（--days 30）
 sysu gym book --type 乒乓球 --venue 场地2 --date 2026-11-10 --start 08:00 --end 09:00
                           下单（默认 dry-run，加 --yes 才真提交）
@@ -14,7 +13,7 @@ sysu gym login [--code N] 换取 token（--force 强制刷新）
 sysu gym token            当前 token 状态
 
 <类型> 可以写名称关键字（如 乒乓球）或完整 id。
-gym 子命令支持 --json。`;
+数据命令默认输出 JSON；--json 只为兼容旧命令保留，不改变输出。`;
 
 const today = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 const addDays = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
@@ -35,7 +34,7 @@ function noticeOf(t) {
   const text = clean(t?.Description);
   if (!text) return '';
   const hit = text.split(/[。！!；;]/).find((s) => /暂停|停开|维护|闭馆|活动/.test(s));
-  return hit ? cut(hit, 72) : '';
+  return hit ? hit.slice(0, 72) : '';
 }
 
 function shortNames(names) {
@@ -63,7 +62,8 @@ function pickFee(list, profile, start) {
   );
 }
 
-const feeText = (fee) => (fee && fee.CreditFee != null ? `${fee.CreditFee} 积分/时` : '');
+const venueMatch = (venue, keyword) =>
+  !keyword || venue.Identity === keyword || String(venue.Name || '').includes(keyword);
 
 async function campusMap(opts) {
   const list = await gym.campuses(opts);
@@ -80,19 +80,14 @@ async function resolveType(input, opts) {
 async function showOverview(opts) {
   const [me, cmap, all] = await Promise.all([gym.me(opts), campusMap(opts), gym.types(opts)]);
   const types = visibleTypes(all, opts);
-  if (opts.json) return console.log(JSON.stringify({ ok: true, me, campuses: [...cmap.values()], types }, null, 2));
-  console.log(`${bold(me.Name || me.Identity)}  ·  ${me.Type || ''}  ·  积分 ${me.Credits ?? '?'}  ·  现金 ${me.CashWallet ?? '?'}`);
-  console.log(dim(`校区：${[...cmap.values()].join(' / ')}`));
-  console.log(dim(`${types.length} 个场馆类型  ·  sysu gym types`));
+  console.log(JSON.stringify({ ok: true, me, campuses: [...cmap.values()], types }, null, 2));
 }
 
 async function showTypes(opts) {
   const [cmap, all] = await Promise.all([campusMap(opts), gym.types(opts)]);
   let rows = visibleTypes(all, opts);
   if (opts.campus) rows = rows.filter((t) => (cmap.get(t.Campus) || '').includes(opts.campus));
-  if (opts.json) return console.log(JSON.stringify({ ok: true, types: rows }, null, 2));
-  for (const t of rows) console.log(`${cut(t.Name, 30)}  ${dim(cmap.get(t.Campus) || '')}`);
-  console.log(dim(`\n共 ${rows.length} 个`));
+  console.log(JSON.stringify({ ok: true, types: rows }, null, 2));
 }
 
 async function showVenues(input, opts) {
@@ -104,26 +99,19 @@ async function showVenues(input, opts) {
     try {
       vs = await gym.venues(t.Identity, opts);
     } catch (err) {
-      if (opts.json) { types.push({ id: t.Identity, name: t.Name, error: err.message }); continue; }
-      console.log(`${bold(t.Name)}  ${red('查询失败')} ${dim(err.message.slice(0, 60))}`);
+      types.push({ id: t.Identity, name: t.Name, error: err.message });
       continue;
     }
+    if (opts.venue) vs = vs.filter((v) => venueMatch(v, opts.venue));
     const short = shortNames(vs.map((v) => v.Name));
     types.push({
       id: t.Identity,
       name: t.Name,
       venues: vs.map((v, i) => ({ id: v.Identity, name: v.Name, shortName: short[i], capacity: v.Capacity ?? null })),
     });
-    if (!opts.json) {
-      console.log(bold(t.Name));
-      vs.forEach((v, i) => console.log(`  ${short[i]}  容量 ${v.Capacity ?? '-'} 人`));
-      console.log('');
-    }
   }
-  if (opts.json) {
-    const errors = types.filter((t) => t.error).map((t) => ({ id: t.id, name: t.name, error: t.error }));
-    console.log(JSON.stringify({ ok: types.some((t) => !t.error), types, ...(errors.length ? { errors } : {}) }, null, 2));
-  }
+  const errors = types.filter((t) => t.error).map((t) => ({ id: t.id, name: t.name, error: t.error }));
+  console.log(JSON.stringify({ ok: types.some((t) => !t.error), types, ...(errors.length ? { errors } : {}) }, null, 2));
 }
 
 async function showSlots(input, opts) {
@@ -134,7 +122,7 @@ async function showSlots(input, opts) {
   const types = [];
 
   for (const t of list) {
-    const days = opts.daysSet ? opts.days : maxAdvance(t) + 1;
+    const days = Number(opts.days) || 1;
     const asked = opts.date ? opts.date : addDays(start, Math.max(0, days - 1));
     const limit = windowEnd(t, start);
     const end = asked > limit ? limit : asked;
@@ -143,18 +131,20 @@ async function showSlots(input, opts) {
     try {
       data = await gym.slots(t.Identity, start, end, opts);
     } catch (err) {
-      if (opts.json) { types.push({ id: t.Identity, name: t.Name, error: err.message }); continue; }
-      console.log(`${bold(t.Name)}  ${red('查询失败')} ${dim(err.message.slice(0, 60))}`);
+      types.push({ id: t.Identity, name: t.Name, error: err.message });
       continue;
     }
 
     const feeList = await gym.fees(t.Identity, opts).catch(() => []);
     const fee = pickFee(feeList, profile, '08:00');
-    const short = shortNames(data.map((v) => v.VenueName));
+    const matched = opts.venue
+      ? data.filter((v) => venueMatch({ Identity: v.VenueId, Name: v.VenueName }, opts.venue))
+      : data;
+    const short = shortNames(matched.map((v) => v.VenueName));
     const venues = [];
 
-    for (let i = 0; i < data.length; i += 1) {
-      const v = data[i];
+    for (let i = 0; i < matched.length; i += 1) {
+      const v = matched[i];
       const slots = (v.Timeslots || [])
         .filter((s) => s.AvailableCapacity > 0)
         .map((s) => ({ date: s.Date, start: timeShort(s.Start), end: timeShort(s.End), available: s.AvailableCapacity }));
@@ -163,49 +153,20 @@ async function showSlots(input, opts) {
 
     const notice = venues.length ? '' : noticeOf(t);
     types.push({ id: t.Identity, name: t.Name, window: { start, end }, fee, notice, venues });
-
-    if (!opts.json) {
-      const note = asked > limit ? dim(`  只能提前 ${maxAdvance(t)} 天`) : '';
-      const feeLine = feeText(fee) ? `  ${feeText(fee)}` : '';
-      console.log(bold(`${t.Name}  ${start} ~ ${end}${feeLine}`) + note);
-      if (!venues.length) {
-        console.log(dim(`  没有空位${notice ? ' · 公告：' + notice : ''}`));
-      } else {
-        for (const v of venues) {
-          console.log(`  ${v.shortName}`);
-          const byDate = new Map();
-          for (const s of v.slots) {
-            if (!byDate.has(s.date)) byDate.set(s.date, []);
-            byDate.get(s.date).push(`${s.start}-${s.end} 余${s.available}`);
-          }
-          for (const [d, arr] of byDate) console.log(dim(`    ${d}  ${arr.join('  ')}`));
-        }
-      }
-      console.log('');
-    }
   }
 
-  if (opts.json) {
-    const errors = types.filter((t) => t.error).map((t) => ({ id: t.id, name: t.name, error: t.error }));
-    console.log(JSON.stringify({ ok: types.some((t) => !t.error), types, ...(errors.length ? { errors } : {}) }, null, 2));
-  }
+  const errors = types.filter((t) => t.error).map((t) => ({ id: t.id, name: t.name, error: t.error }));
+  console.log(JSON.stringify({ ok: types.some((t) => !t.error), types, ...(errors.length ? { errors } : {}) }, null, 2));
 }
 
 async function showMine(opts) {
   const list = await gym.bookings({ days: opts.days }, opts);
-  if (opts.json) return console.log(JSON.stringify({ ok: true, bookings: list }, null, 2));
-  if (!list.length) return console.log(`近 ${opts.days} 天没有预约`);
-  for (const b of list) {
-    const fmt = (iso) => (iso ? new Date(new Date(iso).getTime() + 8 * 3600e3).toISOString().slice(5, 16).replace('T', ' ') : '?');
-    const when = `${fmt(b.StartDateTime)}-${fmt(b.EndDateTime).slice(6)}`;
-    console.log(`${when}  ${cut(b.VenueName || b.VenueTypeName || '', 30)}  ${dim(b.BookingId || '')}  ${dim(b.Status || '')}`);
-  }
-  console.log(dim(`\n共 ${list.length} 条`));
+  console.log(JSON.stringify({ ok: true, bookings: list }, null, 2));
 }
 
 async function run(argvIn = []) {
-  const argv = argvIn.slice();
-  const opts = { json: argv.includes('--json'), all: argv.includes('--all'), days: 3, campus: null, date: null, code: null, force: false };
+  const argv = argvIn.slice().filter((arg) => arg !== '--json');
+  const opts = { all: argv.includes('--all'), days: 1, campus: null, date: null, venue: null, code: null, force: false };
   const takeValue = (name) => {
     const i = argv.indexOf(name);
     if (i < 0) return;
@@ -219,17 +180,16 @@ async function run(argvIn = []) {
     argv.splice(i, 1);
   };
   takeValue('--days');
-  opts.daysSet = argvIn.includes('--days');
   takeValue('--campus');
   takeValue('--date');
   takeValue('--code');
   takeValue('--charge');
-  takeFlag('--json');
   takeFlag('--all');
   takeFlag('--force');
   if (argv.includes('--help') || argv.includes('-h')) return console.log(HELP);
 
   const cmd = argv.shift() || 'overview';
+  if (cmd === 'venues' || cmd === 'slots') takeValue('--venue');
   const arg = argv.find((a) => !a.startsWith('-'));
   if (cmd === 'overview') return showOverview(opts);
   if (cmd === 'types') return showTypes(opts);
@@ -268,24 +228,12 @@ async function run(argvIn = []) {
       opts,
     );
 
-    if (opts.json) {
-      if (!dryRun && Number(r.result?.Code) !== 200) {
-        console.log(JSON.stringify({ ok: false, error: { message: r.result?.Result || '预约失败', raw: r.result } }, null, 2));
-        process.exitCode = 1;
-        return undefined;
-      }
-      return console.log(JSON.stringify({ ok: true, dryRun, charge, ...(dryRun ? { payload: r.payload } : { result: r.result }) }, null, 2));
+    if (!dryRun && Number(r.result?.Code) !== 200) {
+      console.log(JSON.stringify({ ok: false, error: { message: r.result?.Result || '预约失败', raw: r.result } }, null, 2));
+      process.exitCode = 1;
+      return undefined;
     }
-    if (dryRun) {
-      console.log(`DRY-RUN  ${t.Name} · ${opts.date} ${opts.start}-${opts.end}${feeText(fee) ? ' · ' + feeText(fee) : ''}`);
-      return console.log(dim('加 --yes 提交'));
-    }
-    if (r.result?.Code === 200) {
-      const result = r.result.Result;
-      const label = typeof result === 'string' ? result : result?.BookingId || result?.Id || '';
-      return console.log(label ? `✓ 已预订 ${label}` : '✓ 已预订');
-    }
-    return console.log(JSON.stringify(r.result, null, 2));
+    return console.log(JSON.stringify({ ok: true, dryRun, charge, ...(dryRun ? { payload: r.payload } : { result: r.result }) }, null, 2));
   }
   if (cmd === 'cancel') {
     if (!arg) throw new Error('用法：sysu gym cancel <预约号>');
@@ -294,13 +242,12 @@ async function run(argvIn = []) {
     if (!b) throw new Error('没找到这条预约：' + arg);
     const dryRun = !argv.includes('--yes');
     const r = dryRun ? null : await gym.cancel(b.Identity, opts);
-    if (opts.json) {
-      return console.log(JSON.stringify({ ok: true, dryRun, booking: { id: b.Identity, bookingId: b.BookingId, venue: b.VenueName, start: b.StartDateTime, end: b.EndDateTime }, ...(dryRun ? {} : { result: r }) }, null, 2));
-    }
-    const fmt = (iso) => new Date(new Date(iso).getTime() + 8 * 3600e3).toISOString().slice(5, 16).replace('T', ' ');
-    console.log(`${b.BookingId}  ${b.VenueName}  ${fmt(b.StartDateTime)}-${fmt(b.EndDateTime).slice(6)}`);
-    if (dryRun) return console.log(dim('确认取消加 --yes'));
-    return console.log(`✓ 已取消 ${b.BookingId}`);
+    return console.log(JSON.stringify({
+      ok: true,
+      dryRun,
+      booking: { id: b.Identity, bookingId: b.BookingId, venue: b.VenueName, start: b.StartDateTime, end: b.EndDateTime },
+      ...(dryRun ? {} : { result: r }),
+    }, null, 2));
   }
   if (cmd === 'login') {
     const before = gym.readToken();
@@ -308,29 +255,18 @@ async function run(argvIn = []) {
     const after = gym.readToken();
     const left = after ? Math.max(0, Math.round((3500 * 1000 - (Date.now() - after.at)) / 60000)) : 0;
     const reused = before?.access_token === token && !opts.force && !opts.code;
-    if (opts.json) return console.log(JSON.stringify({ ok: true, valid: true, minutes: left, refreshed: !reused }, null, 2));
-    return console.log(`${reused ? '✓ 场馆 token 有效' : '✓ 场馆 token 已刷新'}（${left} 分钟）`);
+    return console.log(JSON.stringify({ ok: true, valid: true, minutes: left, refreshed: !reused }, null, 2));
   }
   if (cmd === 'token') {
     const t = gym.readToken();
     const left = t ? Math.max(0, Math.round((3500 * 1000 - (Date.now() - t.at)) / 60000)) : 0;
-    if (opts.json) return console.log(JSON.stringify({ ok: true, valid: Boolean(t && left > 0), minutes: left }, null, 2));
-    return console.log(t && left > 0 ? `✓ 场馆 token 有效（${left} 分钟）` : '没有有效 token');
+    return console.log(JSON.stringify({ ok: true, valid: Boolean(t && left > 0), minutes: left }, null, 2));
   }
   throw new Error(`未知命令：${cmd}\n\n${HELP}`);
 }
 
 async function main(argvIn = []) {
-  try {
-    return await run(argvIn);
-  } catch (err) {
-    if (argvIn.includes('--json')) {
-      console.log(JSON.stringify({ ok: false, error: { message: err.message, code: err.code || null } }, null, 2));
-      process.exitCode = 1;
-      return undefined;
-    }
-    throw err;
-  }
+  return run(argvIn);
 }
 
 module.exports = { main, HELP };

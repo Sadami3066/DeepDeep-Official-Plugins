@@ -1,0 +1,8 @@
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "message_id": "m_sent_1",
+    "thread_id": "t_sent_1"
+  }
+}

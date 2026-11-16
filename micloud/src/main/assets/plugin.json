@@ -1,16 +1,17 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.micloud",
-  "version": "2.5.0",
+  "version": "2.7.3",
   "publisher": {
     "name": "milous"
   },
   "apiLevel": 6,
-  "minHostVersion": "1.3.0",
+  "minHostVersion": "1.4.0",
   "capabilities": [
     "notifications",
     "secrets",
     "settings",
-    "ui"
+    "ui",
+    "images"
   ],
   "permissions": [
     "notifications.post"
@@ -49,7 +50,8 @@
     ]
   },
   "description": {
-    "default": "连接小米账号后读取小米云服务中的笔记、待办、短信、联系人、相册与录音。首次使用需在插件页面完成小米账号登录。",
-    "zh": "连接小米账号后读取小米云服务中的笔记、待办、短信、联系人、相册与录音。首次使用需在插件页面完成小米账号登录。"
+    "default": "连接小米账号后读取小米云服务中的笔记、待办、短信、联系人、相册与录音；笔记和待办可新建、修改与删除。首次使用需在插件页面完成小米账号登录。",
+    "zh": "连接小米账号后读取小米云服务中的笔记、待办、短信、联系人、相册与录音；笔记和待办可新建、修改与删除。首次使用需在插件页面完成小米账号登录。",
+    "en": "Read notes, to-dos, SMS, contacts, photos and recordings from Xiaomi Cloud after signing in; notes and to-dos can be created, edited and deleted. Sign in from the plugin page first."
   }
 }

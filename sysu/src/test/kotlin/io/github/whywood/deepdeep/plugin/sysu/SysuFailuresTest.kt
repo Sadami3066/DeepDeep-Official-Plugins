@@ -70,7 +70,7 @@ class SysuFailuresTest {
             ChineseStrings,
         )
         assertNotNullMessage(hint)
-        assertTrue(hint!!.contains("sysu netpay --json"))
+        assertTrue(hint!!.contains("sysu netpay"))
         assertFalse(hint.contains("undefined"))
     }
 

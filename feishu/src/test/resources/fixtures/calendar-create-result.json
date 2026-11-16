@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "event": {
+      "event_id": "event_created_1",
+      "url": "https://example.feishu.cn/calendar/event_created_1"
+    }
+  }
+}

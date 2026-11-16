@@ -58,8 +58,6 @@ function readCredentials() {
   }
 }
 
-const codeHint = () => console.log('  10 分钟内用 4 位验证码完成登录：sysu login --code 1234');
-
 const mfaParams = (mfa) => ({
   appId: mfa?.searchParams.get('appId') || '',
   appUrl: mfa?.searchParams.get('appUrl') || '',
@@ -130,7 +128,6 @@ async function passwordAuth(cred) {
     body: { authType: 'webLocalAuth', dataField: { username: cred.netid, password: encrypted, publicKeyId } },
   });
   if (dl.json?.code !== '0') throw new Error(`账密没通过：${dl.json?.msg || '未知错误'}`);
-  console.log('  ✓ 账号密码');
 
   const next = await call(`${BASE}/login?service=${encodeURIComponent(session.SERVICE)}`);
   const mfa = /mfaLogin/.test(next.loc || '') ? new URL(next.loc, CAS) : null;
@@ -140,7 +137,6 @@ async function passwordAuth(cred) {
 async function sendCode(cred) {
   const sent = await call(`${BASE}/api/v3/webWorkWechatMsgAuth/send?username=${encodeURIComponent(cred.netid)}`);
   if (sent.json?.code !== '0') throw new Error(`企微验证码没发出去：${sent.json?.msg || '未知错误'}`);
-  console.log('  ✓ 验证码已发送到企业微信');
 }
 
 async function submitCode(cred, params, code) {
@@ -157,7 +153,6 @@ async function submitCode(cred, params, code) {
     },
   });
   if (sub.json?.code !== '0') throw new Error(`二次验证没过：${sub.json?.msg || '未知错误'}`);
-  console.log('  ✓ 二次验证');
   return call(`${BASE}/login?service=${encodeURIComponent(session.SERVICE)}`);
 }
 
@@ -187,9 +182,7 @@ async function finishLogin(firstNext) {
   if (!cookies.some((c) => c.name === 'LYSESSIONID')) throw new Error('没换到教务系统的会话');
   session.save({ cookies, tgc: jar.get('TGC')?.value });
   clearMfa();
-  console.log(`  ✓ 教务系统会话已写入 ${session.SESSION_PATH}`);
-  if (await session.isLoggedIn()) console.log('  ✓ 登录态正常');
-  else throw new Error('会话拿到了但登录态不对');
+  if (!(await session.isLoggedIn())) throw new Error('会话拿到了但登录态不对');
 }
 
 async function login({ code: given, sendCode: onlySend } = {}) {
@@ -201,17 +194,10 @@ async function login({ code: given, sendCode: onlySend } = {}) {
   if (onlySend || !given) {
     const { next, mfa } = await passwordAuth(cred);
     if (!mfa) {
-      console.log('  ✓ 不需要验证码');
       return finishLogin(next);
     }
     await sendCode(cred);
-    try {
-      saveMfa(cred.netid, mfa);
-      console.log('  ✓ 本次登录会话已保留，可以继续下一步');
-    } catch (err) {
-      console.error(`  ! 本次登录会话没能保留（${err.message}），仍可直接用 --code 尝试`);
-    }
-    codeHint();
+    saveMfa(cred.netid, mfa);
     return;
   }
 
@@ -220,8 +206,7 @@ async function login({ code: given, sendCode: onlySend } = {}) {
     let resumed = null;
     try {
       resumed = await resumeMfa(cred, given, saved);
-    } catch (err) {
-      console.error(`  ! 沿用上次登录会话失败（${err.message}），改用完整登录流程`);
+    } catch {
       jar.clear();
     }
     if (resumed) return finishLogin(resumed);
@@ -229,7 +214,6 @@ async function login({ code: given, sendCode: onlySend } = {}) {
 
   const { next, mfa } = await passwordAuth(cred);
   if (!mfa) {
-    console.log('  ✓ 不需要验证码');
     return finishLogin(next);
   }
   let finalNext;

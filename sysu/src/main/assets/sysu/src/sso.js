@@ -9,7 +9,6 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const readline = require('node:readline/promises');
 const http = require('./http');
 const session = require('./session');
 
@@ -144,20 +143,9 @@ async function mfaVerify(jar, { appId, appUrl, code }) {
   if (json.code !== '0') throw new Error(`二次验证没过：${json.msg || `code ${json.code}`}`);
 }
 
-async function askCode() {
-  if (!process.stdin.isTTY) return null;
-  const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
-  try {
-    const ans = await rl.question('企业微信验证码：');
-    return ans.trim();
-  } finally {
-    rl.close();
-  }
-}
-
 // ── 换票 ──────────────────────────────────────────────────────────
 // 只换 ticket，不跟跳转。需要 MFA 时抛出带 .mfa 的错误或自动处理。
-async function ticket(service, { code, interactive = true } = {}) {
+async function ticket(service, { code } = {}) {
   let jar = new Jar();
   let { location } = await casOpen(service, jar);
 
@@ -165,15 +153,16 @@ async function ticket(service, { code, interactive = true } = {}) {
     const mfa = new URL(location);
     const appId = mfa.searchParams.get('appId');
     const appUrl = mfa.searchParams.get('appUrl');
-    if (!code) await mfaSend(jar);
-    const input = code || (await askCode());
-    if (!input) {
-      throw new Error(
-        '这个站点需要企业微信二次验证，验证码已推送。\n' +
-          '拿到后重跑，并加上 --code <4 位>（或直接在终端里跑，会提示你输入）',
+    if (!code) {
+      await mfaSend(jar);
+      const err = new Error(
+        '这个站点需要企业微信二次验证，验证码已推送。拿到后重跑，并加上 --code <4 位>',
       );
+      err.needMfa = true;
+      err.hint = '验证码已发到企业微信，10 分钟内用 --code <4 位> 重跑本命令';
+      throw err;
     }
-    await mfaVerify(jar, { appId, appUrl, code: input });
+    await mfaVerify(jar, { appId, appUrl, code });
     ({ location } = await casOpen(service, jar));
   }
 
@@ -187,8 +176,8 @@ async function ticket(service, { code, interactive = true } = {}) {
 }
 
 // 顺着跳转走完，把沿途 Cookie 收进 jar
-async function login(service, { label = 'service', code, interactive = true } = {}) {
-  const first = await ticket(service, { code, interactive });
+async function login(service, { label = 'service', code } = {}) {
+  const first = await ticket(service, { code });
   const jar = first.jar;
   // 跟跳转过程中 CAS 可能再回跳一次，必须继续带 TGC
   jar.map.set('TGC', { name: 'TGC', value: tgc(), domain: 'cas.sysu.edu.cn' });
@@ -220,12 +209,12 @@ function saveSession(name, { jar, finalUrl }) {
   });
 }
 
-async function sessionFor(name, service, { label = name, renew = false, code, interactive = true } = {}) {
+async function sessionFor(name, service, { label = name, renew = false, code } = {}) {
   if (!renew) {
     const cached = loadSession(name);
     if (cached) return cached;
   }
-  const fresh = await login(service, { label, code, interactive });
+  const fresh = await login(service, { label, code });
   saveSession(name, fresh);
   return { ...fresh, capturedAt: new Date().toISOString() };
 }

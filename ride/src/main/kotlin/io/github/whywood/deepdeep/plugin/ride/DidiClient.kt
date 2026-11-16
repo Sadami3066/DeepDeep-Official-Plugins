@@ -84,7 +84,7 @@ internal class DidiClient(private val host: PluginHost) {
             timeoutMs = CALL_TIMEOUT_MS,
         )
         val raw = redactDidiError(body, key)
-        val envelope = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull()
+        val envelope = runCatching { json.parseToJsonElement(raw) as? JsonObject }.getOrNull()
             ?: throw DidiException(host.t("滴滴返回数据不完整", "Didi returned incomplete data"), raw = raw)
         val error = envelope["error"] as? JsonObject
         if (error != null) {
@@ -95,11 +95,12 @@ internal class DidiClient(private val host: PluginHost) {
                     host.t("滴滴调用失败", "Didi call failed")
                 },
                 code ?: parseDidiErrorCode(message),
-                raw = raw,
+                raw = didiRaw(envelope, raw),
             )
         }
         val result = envelope["result"] as? JsonObject
-            ?: throw DidiException(host.t("滴滴返回数据不完整", "Didi returned incomplete data"), raw = raw)
+            ?: throw DidiException(host.t("滴滴返回数据不完整", "Didi returned incomplete data"), raw = didiRaw(envelope, raw))
+        val resultRaw = didiRaw(envelope, raw)
         if ((result["isError"] as? JsonPrimitive)?.booleanOrNull == true) {
             val text = result.textContent()
             throw DidiException(
@@ -107,7 +108,7 @@ internal class DidiClient(private val host: PluginHost) {
                     host.t("滴滴调用失败", "Didi call failed")
                 },
                 parseDidiErrorCode(text),
-                raw = raw,
+                raw = resultRaw,
             )
         }
         val payload = result["structuredContent"] ?: run {
@@ -115,7 +116,7 @@ internal class DidiClient(private val host: PluginHost) {
             if (text.isBlank()) JsonObject(emptyMap())
             else parseDidiPayload(text) ?: JsonObject(mapOf("text" to JsonPrimitive(text)))
         }
-        return RideResponse(payload = payload, raw = raw)
+        return RideResponse(payload = payload, raw = resultRaw)
     }
 
     private suspend fun post(

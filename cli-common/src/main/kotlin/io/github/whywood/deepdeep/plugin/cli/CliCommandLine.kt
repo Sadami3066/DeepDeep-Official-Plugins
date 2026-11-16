@@ -5,11 +5,41 @@ private val ENV_ASSIGNMENT = Regex("""^[A-Za-z_][A-Za-z0-9_]*=\S*$""")
 object CliCommandLine {
     private const val SHELL_OPERATORS = "|;`><\n\r"
 
-    fun hasShellOperators(command: String): Boolean =
-        command.any { it in SHELL_OPERATORS } ||
-            command.contains("&&") ||
-            command.contains("||") ||
-            command.contains("\$(")
+    fun hasShellOperators(command: String): Boolean {
+        var quote: Char? = null
+        var escaped = false
+        var index = 0
+        while (index < command.length) {
+            val char = command[index]
+            if (escaped) {
+                escaped = false
+                index++
+                continue
+            }
+            if (char == '\\' && quote != '\'') {
+                escaped = true
+                index++
+                continue
+            }
+            if (quote != null) {
+                when {
+                    char == quote -> quote = null
+                    quote == '"' && (char == '`' ||
+                        (char == '$' && command.getOrNull(index + 1) == '(')) -> return true
+                }
+                index++
+                continue
+            }
+            when {
+                char == '\'' || char == '"' -> quote = char
+                char in SHELL_OPERATORS -> return true
+                char == '$' && command.getOrNull(index + 1) == '(' -> return true
+                char == '&' && command.getOrNull(index + 1) == '&' -> return true
+            }
+            index++
+        }
+        return false
+    }
 
     fun tokenize(command: String): List<String> {
         val tokens = mutableListOf<String>()

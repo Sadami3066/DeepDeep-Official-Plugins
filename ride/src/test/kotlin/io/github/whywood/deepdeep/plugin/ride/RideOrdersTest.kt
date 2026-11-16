@@ -6,6 +6,7 @@ import io.github.whywood.deepdeep.plugin.api.PluginToolResult
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
@@ -69,7 +70,7 @@ class RideOrdersTest {
                 payload = json.parseToJsonElement(
                     """{"orderId":"order-1","statusCode":0,"from":{"name":"公司"},"to":{"name":"机场"},"phoneNumberSuffix":"1234"}""",
                 ),
-                raw = """{"result":{"structuredContent":{"orderId":"order-1","statusCode":0}}}""",
+                raw = """{"structuredContent":{"orderId":"order-1","statusCode":0}}""",
             )
         },
         currentKey = { null },
@@ -92,7 +93,7 @@ class RideOrdersTest {
             cliCalls += tool to callArgs
             RideResponse(
                 payload = json.parseToJsonElement("""{"success":true}"""),
-                raw = """{"result":{"structuredContent":{"success":true}}}""",
+                raw = """{"structuredContent":{"success":true}}""",
             )
         },
         currentKey = { null },
@@ -138,13 +139,17 @@ class RideOrdersTest {
         assertEquals("taxi_create_order", cliCalls.single().first)
         assertEquals("1", cliCalls.single().second["product_category"]?.jsonPrimitive?.contentOrNull)
         assertEquals("trace-1", cliCalls.single().second["estimate_trace_id"]?.jsonPrimitive?.contentOrNull)
-        assertTrue(result.text.orEmpty().contains("订单已创建"))
-        assertTrue(result.text.orEmpty().contains("order-1"))
+        assertEquals("", result.text)
         assertEquals(
-            """{"result":{"structuredContent":{"orderId":"order-1","statusCode":0}}}""",
+            """{"structuredContent":{"orderId":"order-1","statusCode":0}}""",
             result.details?.get(RIDE_RAW_DETAIL_KEY)?.jsonPrimitive?.contentOrNull,
         )
         assertTrue(result.details?.get(RIDE_CARD_DETAIL_KEY) is JsonObject)
+        assertTrue(result.details?.get(RIDE_GUIDANCE_DETAIL_KEY)?.jsonPrimitive?.contentOrNull.orEmpty().isNotBlank())
+        assertEquals(
+            "order-1",
+            (result.details?.get("orderId") as JsonPrimitive).contentOrNull,
+        )
     }
 
     @Test
@@ -192,9 +197,11 @@ class RideOrdersTest {
         assertEquals("taxi_cancel_order", cliCalls.single().first)
         assertEquals("order-1", cliCalls.single().second["order_id"]?.jsonPrimitive?.contentOrNull)
         assertEquals(
-            """{"result":{"structuredContent":{"success":true}}}""",
+            """{"structuredContent":{"success":true}}""",
             result.details?.get(RIDE_RAW_DETAIL_KEY)?.jsonPrimitive?.contentOrNull,
         )
+        assertTrue(result.details?.get(RIDE_CARD_DETAIL_KEY) is JsonObject)
+        assertEquals("", result.text)
     }
 
     @Test
@@ -215,7 +222,10 @@ class RideOrdersTest {
 
         assertTrue(result.isError)
         assertEquals(raw, result.details?.get(RIDE_RAW_DETAIL_KEY)?.jsonPrimitive?.contentOrNull)
-        assertTrue(result.text.orEmpty().contains("订单已经取消过了"))
+        assertEquals("", result.text)
+        val error = result.details?.get(RIDE_ERROR_DETAIL_KEY) as JsonObject
+        assertEquals("upstream", error["kind"]?.jsonPrimitive?.contentOrNull)
+        assertEquals("订单已经取消过了", error["message"]?.jsonPrimitive?.contentOrNull)
     }
 
     @Test

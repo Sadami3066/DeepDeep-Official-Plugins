@@ -44,20 +44,6 @@ class RideErrorSummaryTest {
     }
 
     @Test
-    fun errorTextKeepsUpstreamOriginalAndAddsHint() {
-        val zh: RideTranslate = { text, _ -> text }
-        val text = rideErrorText(
-            DidiException("订单不存在", -32011),
-            null,
-            zh,
-            "查询失败",
-            "Lookup failed",
-        )
-        assertTrue(text.startsWith("查询失败：订单不存在"))
-        assertTrue(text.contains("请确认订单号是否正确"))
-    }
-
-    @Test
     fun blankMessageStaysBlank() {
         assertEquals("", summarizeDidiError(null))
         assertEquals("", summarizeDidiError("   "))
