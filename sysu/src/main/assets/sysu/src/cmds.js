@@ -424,8 +424,7 @@ async function course({ name, week }) {
   console.log(JSON.stringify(output, null, 2));
 }
 
-const HELP = `sysu jwxt                      本周课表
-sysu jwxt schedule --week N    第 N 周  ·  --today / --tomorrow 只看今天/明天
+const HELP = `sysu jwxt schedule              本周课表 · --week N  ·  --today / --tomorrow 只看今天/明天
 sysu jwxt scores               成绩（默认最近有成绩的学期）· --all 全部 · --semester 2025-2
 sysu jwxt credits              毕业学分进度
 sysu jwxt exams                考试安排

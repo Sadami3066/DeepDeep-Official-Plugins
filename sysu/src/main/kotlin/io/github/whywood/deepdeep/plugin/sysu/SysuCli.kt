@@ -26,7 +26,7 @@ internal enum class SysuSite(val key: String) {
 }
 
 internal object SysuCli {
-    const val VERSION = "3.5.0"
+    const val VERSION = "3.5.1"
     const val MIN_NODE_MAJOR = 22
     const val SKILL_ID = "deepdeep-sysu"
 

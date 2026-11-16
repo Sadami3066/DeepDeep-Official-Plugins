@@ -8,7 +8,7 @@ import org.junit.Test
 class SysuCliTest {
     @Test
     fun bundledCliVersionIsCurrent() {
-        assertEquals("3.5.0", SysuCli.VERSION)
+        assertEquals("3.5.1", SysuCli.VERSION)
     }
 
     private val statusOutput = """

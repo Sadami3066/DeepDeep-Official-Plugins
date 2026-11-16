@@ -1,14 +1,13 @@
 ---
 name: sysu
-description: 中山大学校园服务 CLI——教务系统（课表、成绩、学分、考试、空教室、请假）+ 在线教学平台（课程、待办、课程内容）+ 统一认证换票（任意中大站点）。用户问上课时间、成绩绩点、考试安排、作业截止、某门课有什么资料、空教室、请假审批、或想登进别的中大系统时用。命令是 `sysu`（没有 `jwxt` 这个入口了）。
+description: 中山大学校园服务 CLI——教务系统（课表、成绩、学分、考试、空教室、请假）+ 在线教学平台（课程、待办、课程内容）+ 统一认证换票（任意中大站点）。用户问上课时间、成绩绩点、考试安排、作业截止、某门课有什么资料、空教室、请假审批、或想登进别的中大系统时用。命令是 `sysu`；教务课表用 `sysu jwxt schedule`（裸 `sysu jwxt` 已移除，避免与 schedule 重复）。
 ---
 
 # 中大校园服务（`sysu`）
 
 ```sh
 sysu login                     # 统一登录（账密 + 企微验证码；jwxt/lms 共用）
-sysu jwxt                      # 本周课表
-sysu jwxt schedule --week 8    # 指定周  ·  --today / --tomorrow
+sysu jwxt schedule             # 本周课表 · --week 8 指定周 · --today / --tomorrow
 sysu jwxt scores               # 成绩 + 加权绩点  ·  --all 全部学期
 sysu jwxt credits              # 毕业学分进度
 sysu jwxt exams                # 整学期考试安排

@@ -47,7 +47,7 @@ function usage() {
 ${rows.join('\n')}
 
 常用：
-  sysu jwxt              本周课表
+  sysu jwxt schedule     本周课表
   sysu jwxt --help       教务的全部命令
   sysu lms               我的课程
   sysu lms todo          作业与待办

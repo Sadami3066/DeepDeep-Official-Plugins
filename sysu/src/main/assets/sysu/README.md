@@ -5,7 +5,7 @@
 
 ```sh
 sysu login             # 一次登录，所有站点共用
-sysu jwxt              # 本周课表
+sysu jwxt schedule     # 本周课表
 sysu lms               # 在线教学平台的课
 sysu sso <地址>        # 用统一认证换任意站点的登录态
 ```
@@ -13,7 +13,7 @@ sysu sso <地址>        # 用统一认证换任意站点的登录态
 | 命令 | 能干什么 |
 |---|---|
 | `login` | 统一登录：账密 + 企业微信验证码，登录一次后 jwxt / lms / sso 共用 |
-| `jwxt` | 课表、成绩、绩点、学分、考试、课程大纲、公告、空闲教室、请假 |
+| `jwxt <子命令>` | 课表（schedule）、成绩、绩点、学分、考试、课程大纲、公告、空闲教室、请假 |
 | `lms` | 在线教学平台（Moodle）：课程列表、待办/作业截止、课程内容 |
 | `gym` | 体育场馆：账户、场馆类型、空闲时段、我的预约 |
 | `netpay` | 网费在线：网络服务状态、到期日、缴费订单 |
@@ -76,8 +76,7 @@ sysu login --force     # 已登录时强制重来
 ## 教务（`sysu jwxt`）
 
 ```sh
-sysu jwxt                      # 本周课表
-sysu jwxt schedule --week 8    # 指定周  ·  --today / --tomorrow
+sysu jwxt schedule             # 本周课表 · --week 8 指定周 · --today / --tomorrow
 sysu jwxt scores               # 成绩 + 加权绩点  ·  --all 全部学期
 sysu jwxt credits              # 毕业学分进度
 sysu jwxt exams                # 整学期考试安排

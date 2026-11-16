@@ -18,10 +18,10 @@ function main(argvIn = []) {
     throw new Error(msg);
   };
 
-  let cmd = 'schedule';
+  let cmd;
   const at = argv.findIndex((a) => COMMANDS.includes(a));
   if (at >= 0) cmd = argv.splice(at, 1)[0];
-  else if (argv[0] && !argv[0].startsWith('-')) fail(`未知命令：${argv[0]}`);
+  else fail('请指定 jwxt 子命令，例如：sysu jwxt schedule --week 8');
 
   const unknown = argv.find((a) => a.startsWith('-') && ![...BOOL, ...VALUED, '-h', '--help'].includes(a));
   if (unknown) fail(`未知选项：${unknown}`);
