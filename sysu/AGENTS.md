@@ -34,7 +34,7 @@
 
 ## 要点
 
-- 课表只接受显式 `sysu jwxt schedule`（含 `--week/--today/--tomorrow`）；内置 CLI 3.5.1 同步移除了裸 `sysu jwxt` 的默认课表行为，裸命令直接报错提示改用 `schedule`，插件桥也不再把它当课表接管。内置 `sysu/SKILL.md`、`sysu/README.md` 与 `--help` 文案都已改成只列 `jwxt schedule`。
+- 课表只接受显式 `sysu jwxt schedule`（含 `--week/--today/--tomorrow`）；内置 CLI 3.5.1 同步移除了裸 `sysu jwxt` 的默认课表行为，裸命令直接报错提示改用 `schedule`，插件桥也不再把它当课表接管。内置 `sysu/SKILL.md`、`sysu/README.md` 与 `--help` 文案都已改成只列 `jwxt schedule`；裸 `sysu jwxt` 不再被 CLI 或查询桥接受，也不做兼容重写，避免两套命令继续存在。
 
 - 凭证存 `host.secrets()`（netid/password），页面只回显 netid，密码默认隐藏、可切换显示。
 - 页面结构：顶部标题 + 一句用途 → 状态摘要卡（账号、教务/在线教学/场馆/网费四行、运行环境、服务版本，行间 `DdHairline`）→ 环境与错误 `DdNoticeBar`（可重试、可就地重新检查）→ 登录/验证码/已登录阶段各只有一个主操作 `DdPrimaryButton`，次级动作用 `DdTextAction`（返回、重发、刷新、连接未登录服务、退出）→ 底部一句说明；不展示 CLI 参数、JSON 或表单内部字段名。
