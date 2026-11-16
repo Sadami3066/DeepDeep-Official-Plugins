@@ -2,42 +2,43 @@
 
 English | [简体中文](README.md)
 
-The official external-plugin source repository maintained by the DeepDeep project. It brings Feishu, WeCom, SYSU campus services, WeChat export, Xiaomi Cloud and standard IMAP/SMTP mailboxes into DeepDeep, packaged as Ed25519-signed `.ddp` plugin bundles.
+The official external-plugin source repository maintained by the DeepDeep project. It brings Feishu, WeCom, SYSU campus services, WeChat export, Xiaomi Cloud, standard IMAP/SMTP mailboxes and Campus Market into DeepDeep, packaged as Ed25519-signed `.ddp` plugin bundles.
 
 ## Overview
 
 DeepDeep is a personal AI agent on Android ([app repository](https://github.com/Sadami3066/DeepDeep)). Plugins implement the host contract `plugin-api` in Kotlin, load inside the App process, and extend the agent with tools, skills, prompt sections and self-drawn pages. Plugins are installed only from `.ddp` files, and every plugin is a separate Android application module.
 
-This repository contains eleven official plugins, published by `milous`:
+This repository contains twelve official plugins, published by `milous`:
 
 | Module | Plugin | Version | What it does | For |
 |---|---|---|---|---|
-| `feishu` | Feishu | 2.4.0 | Read and write messages, calendar, docs, drive, mail and tasks through the official `lark-cli` | Office users who work in Feishu every day |
-| `wecom` | WeCom | 2.4.0 | Operate messages, mail, docs, schedules and to-dos through the official `wecom-cli` | Teams that use WeCom |
-| `sysu` | SYSU CLI | 2.4.0 | Run the Node.js `sysu` CLI inside the Linux environment: timetable, grades, assignments, course files, venue booking, campus network fees and SSO tickets | Students and staff at Sun Yat-sen University |
+| `feishu` | Feishu | 2.7.0 | Read and write messages, calendar, docs, drive, mail and tasks through the official `lark-cli` | Office users who work in Feishu every day |
+| `wecom` | WeCom | 2.6.0 | Operate messages, mail, docs, schedules and to-dos through the official `wecom-cli` | Teams that use WeCom |
+| `sysu` | SYSU CLI | 2.7.0 | Run the Node.js `sysu` CLI inside the Linux environment: timetable, grades, assignments, course files, venue booking, campus network fees and SSO tickets | Students and staff at Sun Yat-sen University |
 | `wechat` | WeChat Export | 0.5.2 | Sync and decrypt the local WeChat database, export complete chat records for a date range and let the agent summarize | Users who need a complete WeChat export |
-| `micloud` | Xiaomi Cloud | 2.4.0 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
-| `mail` | Mail | 1.5.0 | Connect an IMAP/SMTP mailbox with an authorization code: inbox, conversations, composing with attachments, account management and in-chat mail cards, with agent search, reading, archiving, drafting and sending | Users of standard IMAP/SMTP mailboxes such as QQ, 163, Gmail or iCloud |
-| `ride` | DiDi Ride | 1.1.0 | Didi estimates, order creation, ride status and driver location; payment happens in Didi | Commuters and travellers who need a ride, price comparison or driver status |
-| `hotel` | RollingGo Hotels | 1.1.0 | Search RollingGo hotels, view rooms and orders, create a pending booking; payment happens on RollingGo | Anyone who wants AI help finding, checking or booking hotels |
-| `amap` | Amap Maps | 1.2.0 | Amap MCP for place search, nearby POIs, driving/transit/walking/cycling routes and weather, rendered as cards; requires an Amap key | Commuters and travellers planning routes or looking up places |
-| `rail` | 12306 Railway | 1.1.0 | Search 12306 trains, times and seat availability, then book on 12306 | Anyone travelling by rail who wants train and seat options first |
+| `micloud` | Xiaomi Cloud | 2.7.3 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
+| `mail` | Mail | 1.6.0 | Connect an IMAP/SMTP mailbox with an authorization code: inbox, conversations, composing with attachments, account management and in-chat mail cards, with agent search, reading, archiving, drafting and sending | Users of standard IMAP/SMTP mailboxes such as QQ, 163, Gmail or iCloud |
+| `ride` | DiDi Ride | 1.3.0 | Didi estimates, order creation, ride status and driver location; payment happens in Didi | Commuters and travellers who need a ride, price comparison or driver status |
+| `hotel` | RollingGo Hotels | 1.4.1 | Search RollingGo hotels, view rooms and orders, create a pending booking; payment happens on RollingGo | Anyone who wants AI help finding, checking or booking hotels |
+| `amap` | Amap Maps | 1.5.2 | Amap MCP for place search, nearby POIs, driving/transit/walking/cycling routes and weather, rendered as cards; requires an Amap key | Commuters and travellers planning routes or looking up places |
+| `rail` | 12306 Railway | 1.4.0 | Search 12306 trains, times and seat availability, then book on 12306 | Anyone travelling by rail who wants train and seat options first |
 | `themes` | Themes | 1.0.1 | Provides eight light and dark colour themes that can be switched from the host appearance settings | Users who want a different visual mood |
+| `zanao` | Campus Market | 1.0.18 | Bundled offline token catcher and offline-signing CLI: browsing, posting with images, author profiles and history search | Zanao campus marketplace users |
 
 `cli-common/` is an internal shared module (CLI bridge, card model, CLI update/install core). It is not a plugin, is not listed in manifests, and is not published to the market.
 
-Versions follow `version` in each module's `src/main/assets/plugin.json`. All eleven manifests declare `apiLevel` 6 and are built against `plugin-api` 1.2.0 / 1.3.0 and `design` 0.9.0, compatible with DeepDeep 1.1.0+; the exact minimum host version is in each manifest. Runtime dependencies: Feishu uses `lark-cli` 1.0.100, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.4.2; WeChat Export bundles its own `wechat` CLI and needs Root plus local WeChat data; Amap Maps uses the Amap MCP for places and routes with an Amap key; Trains queries 12306 directly; Hotels uses the official `rgh` CLI with OAuth (Node.js/npm required); Ride calls the Didi MCP HTTP API directly with a key configured on its plugin page; Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page; the Mail plugin needs no CLI and connects to IMAP/SMTP directly over the JVM network stack (QQ, 163, 126, Tencent Exmail, Alibaba Mail, Gmail, iCloud, Fastmail, Yahoo, Zoho and custom servers).
+Versions follow `version` in each module's `src/main/assets/plugin.json`. All twelve manifests declare `apiLevel` 6 and are built against `plugin-api` 1.3.1 and `design` 0.11.0, compatible with DeepDeep 1.1.0+ (image cards and the new plugins require 1.4.0+); the exact minimum host version is in each manifest. Runtime dependencies: Feishu uses `lark-cli` 1.0.100, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.5.0; WeChat Export bundles its own `wechat` CLI and needs Root plus local WeChat data; Amap Maps uses the Amap MCP for places and routes with an Amap key; Trains queries 12306 directly; Hotels uses the official `rgh` CLI with OAuth (Node.js/npm required); Ride calls the Didi MCP HTTP API directly with a key configured on its plugin page; Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page; the Mail plugin needs no CLI and connects to IMAP/SMTP directly over the JVM network stack (QQ, 163, 126, Tencent Exmail, Alibaba Mail, Gmail, iCloud, Fastmail, Yahoo, Zoho and custom servers); Campus Market bundles its own offline token catcher and Python CLI.
 
 ## What's in the repository
 
 | Path | Description |
 |---|---|
-| `feishu/`, `wecom/`, `sysu/`, `wechat/`, `micloud/`, `mail/`, `themes/`, `amap/`, `rail/`, `hotel/`, `ride/` | The eleven plugin modules: Kotlin sources, `src/main/assets/plugin.json` manifests, icons and pages |
+| `feishu/`, `wecom/`, `sysu/`, `wechat/`, `micloud/`, `mail/`, `themes/`, `amap/`, `rail/`, `hotel/`, `ride/`, `zanao/` | The twelve plugin modules: Kotlin sources, `src/main/assets/plugin.json` manifests, icons and pages |
 | `gradle/plugin-bundle.gradle.kts` | Shared packaging script providing the `assemblePlugin`, `signPlugin` and `verifyPlugin` tasks |
 | `settings.gradle.kts` | Module list and repositories; dependencies come from `io.github.sadami3066.deepdeep:plugin-api` on `https://sadami3066.github.io/deepdeep-maven` (use the latest release there; `api()` brings in the matching `design`), Google and Maven Central |
 | `gradle/wrapper/`, `gradlew` | Gradle 9.8.2 wrapper; no local Gradle installation needed |
 | `scripts/gradlew-locked` | Serialized Gradle wrapper: flock build lock, single worker by default, capped JVM memory to avoid OOM on small machines |
-| `scripts/check.sh` | Builds, signs and verifies all eleven plugins |
+| `scripts/check.sh` | Builds, signs and verifies all twelve plugins |
 | `keys/` | Local signing-key directory; key files are not committed (`.gitignore` ignores `keys/*.pem` and `keys/*.pub`) |
 
 All modules share the same compile settings: `compileSdk`/`targetSdk` 36, `minSdk` 29, Java 17. The repository stores only sources and packaging scripts — no private keys and no signed artifacts; `.ddp` bundles are produced at build time.

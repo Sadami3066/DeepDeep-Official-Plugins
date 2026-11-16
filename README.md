@@ -2,13 +2,13 @@
 
 [English](README.en.md) | 简体中文
 
-DeepDeep 官方维护的外部插件源码仓库：把飞书、企业微信、中山大学校园服务、微信记录导出、小米云服务和标准邮箱接入 DeepDeep，统一打包成带 Ed25519 签名的 `.ddp` 插件包。
+DeepDeep 官方维护的外部插件源码仓库：把飞书、企业微信、中山大学校园服务、微信记录导出、小米云服务、标准邮箱和校园集市接入 DeepDeep，统一打包成带 Ed25519 签名的 `.ddp` 插件包。
 
 ## 概览
 
 DeepDeep 是一个运行在 Android 上的个人智能体（[应用仓库](https://github.com/Sadami3066/DeepDeep)）。插件用 Kotlin 实现宿主契约 `plugin-api`，在 App 进程内加载，通过工具、技能、提示词和自绘页面扩展助手能力；插件只从 `.ddp` 安装，每个插件是一个独立的 Android application 模块。
 
-本仓库包含十一个官方插件，发布者为 `milous`：
+本仓库包含十二个官方插件，发布者为 `milous`：
 
 | 模块 | 插件 | 版本 | 作用 | 适合 |
 |---|---|---|---|---|
@@ -23,10 +23,11 @@ DeepDeep 是一个运行在 Android 上的个人智能体（[应用仓库](https
 | `amap` | 高德地图 | 1.5.2 | 高德 MCP：地点搜索、周边、坐标转地址、驾车/公交/步行/骑行路线与天气，卡片展示；需要高德 Key | 通勤、出行规划与查地点的用户 |
 | `rail` | 12306铁路 | 1.4.0 | 查询 12306 车次、时刻与余票，选好车次后去 12306 完成预订 | 坐高铁/火车出行，先看车次和余票的用户 |
 | `themes` | 主题包 | 1.0.1 | 给宿主提供 8 套浅色/深色主题配色，在设置的外观里一键切换 | 想换个界面气质的用户 |
+| `zanao` | 校园集市 | 1.0.18 | 内置离线 Token 捕捉器与离线签名 CLI，支持浏览、带图发帖、作者资料与历史检索 | 赞噢校园集市用户 |
 
 `cli-common/` 是仓库内部共享模块（CLI bridge、卡片模型、CLI 更新/安装核心），不是插件、不进插件清单、不随市场发布。
 
-版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。十一个插件的清单均为 `apiLevel` 6，使用 `plugin-api` 1.3.1 与 `design` 0.11.0 构建，并与 DeepDeep 1.1.0+ 兼容（图片服务要求宿主 1.4.0+），具体最低宿主版本以各模块清单为准。运行时依赖：飞书使用 `lark-cli` 1.0.100，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.5.0；微信导出插件自带 `wechat` CLI，需要 Root 和微信本地数据；高德地图插件通过高德 MCP 提供地点与路线，需要高德 Key；火车票插件直接查询 12306；酒店插件通过官方 `rgh` CLI 与 OAuth 登录（需要 Node.js/npm）；打车插件直接访问滴滴 MCP HTTP API（需要滴滴 Key，插件页配置）；小米云服务没有 CLI，通过插件页内 WebView 登录；邮箱插件不依赖 CLI，用 JVM 网络栈直连 IMAP/SMTP（QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义服务器）。
+版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。十二个插件的清单均为 `apiLevel` 6，使用 `plugin-api` 1.3.1 与 `design` 0.11.0 构建，并与 DeepDeep 1.1.0+ 兼容（图片服务要求宿主 1.4.0+），具体最低宿主版本以各模块清单为准。运行时依赖：飞书使用 `lark-cli` 1.0.100，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.5.0；微信导出插件自带 `wechat` CLI，需要 Root 和微信本地数据；高德地图插件通过高德 MCP 提供地点与路线，需要高德 Key；火车票插件直接查询 12306；酒店插件通过官方 `rgh` CLI 与 OAuth 登录（需要 Node.js/npm）；打车插件直接访问滴滴 MCP HTTP API（需要滴滴 Key，插件页配置）；小米云服务没有 CLI，通过插件页内 WebView 登录；邮箱插件不依赖 CLI，用 JVM 网络栈直连 IMAP/SMTP（QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义服务器）；校园集市插件内置离线 Token 捕捉器和 Python CLI，不需要外部 CLI。
 
 开发示例：[`mcpui-demo/`](mcpui-demo/README.md) 演示把 MCP 工具结果渲染成插件卡片，不上市场，需要 `plugin-api 1.3.0` / 宿主 1.1.0+。
 
@@ -34,12 +35,12 @@ DeepDeep 是一个运行在 Android 上的个人智能体（[应用仓库](https
 
 | 路径 | 说明 |
 |---|---|
-| `feishu/`、`wecom/`、`sysu/`、`wechat/`、`micloud/`、`mail/`、`themes/`、`amap/`、`rail/`、`hotel/`、`ride/` | 十一个插件模块：Kotlin 源码、`src/main/assets/plugin.json` 清单、图标与页面 |
+| `feishu/`、`wecom/`、`sysu/`、`wechat/`、`micloud/`、`mail/`、`themes/`、`amap/`、`rail/`、`hotel/`、`ride/`、`zanao/` | 十二个插件模块：Kotlin 源码、`src/main/assets/plugin.json` 清单、图标与页面 |
 | `gradle/plugin-bundle.gradle.kts` | 共享打包脚本，提供 `assemblePlugin`、`signPlugin`、`verifyPlugin` 三个任务 |
 | `settings.gradle.kts` | 模块列表与仓库配置；依赖来自 `https://sadami3066.github.io/deepdeep-maven` 的 `io.github.sadami3066.deepdeep:plugin-api`（版本以该仓库最新发布为准，`api()` 传递配套的 `design`）、Google 与 Maven Central |
 | `gradle/wrapper/`、`gradlew` | Gradle 9.8.2 wrapper，无需本机预装 Gradle |
 | `scripts/gradlew-locked` | 串行 Gradle 包装：flock 构建锁、默认单 worker、限制 JVM 内存，避免小内存机器并发构建 OOM |
-| `scripts/check.sh` | 跑共享层与十一个插件的单测，并构建、签名、验签全部插件 |
+| `scripts/check.sh` | 跑共享层与十二个插件的单测，并构建、签名、验签全部插件 |
 | `keys/` | 本机签名密钥目录，密钥文件不入库（`.gitignore` 忽略 `keys/*.pem` 与 `keys/*.pub`） |
 
 各模块编译配置一致：`compileSdk`/`targetSdk` 36、`minSdk` 29、Java 17。仓库只保存源码与打包脚本，不包含私钥，也不托管已签名制品；`.ddp` 产物在构建时生成。

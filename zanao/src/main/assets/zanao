@@ -1,0 +1,7 @@
+#!/bin/sh
+# zanao CLI launcher; works in the repo and in the bundled skill directory.
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -f "$DIR/zanao.py" ]; then
+  exec python3 "$DIR/zanao.py" "$@"
+fi
+exec python3 "$DIR/cli/zanao.py" "$@"

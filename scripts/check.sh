@@ -33,4 +33,6 @@ fi
   :ride:testDebugUnitTest \
   :ride:verifyPlugin \
   :amap:testDebugUnitTest \
-  :amap:verifyPlugin
+  :amap:verifyPlugin \
+  :zanao:testDebugUnitTest \
+  :zanao:verifyPlugin
