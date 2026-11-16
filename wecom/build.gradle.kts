@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.wecom"
         minSdk = 29
         targetSdk = 36
-        versionCode = 13
-        versionName = "2.6.0"
+        versionCode = 14
+        versionName = "2.6.1"
     }
 
     compileOptions {

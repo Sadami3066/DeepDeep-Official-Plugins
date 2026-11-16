@@ -13,7 +13,7 @@ This repository contains twelve official plugins, published by `milous`:
 | Module | Plugin | Version | What it does | For |
 |---|---|---|---|---|
 | `feishu` | Feishu | 2.7.0 | Read and write messages, calendar, docs, drive, mail and tasks through the official `lark-cli` | Office users who work in Feishu every day |
-| `wecom` | WeCom | 2.6.0 | Operate messages, mail, docs, schedules and to-dos through the official `wecom-cli` | Teams that use WeCom |
+| `wecom` | WeCom | 2.6.1 | Operate messages, mail, docs, schedules and to-dos through the official `wecom-cli` | Teams that use WeCom |
 | `sysu` | SYSU CLI | 2.7.0 | Run the Node.js `sysu` CLI inside the Linux environment: timetable, grades, assignments, course files, venue booking, campus network fees and SSO tickets | Students and staff at Sun Yat-sen University |
 | `wechat` | WeChat Export | 0.5.2 | Sync and decrypt the local WeChat database, export complete chat records for a date range and let the agent summarize | Users who need a complete WeChat export |
 | `micloud` | Xiaomi Cloud | 2.7.4 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |

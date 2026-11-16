@@ -96,6 +96,7 @@ class WecomPlugin : DeepDeepPlugin {
             append("企业微信插件已连接")
             status.botId?.let { append("（Bot ID：$it）") }
             appendLine("。命令用法见 deepdeep-wecom 技能；发送、修改、删除前先 --dry-run 预览。")
+            appendLine("工具结果带卡片 id 时用 present 交付卡片；正文只写结论与下一步，不要复述卡片内容。")
         }
     } else {
         val label = if (status.installed) "企业微信未连接" else "企业微信 CLI 未安装"
@@ -131,6 +132,7 @@ class WecomPlugin : DeepDeepPlugin {
             - 发消息前先 `wecom-cli chat groups list` 取本次返回的 `chat_id`；给授权人发消息可用 `wecom-cli identity whoami` 的 ID 作为 chat_id。
             - 发送图片、文件、语音或视频前，先经 `wecom-cli media` 上传拿到 `media_id`。
             - 拉取更多结果时按返回的 `next_cursor` 继续单条读取；下载文件用 `--output-dir <download-directory>` 落到工作区，再按当前运行支持的交付方式返回文件绝对路径。
+            - 工具结果末尾带卡片 id 时，用 `present` 交付对应卡片；正文只写结论与下一步，不要复述卡片内容。
         """.trimIndent()
     }
 }
