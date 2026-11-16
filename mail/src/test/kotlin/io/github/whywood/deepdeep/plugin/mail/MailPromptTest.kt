@@ -15,24 +15,23 @@ class MailPromptTest {
     )
 
     @Test
-    fun promptDescribesRulesWithoutCardDisplayWording() {
+    fun promptDescribesRulesAndPresentInstruction() {
         val text = mailPromptBody(
             MailState(accounts = listOf(account), unreadByAccount = mapOf("account-1" to 3)),
         )
         assertTrue(text, text.contains("user@example.com"))
         assertTrue(text, text.contains("未读 3"))
         assertTrue(text, text.contains("mail_save_attachment"))
-        assertFalse(text, text.contains("卡片"))
+        assertTrue(text, text.contains("present"))
+        assertTrue(text, text.contains("卡片 id"))
         assertFalse(text, text.contains("不要再抄"))
-        assertFalse(text, text.contains("card"))
-        assertFalse(text, text.contains("Card"))
     }
 
     @Test
-    fun promptMentionsMissingAccountWithoutCardWording() {
+    fun promptMentionsMissingAccountAndPresentInstruction() {
         val text = mailPromptBody(MailState())
         assertTrue(text, text.contains("没有已连接的邮箱账号"))
-        assertFalse(text, text.contains("卡片"))
+        assertTrue(text, text.contains("present"))
         assertFalse(text, text.contains("不要再抄"))
     }
 }

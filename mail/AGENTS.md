@@ -30,7 +30,7 @@ DeepDeep 官方邮箱插件，当前 1.6.0，打成外部 `.ddp`：不依赖 CLI
 
 ## 回答区卡片
 
-- 已知问题（2026-11-16 真机）：卡片数据已写进结果，但 `mailPromptBody` 目前没有提醒模型用 `present` 交付；真机测试里模型只读文本、卡片没有上屏。修复方式是在提示词里补一条卡片交付说明，待下一插件版本发布。
+- 卡片投递：`mailPromptBody` 明确要求“工具结果带卡片 id 时用 `present` 交付卡片，正文只写结论与下一步，不复述卡片内容”；真机暴露过 prompt 未提示导致卡片不上屏的问题，1.6.1 已修。
 - 投递：`mail_search`/`mail_read`/`mail_draft` 把卡片写进工具结果 `details` 的 `deepdeep.card`：`{"customType": "mail.search|mail.read|mail.draft", "title": 摘要, "payload": MailCardPayloads 的 JSON}`；**不调用** `host.chat().postCustomMessage`，也不自己拼卡片 id。槽位与 payload 兼容旧会话。
 - 搜索是信封列表：未读圆点 + 信封线稿 + 发件人（未读加粗）+ 主题 + 日期右对齐，行间虚线；收起显示 5 封，`DdExpandToggle` 展开全部，底部「打开邮箱」与总数。已发送的行改为显示收件人、箭头线稿与「已发送」chip。
 - 读信是信纸：发件人头像/名字/地址与时间、双细线信头、主题、完整正文（默认 4 行，`DdExpandToggle` 展开全文）、全部附件胶囊；已发送的信显示收件人与「已发送」；未读显示圆点，底部「打开邮件」。
