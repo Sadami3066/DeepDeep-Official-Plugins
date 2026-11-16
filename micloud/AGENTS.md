@@ -6,8 +6,8 @@ DeepDeep 官方小米云插件，打成外部 `.ddp`：WebView 登录 i.mi.com �
 
 | 文件 | 职责 |
 |---|---|
-| `build.gradle.kts` | application 模块配置（namespace/applicationId/versionName 2.7.3、versionCode 16、Compose）；打包签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
-| `src/main/assets/plugin.json` | 清单：id/version 2.7.3/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.4.0/capabilities（notifications/secrets/settings/ui/images）/entryClass/icon/provides（7 个工具、skills `deepdeep-micloud`、pages `main`；页面内容直接挂在 `PluginPage.content`，不需要槽位） |
+| `build.gradle.kts` | application 模块配置（namespace/applicationId/versionName 2.7.4、versionCode 17、Compose）；打包签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
+| `src/main/assets/plugin.json` | 清单：id/version 2.7.4/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.4.0/capabilities（notifications/secrets/settings/ui/images）/entryClass/icon/provides（7 个工具、skills `deepdeep-micloud`、pages `main`；页面内容直接挂在 `PluginPage.content`，不需要槽位） |
 | `src/main/assets/icon.png` | 清单 `icon: asset:icon.png` 引用的小米图标 |
 | `src/main/kotlin/.../MiCloudPlugin.kt` | 入口：availability/uninstall/onEnable/onDisable/skills/promptSections/contributions/ui；`MiCloudContent` 持有各组件与登录态缓存；工具卡渲染器按工具名分发 |
 | `.../MiCloudPage.kt` | 插件页面 Compose：标题与用途、登录摘要卡（账号/连接）+ 刷新与退出的次级文字操作、能力开关分组、就地提示与重试、危险操作确认；登录是独立子页，`DdWebView` + `BackHandler`/`canGoBack` 返回处理与淡入滑动过渡 |
@@ -32,7 +32,7 @@ DeepDeep 官方小米云插件，打成外部 `.ddp`：WebView 登录 i.mi.com �
 
 ## 要点
 
-- 版本 2.7.3（`plugin-api 1.3.1`，`minHostVersion 1.4.0`）：所有工具返回 `textResult("", details=…)`，模型正文由宿主用 `deepdeep.raw`（完整响应 body，失败时保留错误输出）替换；`deepdeep.guidance` 只写分页（notes `syncTag`、recordings `offset`；todo/contacts 是增量同步、明确没有下一页）、空结果、重复待办与失败说明，并提示不要把签名链接/拼音索引/内部 id 复述给用户。
+- 版本 2.7.4（`plugin-api 1.3.1`，`minHostVersion 1.4.0`）：所有工具返回 `textResult("", details=…)`，模型正文由宿主用 `deepdeep.raw`（完整响应 body，失败时保留错误输出）替换；`deepdeep.guidance` 只写分页（notes `syncTag`、recordings `offset`；todo/contacts 是增量同步、明确没有下一页）、空结果、重复待办与失败说明，并提示不要把签名链接/拼音索引/内部 id 复述给用户。
 - 七类工具都有卡片：账号/空间、笔记、待办、录音，以及短信（号码/摘要/时间/未读）、联系人（姓名/电话/分组）、相册（名称/数量/首图）。`deepdeep.card` 只写 `title` 与 `payload`，不写 `customType`；payload 每行带 `source` 原始字段并保留游标、`syncToken`、watermark，渲染器从 `deepdeep.card.payload` 解码并对旧版扁平 details 兜底。相册首图用 `DdRemoteImage` + `host.images()`，不落盘。列表预览 3–5 行，`DdExpandToggle` 展开全部。
 - 待办解析以真机响应为准：记录是 `contentJson.entity`（content/plainText/is_finish/remindTime/lastModifiedTime），不是顶层 contentJson。待办接口是增量同步，不是分页：一次返回本次全部可读记录，`hasMore`/`syncToken` 不能当下一页；工具只接收 `limit`，不再暴露 cursor，guidance 明确“没有下一页”。重复内容按内容+完成态合并，`duplicateIds` 保留原始 id 给写操作，卡片标 `×N` 并显示“合并 M 条重复、共 U 件不同事项”。
 - 笔记标题读取顺序：`subject` → `extraInfo` JSON 的 `title` → 摘要首行；用首行当标题时摘要去掉首行再展示，避免标题与摘要重复。
@@ -46,6 +46,7 @@ DeepDeep 官方小米云插件，打成外部 `.ddp`：WebView 登录 i.mi.com �
 - 待办和联系人 guidance 明确“增量同步没有下一页”；待办一次返回全部并合并重复（`duplicateIds` 保留 id），联系人在本地过滤。
 - 写操作只支持笔记与待办：新建、修改、删除前必须先向用户确认，并说明会直接写入小米云账号；删除、清空、批量修改不可逆，必须二次确认。
 - 读走 `MiCloudClient`（HttpURLConnection + cookie），写（笔记/待办）必须走 `MiCloudWebWriter` 的隐藏 WebView JS fetch——小米云写接口校验浏览器环境，直接 HTTP POST 会失败。
+- skill/prompt 明确“工具结果带卡片 id 时用 present 交付卡片，正文只写结论与下一步”，与列表/账号/空间卡的实际槽位一致。
 - 工具按登录态与能力开关双重门控：只有登录有效（VERIFIED/UNVERIFIED）才注册 `mi_cloud_*` 工具，未登录/登录失效时不注入；登录、退出、登录失效都会调用 `host.requestContributionsRefresh()` 重新物化。
 - 登录 = 插件页面内的独立子页：`DdWebView` 加载 `https://i.mi.com`，登录后点「完成登录」读取 `CookieManager` 的 cookie，经 `MiCloudClient.profile()` 校验后存入 `host.secrets()`；只有这一条完成路径。系统返回与左上角返回先在网页内回退（`canGoBack`），到根页才关闭子页。
 - 登录态由 `MiCloudSession` 缓存（验证 60s TTL、失效 10 分钟内不重复打接口）；页面打开与宿主刷新时异步探测，工具收到 401/403 立即标记失效。

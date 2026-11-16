@@ -16,7 +16,7 @@ This repository contains twelve official plugins, published by `milous`:
 | `wecom` | WeCom | 2.6.0 | Operate messages, mail, docs, schedules and to-dos through the official `wecom-cli` | Teams that use WeCom |
 | `sysu` | SYSU CLI | 2.7.0 | Run the Node.js `sysu` CLI inside the Linux environment: timetable, grades, assignments, course files, venue booking, campus network fees and SSO tickets | Students and staff at Sun Yat-sen University |
 | `wechat` | WeChat Export | 0.5.2 | Sync and decrypt the local WeChat database, export complete chat records for a date range and let the agent summarize | Users who need a complete WeChat export |
-| `micloud` | Xiaomi Cloud | 2.7.3 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
+| `micloud` | Xiaomi Cloud | 2.7.4 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
 | `mail` | Mail | 1.6.1 | Connect an IMAP/SMTP mailbox with an authorization code: inbox, conversations, composing with attachments, account management and in-chat mail cards, with agent search, reading, archiving, drafting and sending | Users of standard IMAP/SMTP mailboxes such as QQ, 163, Gmail or iCloud |
 | `ride` | DiDi Ride | 1.3.0 | Didi estimates, order creation, ride status and driver location; payment happens in Didi | Commuters and travellers who need a ride, price comparison or driver status |
 | `hotel` | RollingGo Hotels | 1.4.1 | Search RollingGo hotels, view rooms and orders, create a pending booking; payment happens on RollingGo | Anyone who wants AI help finding, checking or booking hotels |
