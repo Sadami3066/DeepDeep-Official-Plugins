@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.whywood.deepdeep.design.DdDatePicker
+import io.github.whywood.deepdeep.design.DdExpandToggle
 import io.github.whywood.deepdeep.design.DdSpinner
 import io.github.whywood.deepdeep.design.LocalDdMotionEnabled
 import io.github.whywood.deepdeep.design.DdGroupCard
@@ -75,10 +77,6 @@ import kotlinx.serialization.json.put
 internal const val RAIL_PAGE_ID = "main"
 
 private const val RECENT_ROUTES_KEY = "recent_routes"
-
-private const val CARD_TRAIN_LIMIT = 5
-
-private const val CARD_SEAT_LIMIT = 4
 
 private val JsonFormat = Json { ignoreUnknownKeys = true; isLenient = true }
 
@@ -124,10 +122,10 @@ internal fun TrainPage(host: PluginHost) {
         state = PageState.Loading
         scope.launch {
             state = try {
-                val details = TrainService(host).search(fromText, toText, date)
-                rememberRoute(host, details.from, details.to)
+                val result = TrainService(host).search(fromText, toText, date)
+                rememberRoute(host, result.details.from, result.details.to)
                 recentRoutes = loadRecentRoutes(host)
-                PageState.Loaded(details)
+                PageState.Loaded(result.details)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
@@ -443,22 +441,25 @@ internal fun TrainToolCard(host: PluginHost, state: ToolCardSlotState) {
     }
     val appear = rememberTrainAppear()
     val bookingUrl = bookingLink(details)
+    var expanded by rememberSaveable(details.date, details.from, details.to) { mutableStateOf(false) }
+    val visibleTrains = if (expanded) details.trains else details.trains.take(CARD_TRAIN_PREVIEW)
     RailSurface(Modifier.graphicsLayer { alpha = appear }) {
         TrainTicketHeader(host, details)
         DdHairline(Modifier.padding(horizontal = 16.dp))
-        details.trains.take(CARD_TRAIN_PREVIEW).forEach { train ->
+        visibleTrains.forEach { train ->
             TrainTicketRow(host, details, train)
             DdHairline(Modifier.padding(horizontal = 16.dp))
         }
         if (details.trains.size > CARD_TRAIN_PREVIEW) {
-            DdText(
-                text = host.t(
-                    "还有 ${details.trains.size - CARD_TRAIN_PREVIEW} 趟车次",
-                    "${details.trains.size - CARD_TRAIN_PREVIEW} more trains",
+            DdExpandToggle(
+                expanded = expanded,
+                collapsedLabel = host.t(
+                    "展开全部 ${details.trains.size} 趟",
+                    "Show all ${details.trains.size} trains",
                 ),
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 7.dp, bottom = 3.dp),
-                style = DdType.chip.copy(fontSize = 11.sp, lineHeight = 15.sp),
-                color = deepDeepColors().inkTertiary,
+                expandedLabel = host.t("收起车次", "Collapse trains"),
+                onToggle = { expanded = !expanded },
+                modifier = Modifier.padding(horizontal = 14.dp),
             )
         }
         TrainTicketFooter(host, details, bookingUrl)
@@ -575,31 +576,54 @@ private fun TrainTicketRow(host: PluginHost, details: TrainSearchDetails, train:
             }
         }
         Spacer(Modifier.height(7.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            train.seats.take(CARD_SEAT_LIMIT).forEach { seat ->
-                Column {
-                    DdText(
-                        text = seatLabel(translate, seat.name),
-                        style = DdType.chip.copy(fontSize = 10.sp, lineHeight = 13.sp),
-                        color = colors.inkTertiary,
-                        maxLines = 1,
-                    )
-                    DdText(
-                        text = seat.count,
-                        style = DdType.label.copy(fontSize = 12.sp, lineHeight = 16.sp),
-                        color = colors.inkSecondary,
-                        maxLines = 1,
-                    )
+        val visibleSeats = train.seats.filter { it.status != SeatStatus.NOT_OFFERED }
+        val missingSeats = train.seats.filter { it.status == SeatStatus.NOT_OFFERED }
+        if (visibleSeats.isNotEmpty()) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                visibleSeats.forEach { seat ->
+                    Column {
+                        DdText(
+                            text = seatLabel(translate, seat),
+                            style = DdType.chip.copy(fontSize = 10.sp, lineHeight = 13.sp),
+                            color = colors.inkTertiary,
+                            maxLines = 1,
+                        )
+                        DdText(
+                            text = seatStatusText(translate, seat),
+                            style = DdType.label.copy(fontSize = 12.sp, lineHeight = 16.sp),
+                            color = when (seat.status) {
+                                SeatStatus.AVAILABLE -> colors.ink
+                                SeatStatus.SOLD_OUT -> colors.warning
+                                else -> colors.inkTertiary
+                            },
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
-            if (train.seats.isEmpty()) {
-                DdText(
-                    text = host.t("余票数据暂缺", "No seat data"),
-                    style = DdType.chip.copy(fontSize = 10.sp, lineHeight = 14.sp),
-                    color = colors.inkTertiary,
-                    maxLines = 1,
-                )
-            }
+        }
+        if (missingSeats.isNotEmpty()) {
+            Spacer(Modifier.height(4.dp))
+            DdText(
+                text = host.t(
+                    "无此席别：${missingSeats.joinToString("、") { seatLabel(translate, it) }}",
+                    "Not offered: ${missingSeats.joinToString(", ") { seatLabel(translate, it) }}",
+                ),
+                style = DdType.chip.copy(fontSize = 10.sp, lineHeight = 14.sp),
+                color = colors.inkTertiary,
+            )
+        }
+        if (train.seats.isEmpty()) {
+            DdText(
+                text = host.t("余票数据暂缺", "No seat data"),
+                style = DdType.chip.copy(fontSize = 10.sp, lineHeight = 14.sp),
+                color = colors.inkTertiary,
+                maxLines = 1,
+            )
         }
     }
 }
@@ -731,8 +755,6 @@ private fun TrainTicketError(host: PluginHost, message: String) {
                 modifier = Modifier.weight(1f),
                 style = DdType.bodySmall,
                 color = colors.ink,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
             )
             DdTextAction(
                 text = host.t("打开火车票页面", "Open Trains"),
@@ -856,16 +878,14 @@ private fun TrainResultRow(host: PluginHost, train: TrainOption) {
             text = seatLine(host, train.seats),
             style = DdType.bodySmall,
             color = colors.inkTertiary,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
-private fun seatLine(host: PluginHost, seats: List<SeatAvailability>): String =
-    seats.take(CARD_SEAT_LIMIT)
-        .joinToString(" · ") { "${seatLabel({ zh, en -> host.t(zh, en) }, it.name)} ${it.count}" }
-        .ifEmpty { "—" }
+private fun seatLine(host: PluginHost, seats: List<SeatAvailability>): String {
+    val translate: RailTranslate = { zh, en -> host.t(zh, en) }
+    return trainSeatLine(seats, translate).ifBlank { "—" }
+}
 
 @Composable
 private fun displayDate(raw: String): String {

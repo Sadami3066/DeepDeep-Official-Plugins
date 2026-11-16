@@ -4,6 +4,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +37,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.whywood.deepdeep.design.DdExpandToggle
 import io.github.whywood.deepdeep.design.DdGroupCard
 import io.github.whywood.deepdeep.design.DdHairline
 import io.github.whywood.deepdeep.design.DdIcon
@@ -51,6 +54,7 @@ import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.PluginToolResult
 import io.github.whywood.deepdeep.plugin.api.ToolResultState
+import java.util.Locale
 
 internal enum class AmapCardPhase { LOADING, ERROR, EMPTY, READY }
 
@@ -135,7 +139,9 @@ internal fun AmapPlacesCard(host: PluginHost, state: ToolResultState, around: Bo
     } else {
         AmapUri.search(details.query.orEmpty(), details.city)
     }
-    val maxRows = if (map != null) 3 else 5
+    val previewRows = if (map != null) 3 else 5
+    var expanded by remember(details) { mutableStateOf(false) }
+    val visible = if (expanded) details.items else details.items.take(previewRows)
     DdGroupCard(modifier = Modifier.amapCardEntrance()) {
         if (map != null) {
             Box(Modifier.fillMaxWidth()) {
@@ -168,19 +174,17 @@ internal fun AmapPlacesCard(host: PluginHost, state: ToolResultState, around: Bo
                 }
                 Spacer(Modifier.height(DdSpacing.Sm))
             }
-            details.items.take(maxRows).forEachIndexed { index, item ->
+            visible.forEachIndexed { index, item ->
                 if (index > 0) DdHairline()
-                PlaceRow(host = host, index = index + 1, item = item)
+                PlaceRow(host = host, index = index + 1, item = item, searchCity = details.city)
             }
-            val remaining = details.items.size - maxRows
-            if (remaining > 0) {
-                DdHairline()
-                DdText(
-                    text = host.tf("还有 %d 条", "%d more", remaining),
-                    modifier = Modifier.fillMaxWidth().padding(top = DdSpacing.Sm),
-                    style = DdType.chip,
-                    color = deepDeepColors().inkTertiary,
-                    maxLines = 1,
+            if (details.items.size > previewRows) {
+                DdExpandToggle(
+                    expanded = expanded,
+                    collapsedLabel = host.tf("展开全部 %d 处", "Show all %d places", details.items.size),
+                    expandedLabel = host.t("收起", "Show less"),
+                    onToggle = { expanded = !expanded },
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
@@ -213,10 +217,19 @@ private fun MapLabelPill(icon: DdIcon, title: String, trailing: String) {
 }
 
 @Composable
-private fun PlaceRow(host: PluginHost, index: Int, item: AmapPlaceItem) {
+private fun PlaceRow(host: PluginHost, index: Int, item: AmapPlaceItem, searchCity: String?) {
     val colors = deepDeepColors()
     val location = item.location
     val distance = host.distanceText(item.distanceMeters)
+    val type = item.typeName?.takeIf { it.isNotBlank() }
+    val rating = item.rating?.let { host.tf("评分 %s", "%s rating", String.format(Locale.US, "%.1f", it)) }
+    val business = item.businessArea?.takeIf { it.isNotBlank() }
+        ?.let { host.tf("商圈 %s", "area %s", it) }
+    val city = item.cityName?.takeIf { it.isNotBlank() && it != searchCity }
+        ?.let { host.tf("城市 %s", "city %s", it) }
+    val meta = listOfNotNull(rating, business, city).joinToString(" · ")
+    val address = item.address?.takeIf { it.isNotBlank() }
+    val tel = item.tel?.takeIf { it.isNotBlank() }
     DdPressable(
         onClick = {
             if (location != null) runCatching { host.ui().openUrl(AmapUri.marker(location, item.name)) }
@@ -244,7 +257,7 @@ private fun PlaceRow(host: PluginHost, index: Int, item: AmapPlaceItem) {
                         modifier = Modifier.weight(1f),
                         style = DdType.label,
                         color = colors.ink,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                     if (distance != null) {
@@ -252,20 +265,18 @@ private fun PlaceRow(host: PluginHost, index: Int, item: AmapPlaceItem) {
                         DdText(text = distance, style = DdType.chip, color = colors.inkSecondary, maxLines = 1)
                     }
                 }
-                val type = item.typeName?.takeIf { it.isNotBlank() }
-                val address = item.address?.takeIf { it.isNotBlank() }
-                if (type != null || address != null) {
+                if (type != null || meta.isNotBlank()) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(top = DdSpacing.Xxs),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (type != null) {
                             TypeTag(text = type)
-                            if (address != null) Spacer(Modifier.width(DdSpacing.Sm))
+                            if (meta.isNotBlank()) Spacer(Modifier.width(DdSpacing.Sm))
                         }
-                        if (address != null) {
+                        if (meta.isNotBlank()) {
                             DdText(
-                                text = address,
+                                text = meta,
                                 modifier = Modifier.weight(1f),
                                 style = DdType.chip,
                                 color = colors.inkSecondary,
@@ -274,6 +285,26 @@ private fun PlaceRow(host: PluginHost, index: Int, item: AmapPlaceItem) {
                             )
                         }
                     }
+                }
+                if (address != null) {
+                    DdText(
+                        text = address,
+                        modifier = Modifier.fillMaxWidth().padding(top = DdSpacing.Xxs),
+                        style = DdType.chip,
+                        color = colors.inkSecondary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (tel != null) {
+                    DdText(
+                        text = tel,
+                        modifier = Modifier.fillMaxWidth().padding(top = DdSpacing.Xxs),
+                        style = DdType.chip,
+                        color = colors.inkTertiary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
@@ -333,6 +364,10 @@ internal fun AmapRegeoCard(host: PluginHost, state: ToolResultState) {
         details.district?.takeIf { it.isNotBlank() },
         details.township?.takeIf { it.isNotBlank() },
     ).joinToString(" · ")
+    val street = listOfNotNull(
+        details.street?.takeIf { it.isNotBlank() },
+        details.streetNumber?.takeIf { it.isNotBlank() },
+    ).joinToString("")
     val map = decodeMapSpec(result?.details)
     DdGroupCard(modifier = Modifier.amapCardEntrance()) {
         Column(Modifier.fillMaxWidth().padding(DdSpacing.Lg)) {
@@ -358,6 +393,16 @@ internal fun AmapRegeoCard(host: PluginHost, state: ToolResultState) {
                 Spacer(Modifier.height(DdSpacing.Xs))
                 DdText(
                     text = admin,
+                    style = DdType.bodySmall,
+                    color = colors.inkSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (street.isNotBlank()) {
+                Spacer(Modifier.height(DdSpacing.Xxs))
+                DdText(
+                    text = host.tf("街道 %s", "Street %s", street),
                     style = DdType.bodySmall,
                     color = colors.inkSecondary,
                     maxLines = 2,
@@ -432,17 +477,35 @@ internal fun AmapRouteCard(host: PluginHost, state: ToolResultState) {
     }
     val details = decodeRouteDetails(result?.details) ?: return
     val colors = deepDeepColors()
-    val distance = host.distanceText(details.distanceMeters)
-    val duration = host.durationText(details.durationSeconds)
-    val legs = routeLegs(host, details)
-    val totalSegments = if (details.transitLines.isNotEmpty()) details.transitLines.size else details.steps.size
-    val truncated = totalSegments > MAX_ROUTE_SEGMENTS
+    val paths = details.allPaths
+    var selectedIndex by remember(details) { mutableStateOf(0) }
+    val selected = paths.getOrNull(selectedIndex) ?: paths.firstOrNull() ?: return
+    var segmentsExpanded by remember(details, selectedIndex) { mutableStateOf(false) }
+    val distance = host.distanceText(selected.distanceMeters)
+    val duration = host.durationText(selected.durationSeconds)
+    val walking = host.distanceText(selected.walkingDistanceMeters)
+    val segmentCount = selected.segmentCount
+    val legs = routeLegs(
+        host = host,
+        details = details,
+        path = selected,
+        maxSegments = if (segmentsExpanded) null else ROUTE_PREVIEW_SEGMENTS,
+    )
     val navigationUrl = details.navigationUrl?.takeIf { it.isNotBlank() }
     DdGroupCard(modifier = Modifier.amapCardEntrance()) {
         Column(Modifier.fillMaxWidth().padding(DdSpacing.Lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ModePill(host = host, mode = details.mode)
                 Spacer(Modifier.weight(1f))
+                if (walking != null) {
+                    DdText(
+                        text = host.tf("步行 %s", "walk %s", walking),
+                        style = DdType.chip,
+                        color = colors.inkTertiary,
+                        maxLines = 1,
+                    )
+                    Spacer(Modifier.width(DdSpacing.Sm))
+                }
                 if (distance != null) {
                     DdText(text = distance, style = DdType.chip, color = colors.inkSecondary, maxLines = 1)
                 }
@@ -466,21 +529,31 @@ internal fun AmapRouteCard(host: PluginHost, state: ToolResultState) {
                     )
                 }
             }
+            if (paths.size > 1) {
+                Spacer(Modifier.height(DdSpacing.Md))
+                RoutePathTabs(
+                    host = host,
+                    paths = paths,
+                    selectedIndex = selectedIndex,
+                    onSelect = { selectedIndex = it },
+                )
+            }
             Spacer(Modifier.height(DdSpacing.Md))
             legs.forEachIndexed { index, leg ->
                 TimelineLeg(
                     leg = leg,
                     first = index == 0,
                     last = index == legs.lastIndex,
+                    expanded = segmentsExpanded,
                 )
             }
-            if (truncated) {
-                DdText(
-                    text = host.tf("还有 %d 段", "%d more segments", totalSegments - MAX_ROUTE_SEGMENTS),
-                    modifier = Modifier.padding(start = 22.dp, bottom = DdSpacing.Sm),
-                    style = DdType.chip,
-                    color = colors.inkTertiary,
-                    maxLines = 1,
+            if (segmentCount > ROUTE_PREVIEW_SEGMENTS) {
+                DdExpandToggle(
+                    expanded = segmentsExpanded,
+                    collapsedLabel = host.tf("展开全部 %d 段", "Show all %d segments", segmentCount),
+                    expandedLabel = host.t("收起", "Show less"),
+                    onToggle = { segmentsExpanded = !segmentsExpanded },
+                    modifier = Modifier.fillMaxWidth().padding(start = 22.dp),
                 )
             }
             if (navigationUrl != null) {
@@ -491,45 +564,88 @@ internal fun AmapRouteCard(host: PluginHost, state: ToolResultState) {
     }
 }
 
+@Composable
+private fun RoutePathTabs(
+    host: PluginHost,
+    paths: List<AmapRoutePath>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+) {
+    val colors = deepDeepColors()
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(DdSpacing.Sm),
+    ) {
+        paths.forEachIndexed { index, path ->
+            val selected = index == selectedIndex
+            val parts = buildList {
+                add(if (index == 0) host.t("最优", "Best") else host.tf("备选 %d", "Option %d", index))
+                host.durationText(path.durationSeconds)?.let(::add)
+                host.distanceText(path.distanceMeters)?.let(::add)
+            }
+            val label = parts.joinToString(" · ")
+            DdPressable(
+                onClick = { onSelect(index) },
+                modifier = Modifier.heightIn(min = 44.dp),
+                shape = DdShapes.Pill,
+                contentDescription = label,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .clip(DdShapes.Pill)
+                        .background(if (selected) colors.accentSoft else colors.wash)
+                        .padding(horizontal = DdSpacing.Md, vertical = DdSpacing.Xxs),
+                ) {
+                    DdText(
+                        text = label,
+                        style = DdType.chip,
+                        color = if (selected) colors.accent else colors.inkSecondary,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+}
+
 private enum class RouteLegKind { ORIGIN, STEP, DESTINATION }
 
 private data class RouteLeg(
     val title: String,
     val meta: String?,
+    val detail: String? = null,
     val kind: RouteLegKind,
 )
 
-private fun routeLegs(host: PluginHost, details: AmapRouteDetails): List<RouteLeg> {
-    val originMeta = host.t("起点", "Start")
-    val destinationMeta = host.t("终点", "Destination")
+private fun routeLegs(
+    host: PluginHost,
+    details: AmapRouteDetails,
+    path: AmapRoutePath,
+    maxSegments: Int? = null,
+): List<RouteLeg> {
     val origin = RouteLeg(
         title = details.originName?.takeIf { it.isNotBlank() }
             ?: details.origin?.display
             ?: host.t("起点", "Start"),
-        meta = originMeta,
+        meta = host.t("起点", "Start"),
         kind = RouteLegKind.ORIGIN,
     )
     val destination = RouteLeg(
         title = details.destinationName?.takeIf { it.isNotBlank() }
             ?: details.destination?.display
             ?: host.t("终点", "Destination"),
-        meta = destinationMeta,
+        meta = host.t("终点", "Destination"),
         kind = RouteLegKind.DESTINATION,
     )
-    val segments = if (details.transitLines.isNotEmpty()) {
-        details.transitLines.map { line ->
-            val walking = line.walkingMeters?.takeIf { it > 0 }
-            RouteLeg(
-                title = line.lineName?.takeIf { it.isNotBlank() } ?: host.t("步行", "Walk"),
-                meta = walking?.let { host.tf("步行 %d 米", "Walk %d m", it) },
-                kind = RouteLegKind.STEP,
-            )
-        }
+    val segments = if (path.transitLines.isNotEmpty()) {
+        path.transitLines.map { line -> transitLeg(host, line) }
     } else {
-        details.steps.map { step ->
+        path.steps.map { step ->
             val meta = listOfNotNull(
                 step.road?.takeIf { it.isNotBlank() },
                 host.distanceText(step.distanceMeters),
+                host.durationText(step.durationSeconds),
             ).joinToString(" · ")
             RouteLeg(
                 title = step.instruction,
@@ -540,12 +656,71 @@ private fun routeLegs(host: PluginHost, details: AmapRouteDetails): List<RouteLe
     }
     return buildList {
         add(origin)
-        addAll(segments.take(MAX_ROUTE_SEGMENTS))
+        addAll(if (maxSegments == null) segments else segments.take(maxSegments))
         add(destination)
     }
 }
 
-private const val MAX_ROUTE_SEGMENTS = 4
+private fun transitLeg(host: PluginHost, line: AmapTransitLine): RouteLeg {
+    val facts = buildList {
+        line.walkingMeters?.takeIf { it > 0 }?.let { add(host.tf("步行 %d 米", "Walk %d m", it)) }
+        host.durationText(line.walkingSeconds)?.let { add(host.tf("步行 %s", "Walk %s", it)) }
+        val from = line.departureStop?.takeIf { it.isNotBlank() }
+        val to = line.arrivalStop?.takeIf { it.isNotBlank() }
+        if (from != null && to != null) add("$from → $to")
+        line.viaCount?.takeIf { it > 0 }?.let { add(host.tf("经停 %d 站", "%d stops", it)) }
+        if (line.options.size <= 1) {
+            host.distanceText(line.lineDistanceMeters)?.let { add(it) }
+            host.durationText(line.lineDurationSeconds)?.let { add(it) }
+            val start = line.startTime?.takeIf { it.isNotBlank() }
+            val end = line.endTime?.takeIf { it.isNotBlank() }
+            if (start != null || end != null) {
+                add(
+                    host.tf(
+                        "首末班 %s–%s",
+                        "First/last %s–%s",
+                        start ?: "—",
+                        end ?: "—",
+                    ),
+                )
+            }
+        }
+        line.entrance?.takeIf { it.isNotBlank() }?.let { add(host.tf("入口 %s", "Entrance %s", it)) }
+        line.exit?.takeIf { it.isNotBlank() }?.let { add(host.tf("出口 %s", "Exit %s", it)) }
+    }
+    val detail = buildList {
+        if (line.viaStops.isNotEmpty()) {
+            add(host.tf("经停：%s", "Stops: %s", line.viaStops.joinToString(host.t("、", ", "))))
+        }
+        if (line.options.size > 1) {
+            line.options.forEach { option -> add(transitOptionCardText(host, option)) }
+        }
+    }.joinToString("；").takeIf { it.isNotBlank() }
+    return RouteLeg(
+        title = line.lineName?.takeIf { it.isNotBlank() } ?: host.t("步行", "Walk"),
+        meta = facts.joinToString(" · ").takeIf { it.isNotBlank() },
+        detail = detail,
+        kind = RouteLegKind.STEP,
+    )
+}
+
+private fun transitOptionCardText(host: PluginHost, option: AmapTransitOption): String {
+    val parts = buildList {
+        add(option.name)
+        val from = option.departureStop?.takeIf { it.isNotBlank() }
+        val to = option.arrivalStop?.takeIf { it.isNotBlank() }
+        if (from != null && to != null) add("$from → $to")
+        option.viaCount?.takeIf { it > 0 }?.let { add(host.tf("经停 %d 站", "%d stops", it)) }
+        host.distanceText(option.distanceMeters)?.let(::add)
+        host.durationText(option.durationSeconds)?.let(::add)
+        val start = option.startTime?.takeIf { it.isNotBlank() }
+        val end = option.endTime?.takeIf { it.isNotBlank() }
+        if (start != null || end != null) add(host.tf("%s–%s", "%s–%s", start ?: "—", end ?: "—"))
+    }
+    return parts.joinToString(" · ")
+}
+
+private const val ROUTE_PREVIEW_SEGMENTS = 3
 
 @Composable
 private fun ModePill(host: PluginHost, mode: AmapRouteMode) {
@@ -568,7 +743,7 @@ private fun PluginHost.routeModeLabel(mode: AmapRouteMode): String = when (mode)
 }
 
 @Composable
-private fun TimelineLeg(leg: RouteLeg, first: Boolean, last: Boolean) {
+private fun TimelineLeg(leg: RouteLeg, first: Boolean, last: Boolean, expanded: Boolean) {
     val colors = deepDeepColors()
     val ring = when (leg.kind) {
         RouteLegKind.ORIGIN -> colors.success
@@ -612,7 +787,7 @@ private fun TimelineLeg(leg: RouteLeg, first: Boolean, last: Boolean) {
                 text = leg.title,
                 style = if (strong) DdType.label else DdType.bodySmall,
                 color = colors.ink,
-                maxLines = 2,
+                maxLines = if (expanded) 4 else 2,
                 overflow = TextOverflow.Ellipsis,
             )
             leg.meta?.let { meta ->
@@ -621,7 +796,17 @@ private fun TimelineLeg(leg: RouteLeg, first: Boolean, last: Boolean) {
                     text = meta,
                     style = DdType.chip,
                     color = colors.inkSecondary,
-                    maxLines = 1,
+                    maxLines = if (expanded) Int.MAX_VALUE else 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            leg.detail?.let { detail ->
+                Spacer(Modifier.height(1.dp))
+                DdText(
+                    text = detail,
+                    style = DdType.chip,
+                    color = colors.inkTertiary,
+                    maxLines = if (expanded) Int.MAX_VALUE else 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -662,7 +847,9 @@ internal fun AmapWeatherCard(host: PluginHost, state: ToolResultState) {
     val details = decodeWeatherDetails(result?.details) ?: return
     val colors = deepDeepColors()
     val current = details.days.first()
-    val future = details.days.drop(1).take(MAX_FUTURE_DAYS)
+    val future = details.days.drop(1)
+    val preview = future.take(WEATHER_PREVIEW_DAYS)
+    var expanded by remember(details) { mutableStateOf(false) }
     val bigTemp = current.dayTemp ?: current.nightTemp
     DdGroupCard(modifier = Modifier.amapCardEntrance()) {
         Column(Modifier.fillMaxWidth().padding(DdSpacing.Lg)) {
@@ -722,44 +909,63 @@ internal fun AmapWeatherCard(host: PluginHost, state: ToolResultState) {
             }
             if (future.isNotEmpty()) {
                 Spacer(Modifier.height(DdSpacing.Md))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(DdShapes.Medium)
-                        .background(colors.wash)
-                        .padding(vertical = DdSpacing.Sm, horizontal = DdSpacing.Xs),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    future.forEachIndexed { index, day ->
-                        if (index > 0) {
-                            Box(Modifier.width(1.dp).height(34.dp).background(colors.hairline))
-                        }
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(1.dp),
-                        ) {
-                            DdText(
-                                text = shortDateLabel(day.date) ?: "",
-                                style = DdType.chip,
-                                color = colors.inkTertiary,
-                                maxLines = 1,
-                            )
-                            DdText(
-                                text = weatherLine(host, day),
-                                style = DdType.chip,
-                                color = colors.inkSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            DdText(
-                                text = temperatureLine(day),
-                                style = DdType.numeric,
-                                color = colors.ink,
-                                maxLines = 1,
-                            )
+                val container = Modifier
+                    .fillMaxWidth()
+                    .clip(DdShapes.Medium)
+                    .background(colors.wash)
+                if (expanded && future.size > WEATHER_PREVIEW_DAYS) {
+                    Column(container.padding(vertical = DdSpacing.Sm, horizontal = DdSpacing.Md)) {
+                        future.forEach { day -> WeatherDayRow(host = host, day = day) }
+                    }
+                } else {
+                    Row(
+                        modifier = container.padding(vertical = DdSpacing.Sm, horizontal = DdSpacing.Xs),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        preview.forEachIndexed { index, day ->
+                            if (index > 0) {
+                                Box(Modifier.width(1.dp).height(34.dp).background(colors.hairline))
+                            }
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(1.dp),
+                            ) {
+                                DdText(
+                                    text = shortDateLabel(day.date) ?: "",
+                                    style = DdType.chip,
+                                    color = colors.inkTertiary,
+                                    maxLines = 1,
+                                )
+                                DdText(
+                                    text = weatherLine(host, day),
+                                    style = DdType.chip,
+                                    color = colors.inkSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                DdText(
+                                    text = temperatureLine(day),
+                                    style = DdType.numeric,
+                                    color = colors.ink,
+                                    maxLines = 1,
+                                )
+                            }
                         }
                     }
+                }
+                if (future.size > WEATHER_PREVIEW_DAYS) {
+                    DdExpandToggle(
+                        expanded = expanded,
+                        collapsedLabel = host.tf(
+                            "展开全部 %d 天",
+                            "Show all %d days",
+                            details.days.size,
+                        ),
+                        expandedLabel = host.t("收起", "Show less"),
+                        onToggle = { expanded = !expanded },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
             Spacer(Modifier.height(DdSpacing.Sm))
@@ -773,7 +979,39 @@ internal fun AmapWeatherCard(host: PluginHost, state: ToolResultState) {
     }
 }
 
-private const val MAX_FUTURE_DAYS = 4
+private const val WEATHER_PREVIEW_DAYS = 4
+
+@Composable
+private fun WeatherDayRow(host: PluginHost, day: AmapWeatherDay) {
+    val colors = deepDeepColors()
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = DdSpacing.Xxs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        DdText(
+            text = shortDateLabel(day.date) ?: "",
+            modifier = Modifier.width(40.dp),
+            style = DdType.chip,
+            color = colors.inkTertiary,
+            maxLines = 1,
+        )
+        DdText(
+            text = weatherLine(host, day),
+            modifier = Modifier.weight(1f),
+            style = DdType.chip,
+            color = colors.ink,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Column(horizontalAlignment = Alignment.End) {
+            DdText(text = temperatureLine(day), style = DdType.numeric, color = colors.ink, maxLines = 1)
+            val wind = windLine(host, day)
+            if (wind.isNotBlank()) {
+                DdText(text = wind, style = DdType.chip, color = colors.inkSecondary, maxLines = 1)
+            }
+        }
+    }
+}
 
 @Composable
 private fun weatherLine(host: PluginHost, day: AmapWeatherDay): String {
@@ -891,7 +1129,7 @@ private fun AmapMessageCard(
                 text = message,
                 style = DdType.bodySmall,
                 color = colors.inkSecondary,
-                maxLines = 3,
+                maxLines = 8,
                 overflow = TextOverflow.Ellipsis,
             )
         }

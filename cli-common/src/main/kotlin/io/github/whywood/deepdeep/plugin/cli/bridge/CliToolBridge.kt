@@ -7,13 +7,17 @@ import io.github.whywood.deepdeep.plugin.api.SessionClosedEvent
 import io.github.whywood.deepdeep.plugin.api.ToolCallDecision
 import io.github.whywood.deepdeep.plugin.api.ToolCallRequest
 import io.github.whywood.deepdeep.plugin.api.ToolExecutionResult
+import io.github.whywood.deepdeep.plugin.api.ToolResultAction
 import io.github.whywood.deepdeep.plugin.api.ToolResultDecision
 import io.github.whywood.deepdeep.plugin.api.resultKeep
 import io.github.whywood.deepdeep.plugin.api.resultReplace
+import io.github.whywood.deepdeep.plugin.api.richResult
 import io.github.whywood.deepdeep.plugin.api.textResult
 import io.github.whywood.deepdeep.plugin.api.toolContinue
 import io.github.whywood.deepdeep.plugin.cli.CliCommandLine
 import io.github.whywood.deepdeep.plugin.cli.CliJsonEnvelope
+import io.github.whywood.deepdeep.plugin.cli.CliText
+import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -60,6 +64,7 @@ class CliBridgeConfig<C : Any, CARD : Any>(
     val errorMapper: CliErrorMapper<C>? = null,
     val payloadFinder: ((String) -> JsonElement?)? = null,
     val requireSuccessEnvelope: Boolean = true,
+    val redactRaw: suspend (PluginHost, String) -> String = { _, raw -> raw },
 ) {
     companion object {
         const val DEFAULT_MAX_OUTPUT_BYTES: Int = 256 * 1024
@@ -70,6 +75,12 @@ class CliBridgeConfig<C : Any, CARD : Any>(
 
 class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, CARD>) {
     private class Pending<C>(val sessionId: String, val command: C)
+
+    private class CliOutput(
+        val text: String,
+        val truncated: Boolean,
+        val recovered: Boolean,
+    )
 
     private val pending = object : LinkedHashMap<String, Pending<C>>() {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pending<C>>?): Boolean =
@@ -153,27 +164,30 @@ class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, 
             log(host, "after call=${request.callId} skip=duplicate")
             return resultKeep()
         }
+        val source = recoverOutput(host, request)
         if (request.result.isError) {
             log(host, "after call=${request.callId} skip=is-error")
-            return config.errorMapper?.map(host, request, invocation.command) ?: resultKeep()
+            val mapped = config.errorMapper?.map(host, request, invocation.command)
+            if (mapped != null) return attachRaw(host, source, mapped)
+            return truncationHint(request, source)
         }
-        val output = request.result.text.orEmpty()
+        val output = source.text
         val outputBytes = output.toByteArray(Charsets.UTF_8).size
-        log(host, "after call=${request.callId} output-bytes=$outputBytes")
+        log(host, "after call=${request.callId} output-bytes=$outputBytes recovered=${source.recovered}")
         if (output.isEmpty() || outputBytes > config.maxOutputBytes) {
             log(host, "after call=${request.callId} skip=output-size")
-            return resultKeep()
+            return truncationHint(request, source)
         }
         val strictEnvelope = config.requireSuccessEnvelope && config.envelope.successField != null
         val observation: CliObservation<CARD>? = if (strictEnvelope) {
             val envelope = config.envelope.find(output)
             if (envelope == null) {
                 warn(host, "after call=${request.callId} parse=json-miss bytes=$outputBytes")
-                return resultKeep()
+                return truncationHint(request, source)
             }
             if (!config.envelope.isSuccess(envelope)) {
                 warn(host, "after call=${request.callId} parse=not-ok")
-                return resultKeep()
+                return truncationHint(request, source)
             }
             config.observer.build(host, invocation.command, config.envelope.stripNotice(envelope))
         } else {
@@ -181,47 +195,101 @@ class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, 
             val payload = finder(output)
             if (payload == null) {
                 warn(host, "after call=${request.callId} parse=payload-miss bytes=$outputBytes")
-                return resultKeep()
+                return truncationHint(request, source)
             }
             config.observer.build(host, invocation.command, payload)
         }
         if (observation == null) {
             warn(host, "after call=${request.callId} parse=observation-miss command=${invocation.command}")
-            return resultKeep()
+            return truncationHint(request, source)
         }
         val cardPayload = observation.card?.let { card ->
             runCatching { config.cardEncoder(card) }.getOrNull()
         }
-        val details = cardPayload?.let { payload ->
-            buildJsonObject {
+        val rawDetails = rawDetails(host, source)
+        val details = buildJsonObject {
+            if (cardPayload != null) {
                 put(
                     CARD_DETAILS_KEY,
                     buildJsonObject {
                         put("customType", observation.customType ?: config.customType)
                         observation.summary.takeIf { it.isNotBlank() }?.let { put("title", it) }
-                        put("payload", payload)
+                        put("payload", cardPayload)
                     },
                 )
             }
-        }
-        val withHint = cardPayload != null && !observation.isError
+            rawDetails?.forEach { (key, value) -> put(key, value) }
+        }.takeIf { it.isNotEmpty() }
         log(
             host,
             "after call=${request.callId} observation=ok chars=${observation.text.length} " +
-                "card=${cardPayload != null} hint=$withHint error=${observation.isError}",
+                "card=${cardPayload != null} raw=${rawDetails != null} error=${observation.isError}",
         )
-        val text = if (withHint) {
-            val base = observation.text.trimEnd()
-            if (base.isEmpty()) "$CARD_ID_LABEL${request.callId}" else "$base\n\n$CARD_ID_LABEL${request.callId}"
+        return resultReplace(textResult(observation.text, details = details, isError = observation.isError))
+    }
+
+    private suspend fun attachRaw(
+        host: PluginHost,
+        source: CliOutput,
+        decision: ToolResultDecision,
+    ): ToolResultDecision {
+        val raw = rawDetails(host, source) ?: return decision
+        if (decision.action != ToolResultAction.REPLACE) return decision
+        val result = decision.result ?: return decision
+        val merged = JsonObject((result.details ?: JsonObject(emptyMap())) + raw)
+        val resultText = result.text
+        val replaced = if (resultText != null) {
+            textResult(resultText, details = merged, isError = result.isError)
         } else {
-            observation.text
+            richResult(result.blocks, details = merged, isError = result.isError)
         }
-        return resultReplace(textResult(text, details = details, isError = observation.isError))
+        return resultReplace(replaced)
+    }
+
+    private suspend fun rawDetails(host: PluginHost, source: CliOutput): JsonObject? {
+        val cleaned = CliText.stripAnsi(source.text).trim()
+        if (cleaned.isEmpty()) return null
+        val redacted = runCatching { config.redactRaw(host, cleaned) }.getOrNull() ?: return null
+        if (redacted.isBlank()) return null
+        return buildJsonObject { put(RAW_DETAILS_KEY, redacted) }
+    }
+
+    private fun truncationHint(request: ToolExecutionResult, source: CliOutput): ToolResultDecision {
+        if (!source.truncated || source.recovered) return resultKeep()
+        val text = request.result.text.orEmpty().trimEnd()
+        val withHint = if (text.contains(TRUNCATION_HINT)) text else "$text\n\n$TRUNCATION_HINT"
+        return resultReplace(textResult(withHint, details = request.result.details, isError = request.result.isError))
+    }
+
+    private fun recoverOutput(host: PluginHost, request: ToolExecutionResult): CliOutput {
+        val text = request.result.text.orEmpty()
+        val details = request.result.details as? JsonObject ?: return CliOutput(text, false, false)
+        val truncated = ((details["truncation"] as? JsonObject)?.get("truncated") as? JsonPrimitive)
+            ?.contentOrNull
+            ?.toBoolean() == true
+        if (!truncated) return CliOutput(text, false, false)
+        val path = (details["fullOutputPath"] as? JsonPrimitive)?.contentOrNull
+        if (path.isNullOrBlank()) return CliOutput(text, true, false)
+        val file = File(path)
+        if (!file.isFile || file.length() > MAX_RECOVERED_OUTPUT_BYTES) {
+            log(host, "recover skip=file path=$path exists=${file.isFile} bytes=${file.length()}")
+            return CliOutput(text, true, false)
+        }
+        val recovered = runCatching { file.readText() }.getOrNull()
+        if (recovered == null) {
+            warn(host, "recover read-error path=$path")
+            return CliOutput(text, true, false)
+        }
+        log(host, "recover ok chars=${recovered.length}")
+        return CliOutput(recovered, true, true)
     }
 
     private companion object {
         const val CARD_DETAILS_KEY: String = "deepdeep.card"
-        const val CARD_ID_LABEL: String = "卡片 id："
+        const val RAW_DETAILS_KEY: String = "deepdeep.raw"
+        const val MAX_RECOVERED_OUTPUT_BYTES: Long = 4L * 1024L * 1024L
+        const val TRUNCATION_HINT: String =
+            "（上游输出超过单次上限已被截断，无法完整读取；请缩小范围后重试，例如 --page-size、--page-token 或更短的时间区间。）"
     }
 
     private fun clearSession(host: PluginHost, sessionId: String) {

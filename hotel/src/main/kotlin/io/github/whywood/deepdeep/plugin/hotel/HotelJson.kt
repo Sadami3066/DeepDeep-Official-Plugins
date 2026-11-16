@@ -12,6 +12,18 @@ import kotlinx.serialization.json.contentOrNull
 
 internal val HotelJson = Json { ignoreUnknownKeys = true; isLenient = true }
 
+internal const val DEEPDEEP_RAW_KEY = "deepdeep.raw"
+
+internal fun withHotelRaw(details: JsonObject, raw: String?): JsonObject {
+    val text = raw?.let(::stripAnsi)?.trim().orEmpty()
+    if (text.isEmpty()) return details
+    return JsonObject(details + (DEEPDEEP_RAW_KEY to JsonPrimitive(text)))
+}
+
+internal fun stripAnsi(value: String): String = value.replace(ANSI_PATTERN, "")
+
+private val ANSI_PATTERN = Regex("\u001B\\[[;\\d]*[ -/]*[@-~]")
+
 internal fun extractJsonElement(raw: String?): JsonElement? = extractJsonElements(raw).firstOrNull()
 
 internal fun extractJsonElements(raw: String?): List<JsonElement> {
@@ -80,10 +92,12 @@ internal fun parseHotelSearch(
         val name = item.string("name", "hotelName") ?: return@mapNotNull null
         HotelSummary(
             name = name,
+            nameEn = item.string("nameEn", "name_en"),
             starRating = item.starRating(),
             priceText = item.hotelPrice(),
             address = item.string("address", "addressAll"),
-            tags = item.stringList("tags").take(5),
+            tags = item.stringList("tags"),
+            amenities = item.stringList("hotelAmenities", "amenities"),
             bookingUrl = item.string("bookingUrl", "booking_url"),
             distance = item.string("distanceText", "distance_text"),
             distanceMeters = item.number("distanceInMeters", "distance_in_meters")?.toInt(),
@@ -98,6 +112,9 @@ internal fun parseHotelSearch(
         nights = nights,
         hotels = hotels,
         fetchedAt = System.currentTimeMillis(),
+        nextPageToken = root.string("nextPageToken", "next_page_token"),
+        filter = root.filterEntries(),
+        noMatchingRates = root.boolean("noMatchingRates", "no_matching_rates") ?: false,
     )
 }
 
@@ -124,9 +141,10 @@ internal fun parseHotelDetail(raw: String, fallbackName: String): HotelDetailDet
         val roomInfo = item["roomInfo"] as? JsonObject
         val currency = item.string("currency")
         val averagePrice = item.number("averagePrice", "average_price", "totalSalesRate", "total_sales_rate")
-        val totalPrice = item.number("totalPrice", "total_price")
-            ?: averagePrice?.let { price -> price * nights }
+        val explicitTotal = item.number("totalPrice", "total_price")
+        val totalPrice = explicitTotal ?: averagePrice?.let { price -> price * nights }
         val cancelable = item.boolean("cancelable")
+        val cancellations = item.cancellationTexts()
         HotelRoomPlan(
             name = name.trim(),
             ratePlanName = item.string("ratePlanName", "rate_plan_name"),
@@ -134,14 +152,14 @@ internal fun parseHotelDetail(raw: String, fallbackName: String): HotelDetailDet
                 ?: roomInfo?.string("bedTypeDescription", "bedType"),
             priceText = money(totalPrice, currency),
             avgPriceText = money(averagePrice, currency),
-            cancellation = item.string("cancelPolicy", "cancel_policy")
-                ?: item.cancellationText()
-                ?: if (cancelable == false) "不可取消" else null,
+            cancellation = cancellations.firstOrNull(),
+            cancellations = cancellations,
             ratePlanId = item.string("ratePlanId", "rate_plan_id"),
             totalPrice = totalPrice,
             averagePrice = averagePrice,
             currency = currency,
             meal = item.string("mealTypeStr", "meal_type_str", "mealType", "meal_type"),
+            mealAmount = item.number("mealAmount", "meal_amount")?.toInt(),
             cancelable = cancelable,
             checkIn = checkIn,
             checkOut = checkOut,
@@ -153,10 +171,14 @@ internal fun parseHotelDetail(raw: String, fallbackName: String): HotelDetailDet
             maxOccupancy = roomInfo?.number("maxOccupancy", "max_occupancy")?.toInt(),
             hasWindow = roomInfo?.boolean("hasWindow", "has_window"),
             hasWifi = roomInfo?.boolean("hasWifi", "has_wifi"),
+            images = roomInfo?.imageUrls().orEmpty(),
+            totalDerived = explicitTotal == null && averagePrice != null,
         )
     }.orEmpty()
     return HotelDetailDetails(
         name = explicitName ?: fallbackName,
+        nameEn = root.string("nameEn", "name_en"),
+        starRating = root.starRating(),
         checkIn = checkIn,
         checkOut = checkOut,
         rooms = rooms,
@@ -165,6 +187,9 @@ internal fun parseHotelDetail(raw: String, fallbackName: String): HotelDetailDet
         fetchedAt = System.currentTimeMillis(),
         hotelId = root.number("hotelId", "hotel_id")?.toLong(),
         errorMessage = root.string("errorMessage", "error_message"),
+        message = root.string("message"),
+        filter = root.filterEntries(),
+        noMatchingRates = root.boolean("noMatchingRates", "no_matching_rates") ?: false,
     )
 }
 
@@ -278,32 +303,133 @@ private fun parseHotelOrder(row: JsonObject): HotelOrderSummary? {
     val hotel = row["hotelBookingHotel"] as? JsonObject
     val room = row["hotelRatePlanInfo"] as? JsonObject
     val contact = row["hotelContact"] as? JsonObject
-    val hotelName = hotel?.string("hotelName", "name")
+    val hotelName = row.string("hotelName")
+        ?: hotel?.string("hotelName", "name")
         ?: info?.string("hotelName")
-        ?: row.string("hotelName")
         ?: return null
+    val checkIn = row.string("checkInDate", "check_in_date")?.take(10)
+        ?: info?.string("checkInDate", "check_in_date")?.take(10)
+    val checkOut = row.string("checkOutDate", "check_out_date")?.take(10)
+        ?: info?.string("checkOutDate", "check_out_date")?.take(10)
+    val currency = row.string("currency") ?: room?.string("currency") ?: info?.string("currency")
     return HotelOrderSummary(
         hotelName = hotelName,
-        orderNo = info?.string("mainOrderNo", "main_order_no", "orderNo", "order_no", "orderId", "order_id"),
-        subOrderNo = info?.string("subOrderNo", "sub_order_no"),
-        referenceNo = info?.string("referenceNo", "reference_no"),
-        hotelAddress = hotel?.string("hotelAddress", "address"),
-        checkIn = info?.string("checkInDate", "check_in_date")?.take(10),
-        checkOut = info?.string("checkOutDate", "check_out_date")?.take(10),
-        nights = info?.number("nights", "nightNum")?.toInt(),
-        roomCount = info?.number("numOfRooms", "roomCount", "room_count")?.toInt(),
-        status = info?.string("status", "orderStatus", "order_status"),
-        paymentStatus = info?.string("paymentStatus", "payment_status"),
-        roomName = room?.string("roomNameCn", "roomName", "ratePlanName"),
+        orderNo = row.string("orderNo", "order_no", "orderId", "order_id")
+            ?: info?.string("mainOrderNo", "main_order_no", "orderNo", "order_no", "orderId", "order_id"),
+        subOrderNo = row.string("subOrderNo", "sub_order_no")
+            ?: info?.string("subOrderNo", "sub_order_no"),
+        referenceNo = row.string("referenceNo", "reference_no")
+            ?: info?.string("referenceNo", "reference_no"),
+        hotelAddress = row.string("hotelAddress", "hotel_address", "address")
+            ?: hotel?.string("hotelAddress", "address"),
+        checkIn = checkIn,
+        checkOut = checkOut,
+        nights = row.number("nights", "nightNum")?.toInt()
+            ?: info?.number("nights", "nightNum")?.toInt()
+            ?: if (checkIn != null && checkOut != null) hotelNights(checkIn, checkOut) else null,
+        roomCount = row.number("numOfRooms", "roomCount", "room_count")?.toInt()
+            ?: info?.number("numOfRooms", "roomCount", "room_count")?.toInt(),
+        status = row.string("orderStatus", "order_status", "status")
+            ?: info?.string("status", "orderStatus", "order_status"),
+        paymentStatus = row.string("paymentStatus", "payment_status")
+            ?: info?.string("paymentStatus", "payment_status"),
+        roomName = row.string("roomName", "room_name")
+            ?: room?.string("roomNameCn", "roomName", "ratePlanName"),
         totalPrice = money(
-            info?.number("totalPrice") ?: room?.number("totalPrice"),
-            room?.string("currency") ?: info?.string("currency"),
+            row.number("totalPrice", "total_price")
+                ?: info?.number("totalPrice")
+                ?: room?.number("totalPrice"),
+            currency,
         ),
+        currency = currency,
+        meal = row.string("mealDesc", "meal_desc", "meal"),
+        cancelPolicy = row.string("cancelPolicyDesc", "cancel_policy_desc", "cancelPolicy"),
+        orderDate = row.string("orderDate", "order_date"),
+        orderDetailUrl = row.string("orderDetailUrl", "order_detail_url"),
         contactName = listOfNotNull(contact?.string("firstName"), contact?.string("lastName"))
             .joinToString(" ")
             .takeIf { it.isNotBlank() },
         contactEmail = contact?.string("email"),
-        paymentUrl = info?.string("paymentUrl", "payment_url") ?: row.string("paymentUrl", "payment_url"),
+        paymentUrl = row.string("paymentUrl", "payment_url")
+            ?: info?.string("paymentUrl", "payment_url"),
+    )
+}
+
+internal fun parseHotelOrderDetail(raw: String, fallbackOrderNo: String): HotelOrderDetail? {
+    val elements = extractJsonElements(raw)
+    val root = elements.filterIsInstance<JsonObject>().firstOrNull { it["orderDetail"] is JsonObject }
+        ?: elements.filterIsInstance<JsonObject>().firstOrNull { candidate ->
+            candidate["baseInfo"] is JsonObject ||
+                candidate["stayInfo"] is JsonObject ||
+                candidate["priceInfo"] is JsonObject ||
+                candidate["policyInfo"] is JsonObject ||
+                (candidate["orderNo"] != null && candidate["hotelName"] != null)
+        }
+        ?: return null
+    val detail = root["orderDetail"] as? JsonObject ?: root
+    val base = detail["baseInfo"] as? JsonObject ?: detail
+    val hotel = detail["hotelInfo"] as? JsonObject ?: detail
+    val stay = detail["stayInfo"] as? JsonObject ?: detail
+    val price = detail["priceInfo"] as? JsonObject ?: detail
+    val policy = detail["policyInfo"] as? JsonObject ?: detail
+    val contact = stay["contact"] as? JsonObject
+    val orderNo = base.string("orderNo", "order_no")
+        ?: detail.string("orderNo", "order_no")
+        ?: root.string("orderNo", "order_no")
+        ?: fallbackOrderNo.takeIf { it.isNotBlank() }
+        ?: return null
+    val checkIn = stay.string("checkInDate", "check_in_date", "checkIn")?.take(10)
+    val checkOut = stay.string("checkOutDate", "check_out_date", "checkOut")?.take(10)
+    val currency = price.string("currency") ?: detail.string("currency")
+    return HotelOrderDetail(
+        orderNo = orderNo,
+        referenceNo = base.string("referenceNo", "reference_no") ?: detail.string("referenceNo", "reference_no"),
+        hotelConfirmationNo = base.string("hotelConfirmationNo", "hotel_confirmation_no"),
+        orderStatus = base.string("orderStatus", "order_status", "status"),
+        orderDate = base.string("orderDate", "order_date"),
+        orderDetailUrl = base.string("orderDetailUrl", "order_detail_url"),
+        hotelName = hotel.string("hotelName", "hotel_name", "name"),
+        hotelImageUrl = hotel.string("hotelImageUrl", "hotel_image_url", "imageUrl"),
+        hotelPhone = hotel.string("hotelPhone", "hotel_phone", "phone"),
+        platformSupportPhone = hotel.string("platformSupportPhone", "platform_support_phone"),
+        hotelAddress = hotel.string("hotelAddress", "hotel_address", "address"),
+        latitude = hotel.number("latitude", "lat"),
+        longitude = hotel.number("longitude", "lng", "lon"),
+        roomName = stay.string("roomName", "room_name", "roomNameCn", "room_name_cn"),
+        bedType = stay.string("bedTypeStr", "bedTypeDescription", "bed_type_str", "bedType"),
+        checkIn = checkIn,
+        checkOut = checkOut,
+        checkInTime = stay.string("checkInTime", "check_in_time"),
+        checkOutTime = stay.string("checkOutTime", "check_out_time"),
+        roomCount = stay.number("numOfRooms", "roomCount", "room_count")?.toInt(),
+        nights = stay.number("nights", "nightNum")?.toInt()
+            ?: if (checkIn != null && checkOut != null) hotelNights(checkIn, checkOut) else null,
+        meal = stay.string("mealDesc", "meal_desc", "mealTypeStr", "meal"),
+        contactName = contact?.string("name", "contactName", "contact_name")
+            ?: stay.string("contactName", "contact_name"),
+        contactPhone = contact?.string("phone", "contactPhone", "contact_phone")
+            ?: stay.string("contactPhone", "contact_phone"),
+        contactEmail = contact?.string("email", "contactEmail", "contact_email")
+            ?: stay.string("contactEmail", "contact_email"),
+        guestNames = stay.stringList("guestNames", "guest_names"),
+        totalPrice = money(
+            price.number("totalPrice", "total_price") ?: detail.number("totalPrice", "total_price"),
+            currency,
+        ),
+        currency = currency,
+        paymentType = price.string("paymentType", "payment_type")
+            ?: detail.string("paymentType", "payment_type"),
+        paymentUrl = price.string("paymentUrl", "payment_url")
+            ?: base.string("paymentUrl", "payment_url")
+            ?: detail.string("paymentUrl", "payment_url"),
+        paymentDeadline = price.string("paymentDeadline", "payment_deadline")
+            ?: base.string("paymentDeadline", "payment_deadline"),
+        isCancelable = policy.boolean("isCancelable", "is_cancelable", "cancelable"),
+        freeCancelDeadline = policy.string("freeCancelDeadline", "free_cancel_deadline"),
+        cancelPolicy = policy.string("cancelPolicyDesc", "cancel_policy_desc", "cancelPolicy", "description")
+            ?: detail.string("cancelPolicyDesc", "cancelPolicy"),
+        message = root.string("message"),
+        fetchedAt = System.currentTimeMillis(),
     )
 }
 
@@ -381,9 +507,47 @@ private fun JsonObject.boolean(vararg names: String): Boolean? {
     return null
 }
 
-private fun JsonObject.stringList(name: String): List<String> {
-    val array = this[name] as? JsonArray ?: return emptyList()
-    return array.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf(String::isNotBlank) }
+private fun JsonObject.stringList(vararg names: String): List<String> {
+    names.forEach { name ->
+        val array = this[name] as? JsonArray ?: return@forEach
+        val values = array.mapNotNull {
+            (it as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf(String::isNotBlank)
+        }
+        if (values.isNotEmpty()) return values
+    }
+    return emptyList()
+}
+
+private fun JsonObject.imageUrls(): List<String> {
+    val element = this["images"] ?: this["imageUrls"] ?: this["imagesList"] ?: return emptyList()
+    return when (element) {
+        is JsonPrimitive -> listOfNotNull(element.contentOrNull?.trim()?.takeIf(String::isNotBlank))
+        is JsonArray -> element.mapNotNull { entry ->
+            when (entry) {
+                is JsonPrimitive -> entry.contentOrNull?.trim()?.takeIf(String::isNotBlank)
+                is JsonObject -> entry.string("url", "imageUrl", "image_url")
+                else -> null
+            }
+        }
+
+        is JsonObject -> listOfNotNull(element.string("url", "imageUrl", "image_url"))
+    }
+}
+
+private fun JsonObject.filterEntries(): List<String> {
+    val filter = this["filter"] as? JsonObject ?: return emptyList()
+    return filter.entries.mapNotNull { (key, value) ->
+        val text = when (value) {
+            is JsonPrimitive -> value.contentOrNull?.trim()
+            is JsonArray -> value.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim() }
+                .filter(String::isNotEmpty)
+                .joinToString("、")
+                .takeIf(String::isNotBlank)
+
+            is JsonObject -> value.toString().takeIf { it.isNotBlank() && it != "{}" }
+        }
+        text?.takeIf(String::isNotBlank)?.let { "$key=$it" }
+    }
 }
 
 private fun JsonObject.starRating(): String? {
@@ -404,13 +568,27 @@ private fun JsonObject.hotelPrice(): String? {
     return money(number("lowestPrice", "lowest_price"), string("currency"))
 }
 
+private fun JsonObject.cancellationTexts(): List<String> {
+    val texts = mutableListOf<String>()
+    (this["cancellationPolicies"] as? JsonArray)?.forEach { element ->
+        (element as? JsonObject)?.cancellationText()?.let(texts::add)
+    }
+    string("cancelPolicy", "cancel_policy")?.let(texts::add)
+    if (texts.isEmpty()) {
+        when (boolean("cancelable")) {
+            false -> texts.add("不可取消")
+            true -> texts.add("可免费取消")
+            null -> Unit
+        }
+    }
+    return texts.distinct()
+}
+
 private fun JsonObject.cancellationText(): String? {
-    val policies = this["cancellationPolicies"] as? JsonArray ?: return null
-    val first = policies.firstOrNull() as? JsonObject ?: return null
-    first.string("description")?.let { return it }
-    val amount = first.number("amount")
-    val percent = first.number("percent")
-    val from = first.string("fromDate", "from_date")?.take(10)
+    string("description")?.let { return it }
+    val amount = number("amount")
+    val percent = number("percent")
+    val from = string("fromDate", "from_date")?.take(10)
     return when {
         amount == null && percent == null -> null
         amount == 0.0 || percent == 0.0 -> "可免费取消"

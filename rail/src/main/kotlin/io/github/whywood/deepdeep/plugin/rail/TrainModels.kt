@@ -31,10 +31,20 @@ internal data class TrainOption(
     val seatTypes: String = "",
 )
 
+internal enum class SeatStatus {
+    AVAILABLE,
+    SOLD_OUT,
+    NOT_ON_SALE,
+    NOT_RETURNED,
+    NOT_OFFERED,
+}
+
 @Serializable
 internal data class SeatAvailability(
     val name: String,
-    val count: String,
+    val count: String = "",
+    val status: SeatStatus = SeatStatus.AVAILABLE,
+    val code: String = "",
 )
 
 @Serializable

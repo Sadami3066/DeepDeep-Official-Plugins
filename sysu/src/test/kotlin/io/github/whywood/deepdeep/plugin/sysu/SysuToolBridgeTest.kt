@@ -43,8 +43,6 @@ class SysuToolBridgeTest {
 
     private fun hooks(host: SysuFakeHost) = SysuToolBridge().hooks(host)
 
-    private val hint: String = "卡片 id：call-1"
-
     private fun cardDetails(decision: ToolResultDecision): JsonObject =
         decision.result?.details?.get("deepdeep.card") as JsonObject
 
@@ -52,7 +50,7 @@ class SysuToolBridgeTest {
         CliCardCodec.decode(cardDetails(decision).getValue("payload").jsonObject, SYSU_CARD_KINDS)
 
     @Test
-    fun replacesScheduleWithObservationAndCardDetailsAndId() = runTest {
+    fun replacesScheduleWithObservationAndCardDetails() = runTest {
         val host = SysuFakeHost()
         val hooks = hooks(host)
         hooks.beforeToolCall(call("sysu jwxt schedule --json"))
@@ -60,7 +58,7 @@ class SysuToolBridgeTest {
         assertEquals(ToolResultAction.REPLACE, decision.action)
         val text = decision.result?.text.orEmpty()
         assertTrue(text.startsWith("课表 · 2026-1 · 第 10 周"))
-        assertTrue(text.endsWith(hint))
+        assertFalse(text.contains("卡片"))
         assertFalse(text.contains("TGC"))
         val details = cardDetails(decision)
         assertEquals(SYSU_CARD_TYPE, details.getValue("customType").jsonPrimitive.content)
@@ -71,7 +69,25 @@ class SysuToolBridgeTest {
         assertEquals("课表", card.title)
         assertEquals("6 门", card.trailing)
         assertEquals("周一 2026-11-09", card.sections.first().label)
-        assertTrue(card.sections.sumOf { it.items.size } <= CliCardCodec.MAX_ROWS)
+        assertEquals(6, card.sections.sumOf { it.items.size })
+        val raw = decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content
+        assertNotNull(raw)
+        assertFalse(raw!!.contains("TGC"))
+    }
+
+    @Test
+    fun observationRawRedactsTicketsAndSaysSo() = runTest {
+        val host = SysuFakeHost()
+        val hooks = hooks(host)
+        hooks.beforeToolCall(call("sysu jwxt schedule --json"))
+        val output = "TGC=abc123def\n" + SysuFixtures.bashOutput("schedule.json")
+        val decision = hooks.afterToolExecution(result(output = output))
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        val raw = decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content
+        assertNotNull(raw)
+        assertFalse(raw!!.contains("TGC"))
+        assertFalse(raw.contains("abc123def"))
+        assertTrue(raw.contains("已隐去"))
     }
 
     @Test
@@ -83,8 +99,11 @@ class SysuToolBridgeTest {
         assertEquals(ToolResultAction.REPLACE, decision.action)
         val text = decision.result?.text.orEmpty()
         assertTrue(text.startsWith("毕业学分"))
-        assertFalse(text.contains("卡片 id"))
-        assertNull(decision.result?.details)
+        assertFalse(text.contains("卡片"))
+        val details = decision.result?.details
+        assertNotNull(details)
+        assertNull(details!!["deepdeep.card"])
+        assertNotNull(details["deepdeep.raw"]?.jsonPrimitive?.content)
     }
 
     @Test
@@ -96,12 +115,13 @@ class SysuToolBridgeTest {
         assertEquals(ToolResultAction.REPLACE, decision.action)
         assertTrue(decision.result?.isError == true)
         val text = decision.result?.text.orEmpty()
-        assertTrue(text.contains("插件页重新登录"))
+        assertTrue(text.contains("插件页"))
+        assertTrue(text.contains("sysu netpay login"))
         assertFalse(text.contains("undefined"))
-        assertFalse(text.endsWith(hint))
-        assertFalse(text.contains("卡片 id"))
+        assertFalse(text.contains("卡片"))
         val card = card(decision)
         assertEquals(CliCardState.ERROR, card?.state)
+        assertNotNull(decision.result?.details?.get("deepdeep.raw"))
     }
 
     @Test
@@ -118,10 +138,13 @@ class SysuToolBridgeTest {
         assertEquals(ToolResultAction.REPLACE, decision.action)
         assertTrue(decision.result?.isError == true)
         val text = decision.result?.text.orEmpty()
-        assertTrue(text.contains("插件页重新登录"))
+        assertTrue(text.contains("插件页"))
+        assertTrue(text.contains("sysu login"))
         assertFalse(text.contains("TGC"))
         assertFalse(text.contains("tgc"))
-        assertNull(decision.result?.details)
+        val raw = decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content
+        assertNotNull(raw)
+        assertFalse(raw!!.contains("TGC"))
     }
 
     @Test
@@ -161,12 +184,33 @@ class SysuToolBridgeTest {
         val hooks = hooks(host)
         assertEquals(ToolCallAction.CONTINUE, hooks.beforeToolCall(call("sysu jwxt course LN3015 --json")).action)
         val unsupported = hooks.afterToolExecution(result(output = "课程信息：LN3015\n\n[exit: 0]"))
-        assertEquals(ToolResultAction.KEEP, unsupported.action)
-        assertNull(unsupported.result)
+        assertEquals(ToolResultAction.REPLACE, unsupported.action)
+        assertEquals("课程信息：LN3015\n\n[exit: 0]", unsupported.result?.text)
+        assertNotNull(unsupported.result?.details?.get("deepdeep.raw"))
         assertEquals(ToolCallAction.CONTINUE, hooks.beforeToolCall(call("lark-cli im +chat-list", "call-2")).action)
         val otherTool = hooks.afterToolExecution(result("call-2", output = """{"ok":true,"data":[]}"""))
         assertEquals(ToolResultAction.KEEP, otherTool.action)
         assertNull(otherTool.result)
+    }
+
+    @Test
+    fun gymTokenFailureKeepsOriginalAndSuggestsSiteLogin() = runTest {
+        val host = SysuFakeHost()
+        val hooks = hooks(host)
+        hooks.beforeToolCall(call("sysu gym slots 健身房 --json"))
+        val decision = hooks.afterToolExecution(
+            result(
+                output = """{"ok":false,"error":{"message":"gym token 失效","code":401}}""" + "\n\n[exit: 1]",
+                isError = true,
+            ),
+        )
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        val text = decision.result?.text.orEmpty()
+        assertTrue(text.contains("gym token 失效"))
+        assertTrue(text.contains("sysu gym login"))
+        assertTrue(text.contains("插件页"))
+        assertFalse(text.contains("TGC"))
+        assertNotNull(decision.result?.details?.get("deepdeep.raw"))
     }
 
     @Test
@@ -175,8 +219,8 @@ class SysuToolBridgeTest {
         val hooks = hooks(host)
         hooks.beforeToolCall(call("sysu jwxt scores --json"))
         val decision = hooks.afterToolExecution(result(output = "（无输出）\n\n[exit: 0]"))
-        assertEquals(ToolResultAction.KEEP, decision.action)
-        assertNull(decision.result)
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        assertNotNull(decision.result?.details?.get("deepdeep.raw"))
     }
 
     @Test
@@ -220,6 +264,10 @@ class SysuToolBridgeTest {
         assertFalse(text.contains("abc123def"))
         assertTrue(text.contains("其它无关输出"))
         assertFalse(text.contains("卡片"))
+        val raw = decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content
+        assertNotNull(raw)
+        assertFalse(raw!!.contains("TGC"))
+        assertFalse(raw.contains("abc123def"))
     }
 
     @Test
@@ -235,6 +283,7 @@ class SysuToolBridgeTest {
         assertTrue(text.contains("sysu netpay --json"))
         assertFalse(text.contains("undefined"))
         assertFalse(text.contains("·  ·"))
+        assertNotNull(decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content)
     }
 
     @Test
@@ -248,7 +297,8 @@ class SysuToolBridgeTest {
         val text = decision.result?.text.orEmpty()
         assertTrue(text.startsWith("课表"))
         assertFalse(text.contains("TGC"))
-        assertTrue(text.endsWith(hint))
+        assertFalse(text.contains("卡片"))
+        assertEquals(6, card(decision)?.sections?.sumOf { it.items.size })
     }
 
     @Test

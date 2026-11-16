@@ -14,6 +14,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,7 +44,8 @@ internal fun WecomTodoCard(host: PluginHost, kind: WecomCommandKind, model: CliC
         WecomStateCard(host, kind, model)
         return
     }
-    val rows = model.items.take(WECOM_TODO_ROWS)
+    var expanded by remember(model) { mutableStateOf(false) }
+    val rows = if (expanded) model.items else model.items.take(WECOM_TODO_ROWS)
     val total = maxOf(model.total, model.items.size)
     WecomCardSurface {
         Column(
@@ -55,12 +60,18 @@ internal fun WecomTodoCard(host: PluginHost, kind: WecomCommandKind, model: CliC
             Spacer(Modifier.height(DdSpacing.Xs))
             rows.forEachIndexed { index, item ->
                 if (index > 0) DdRowDivider()
-                TodoRow(item = item)
+                TodoRow(item = item, expanded = expanded)
             }
+            WecomExpandToggle(
+                host = host,
+                kind = kind,
+                expanded = expanded,
+                hidden = model.items.size - WECOM_TODO_ROWS,
+                onToggle = { expanded = !expanded },
+            )
             WecomMoreLine(
                 host = host,
                 kind = kind,
-                hidden = total - rows.size,
                 hasMore = !model.note.isNullOrBlank(),
             )
         }
@@ -68,7 +79,7 @@ internal fun WecomTodoCard(host: PluginHost, kind: WecomCommandKind, model: CliC
 }
 
 @Composable
-private fun TodoRow(item: CliCardItem) {
+private fun TodoRow(item: CliCardItem, expanded: Boolean) {
     val colors = deepDeepColors()
     val parts = wecomTodoParts(item)
     val subtitle = listOfNotNull(parts.status, parts.followers).joinToString(" · ").ifBlank { null }
@@ -110,10 +121,17 @@ private fun TodoRow(item: CliCardItem) {
                         modifier = Modifier.weight(1f, fill = false),
                         style = WecomCardType.secondary,
                         color = if (parts.done) colors.inkTertiary else colors.inkSecondary,
-                        maxLines = 1,
+                        maxLines = if (expanded) Int.MAX_VALUE else 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+            }
+            item.body?.takeIf { it.isNotBlank() }?.let { details ->
+                Spacer(Modifier.height(3.dp))
+                WecomDetailText(
+                    text = details,
+                    maxLines = if (expanded) Int.MAX_VALUE else 2,
+                )
             }
         }
         parts.dueDate?.let { date ->

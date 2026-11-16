@@ -1,7 +1,10 @@
 package io.github.whywood.deepdeep.plugin.hotel
 
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -194,7 +197,7 @@ class HotelJsonTest {
     fun searchTextIncludesEveryFactAndNeverSaysCard() {
         val details = requireNotNull(parseHotelSearch(sampleSearchJson(), "q", "杭州西湖", "景点", "2026-11-20", 1))
 
-        val text = hotelSearchText(details, zh, 10)
+        val text = hotelSearchText(details, zh)
 
         assertTrue(text.contains("杭州富阳东方茂开元名都大酒店"))
         assertTrue(text.contains("hotelId 1090005"))
@@ -569,7 +572,7 @@ class HotelJsonTest {
 
         assertTrue(text.contains("按总价从低到高（总价按 2 晚计算）"))
         assertTrue(text.contains("每晚 ¥754"))
-        assertTrue(text.contains("总价 ¥1508（2 晚）"))
+        assertTrue(text.contains("总价 ¥1508（按 2 晚折算）"))
         assertTrue(text.contains("不含早餐"))
         assertTrue(text.contains("不可免费取消"))
         assertTrue(text.contains("rp-a"))
@@ -709,7 +712,11 @@ class HotelJsonTest {
 
         assertEquals(70, details.rooms.size)
         assertEquals(16, details.roomGroups.size)
-        assertTrue(details.rooms.all { it.averagePrice != null && it.totalPrice != null && it.priceText != null })
+        assertEquals("Vaperse Hotel", details.nameEn)
+        assertEquals("5", details.starRating)
+        assertTrue(details.filter.isEmpty())
+        assertEquals(false, details.noMatchingRates)
+        assertTrue(details.rooms.all { it.averagePrice != null && it.totalPrice != null && it.priceText != null && it.totalDerived })
         val first = details.rooms.first()
         assertEquals("威珀斯商务大床房", first.name)
         assertEquals(754.0, first.averagePrice!!, 0.001)
@@ -717,6 +724,8 @@ class HotelJsonTest {
         assertEquals("¥754", first.priceText)
         assertEquals("1 大床", first.bed)
         assertEquals("不含早餐", first.meal)
+        assertEquals(0, first.mealAmount)
+        assertEquals("https://image-cdn.rollinggo.cn/v2/207304/room-type/default/6/13290290/201401021/image/205c05a4_z.jpg", first.images.single())
         assertEquals("不可免费取消", first.cancellation)
         assertEquals(false, first.cancelable)
         assertEquals(true, first.onRequest)
@@ -739,11 +748,300 @@ class HotelJsonTest {
         assertTrue(text.contains("共 16 个房型、70 个价格方案"))
         assertTrue(text.contains("按总价从低到高（总价按 1 晚计算）"))
         assertTrue(text.contains("每晚 ¥754"))
-        assertTrue(text.contains("总价 ¥754（1 晚）"))
+        assertTrue(text.contains("总价 ¥754（按 1 晚折算）"))
         assertTrue(text.contains("不含早餐"))
         assertTrue(text.contains("不可免费取消"))
         assertTrue(text.contains("价格方案 ID：8mXl7C5So4b-64rnH7LfIBR"))
         assertTrue(!text.contains("价格待确认"))
         assertTrue(!text.contains("卡片"))
     }
+
+    @Test
+    fun parsesRealOrderListSummaryShape() {
+        val details = requireNotNull(parseHotelOrders(realOrderListJson()))
+
+        assertEquals("查询成功", details.message)
+        val order = details.orders.single()
+        assertEquals("H178969795522549201", order.orderNo)
+        assertEquals("广州威珀斯酒店", order.hotelName)
+        assertEquals("威珀斯商务大床房", order.roomName)
+        assertEquals(2, order.roomCount)
+        assertEquals("2026-11-16", order.checkIn)
+        assertEquals("2026-11-18", order.checkOut)
+        assertEquals(2, order.nights)
+        assertEquals("双早", order.meal)
+        assertEquals("11月15日前免费取消", order.cancelPolicy)
+        assertEquals("已确认", order.status)
+        assertEquals("¥1508", order.totalPrice)
+        assertEquals("CNY", order.currency)
+        assertEquals("2026-11-10 12:34:56", order.orderDate)
+        assertEquals("https://rollinggo.cn/order/detail?orderNo=H178969795522549201", order.orderDetailUrl)
+    }
+
+    @Test
+    fun realOrderListTextKeepsEverySummaryFieldAndPointsToDetail() {
+        val details = requireNotNull(parseHotelOrders(realOrderListJson()))
+
+        val text = hotelOrdersText(details, zh)
+
+        assertTrue(text.contains("H178969795522549201"))
+        assertTrue(text.contains("广州威珀斯酒店"))
+        assertTrue(text.contains("威珀斯商务大床房"))
+        assertTrue(text.contains("入住 2026-11-16 → 离店 2026-11-18"))
+        assertTrue(text.contains("2 晚"))
+        assertTrue(text.contains("2 间"))
+        assertTrue(text.contains("双早"))
+        assertTrue(text.contains("11月15日前免费取消"))
+        assertTrue(text.contains("已确认"))
+        assertTrue(text.contains("总价：¥1508"))
+        assertTrue(text.contains("下单时间 2026-11-10 12:34:56"))
+        assertTrue(text.contains("订单详情链接：https://rollinggo.cn/order/detail?orderNo=H178969795522549201"))
+        assertTrue(text.contains("hotel_order_detail"))
+    }
+
+    @Test
+    fun parsesOrderDetailWithEveryDocumentedField() {
+        val details = requireNotNull(parseHotelOrderDetail(realOrderDetailJson(), "H178969795522549201"))
+
+        assertEquals("H178969795522549201", details.orderNo)
+        assertEquals("REF-1", details.referenceNo)
+        assertEquals("HC-998877", details.hotelConfirmationNo)
+        assertEquals("已确认", details.orderStatus)
+        assertEquals("2026-11-10 12:34:56", details.orderDate)
+        assertEquals("https://rollinggo.cn/pages/order/detail?orderNo=H178969795522549201", details.orderDetailUrl)
+        assertEquals("广州威珀斯酒店", details.hotelName)
+        assertEquals("https://image-cdn.rollinggo.cn/hotel.jpg", details.hotelImageUrl)
+        assertEquals("020-12345678", details.hotelPhone)
+        assertEquals("400-888-8888", details.platformSupportPhone)
+        assertEquals("广州市天河区示例路 1 号", details.hotelAddress)
+        assertEquals(23.123456, details.latitude!!, 0.000001)
+        assertEquals(113.654321, details.longitude!!, 0.000001)
+        assertEquals("威珀斯商务大床房", details.roomName)
+        assertEquals("1张特大床 (1.8m)", details.bedType)
+        assertEquals("2026-11-16", details.checkIn)
+        assertEquals("2026-11-18", details.checkOut)
+        assertEquals("14:00", details.checkInTime)
+        assertEquals("12:00", details.checkOutTime)
+        assertEquals(2, details.roomCount)
+        assertEquals(2, details.nights)
+        assertEquals("双早", details.meal)
+        assertEquals("张三", details.contactName)
+        assertEquals("13800000000", details.contactPhone)
+        assertEquals("san@example.com", details.contactEmail)
+        assertEquals(listOf("ZHANG SAN", "LI SI"), details.guestNames)
+        assertEquals("¥1508", details.totalPrice)
+        assertEquals("CNY", details.currency)
+        assertEquals("URL", details.paymentType)
+        assertEquals("https://rollinggo.cn/pay/H178969795522549201", details.paymentUrl)
+        assertEquals("2026-11-10 13:04:56", details.paymentDeadline)
+        assertEquals(true, details.isCancelable)
+        assertEquals("2026-11-15 18:00:00", details.freeCancelDeadline)
+        assertEquals("11月15日前免费取消", details.cancelPolicy)
+    }
+
+    @Test
+    fun orderDetailTextKeepsEveryField() {
+        val details = requireNotNull(parseHotelOrderDetail(realOrderDetailJson(), "H178969795522549201"))
+
+        val text = hotelOrderDetailText(details, zh)
+
+        listOf(
+            "订单号：H178969795522549201",
+            "订单状态：已确认",
+            "下单时间：2026-11-10 12:34:56",
+            "酒店：广州威珀斯酒店",
+            "地址：广州市天河区示例路 1 号",
+            "酒店电话：020-12345678",
+            "平台客服：400-888-8888",
+            "酒店确认号：HC-998877",
+            "入住 2026-11-16 → 离店 2026-11-18",
+            "2 晚",
+            "2 间",
+            "威珀斯商务大床房",
+            "1张特大床 (1.8m)",
+            "双早",
+            "最早入住 14:00",
+            "最晚退房 12:00",
+            "入住人：ZHANG SAN、LI SI",
+            "联系人：张三 · 13800000000 · san@example.com",
+            "总价：¥1508",
+            "支付方式：URL",
+            "支付截止：2026-11-10 13:04:56",
+            "支付链接：https://rollinggo.cn/pay/H178969795522549201",
+            "取消政策：11月15日前免费取消",
+            "当前可免费取消",
+            "免费取消截止：2026-11-15 18:00:00",
+            "订单页面：https://rollinggo.cn/pages/order/detail?orderNo=H178969795522549201",
+        ).forEach { assertTrue("missing: $it", text.contains(it)) }
+    }
+
+    @Test
+    fun missingOrderDetailIsNotFabricated() {
+        assertNull(parseHotelOrderDetail("""{"success":false,"message":"订单不存在"}""", "H1"))
+    }
+
+    @Test
+    fun rawDetailsKeepFullOutputAndStripAnsi() {
+        val details = kotlinx.serialization.json.buildJsonObject {
+            put("message", "查询成功")
+        }
+        val raw = "\u001b[32m{\"success\":true,\"orderNo\":\"H1\"}\u001b[0m\n"
+
+        val withRaw = withHotelRaw(details, raw)
+
+        assertEquals("{\"success\":true,\"orderNo\":\"H1\"}", withRaw["deepdeep.raw"]?.jsonPrimitive?.contentOrNull)
+        assertEquals(details, withHotelRaw(details, "   "))
+    }
+
+    @Test
+    fun searchTextListsEveryHotelAndEveryTag() {
+        val hotels = (1..6).joinToString(",") { index ->
+            """{"name":"酒店$index","tags":["标签1","标签2","标签3","标签4","标签5","标签6","标签7","标签8"],"hotelAmenities":["设施1","设施2"]}"""
+        }
+        val details = requireNotNull(
+            parseHotelSearch("""{"hotelInformationList":[$hotels]}""", "q", "杭州", "城市", null, 1),
+        )
+
+        val text = hotelSearchText(details, zh)
+
+        (1..6).forEach { assertTrue("missing hotel $it", text.contains("酒店$it")) }
+        (1..8).forEach { assertTrue("missing tag $it", text.contains("标签$it")) }
+        assertTrue(text.contains("设施2"))
+        assertEquals(8, details.hotels.first().tags.size)
+    }
+
+    @Test
+    fun cardPayloadKeepsAllRoomsPlansAndOrders() {
+        val raw = requireNotNull(javaClass.classLoader?.getResourceAsStream("fixtures/hotel-detail-live.json"))
+            .bufferedReader()
+            .use { it.readText() }
+        val detail = requireNotNull(parseHotelDetail(raw, "广州威珀斯酒店"))
+        val detailPayload = HotelJson.encodeToJsonElement(HotelDetailDetails.serializer(), detail)
+        val decodedDetail = HotelJson.decodeFromJsonElement(HotelDetailDetails.serializer(), detailPayload)
+
+        assertEquals(16, decodedDetail.roomGroups.size)
+        assertEquals(70, decodedDetail.roomGroups.sumOf { it.plans.size })
+        assertTrue(decodedDetail.roomGroups.all { it.plans.size == it.planCount })
+        assertTrue(decodedDetail.rooms.all { it.totalDerived })
+
+        val orders = requireNotNull(parseHotelOrders(realOrderListJson()))
+        val ordersPayload = HotelJson.encodeToJsonElement(HotelOrdersDetails.serializer(), orders)
+        val decodedOrders = HotelJson.decodeFromJsonElement(HotelOrdersDetails.serializer(), ordersPayload)
+        assertEquals(orders.orders, decodedOrders.orders)
+        assertEquals(orders.orders.single().orderDetailUrl, decodedOrders.orders.single().orderDetailUrl)
+
+        val orderDetail = requireNotNull(parseHotelOrderDetail(realOrderDetailJson(), "H178969795522549201"))
+        val orderDetailPayload = HotelJson.encodeToJsonElement(HotelOrderDetail.serializer(), orderDetail)
+        val decodedOrderDetail = HotelJson.decodeFromJsonElement(HotelOrderDetail.serializer(), orderDetailPayload)
+        assertEquals(orderDetail, decodedOrderDetail)
+        assertEquals(listOf("ZHANG SAN", "LI SI"), decodedOrderDetail.guestNames)
+    }
+
+    private fun realOrderListJson(): String = """
+        {
+          "success": true,
+          "code": 2000,
+          "message": "查询成功",
+          "orderList": [
+            {
+              "orderNo": "H178969795522549201",
+              "hotelName": "广州威珀斯酒店",
+              "roomName": "威珀斯商务大床房",
+              "numOfRooms": 2,
+              "checkInDate": "2026-11-16",
+              "checkOutDate": "2026-11-18",
+              "mealDesc": "双早",
+              "cancelPolicyDesc": "11月15日前免费取消",
+              "orderStatus": "已确认",
+              "totalPrice": 1508,
+              "currency": "CNY",
+              "orderDate": "2026-11-10 12:34:56",
+              "orderDetailUrl": "https://rollinggo.cn/order/detail?orderNo=H178969795522549201",
+              "paymentUrl": null
+            }
+          ]
+        }
+    """.trimIndent()
+
+    private fun realOrderDetailJson(): String = """
+        {
+          "success": true,
+          "code": 2000,
+          "message": "查询成功",
+          "orderDetail": {
+            "baseInfo": {
+              "orderNo": "H178969795522549201",
+              "referenceNo": "REF-1",
+              "hotelConfirmationNo": "HC-998877",
+              "orderStatus": "已确认",
+              "orderDate": "2026-11-10 12:34:56",
+              "orderDetailUrl": "https://rollinggo.cn/pages/order/detail?orderNo=H178969795522549201"
+            },
+            "hotelInfo": {
+              "hotelName": "广州威珀斯酒店",
+              "hotelImageUrl": "https://image-cdn.rollinggo.cn/hotel.jpg",
+              "hotelPhone": "020-12345678",
+              "platformSupportPhone": "400-888-8888",
+              "hotelAddress": "广州市天河区示例路 1 号",
+              "latitude": 23.123456,
+              "longitude": 113.654321
+            },
+            "stayInfo": {
+              "roomName": "威珀斯商务大床房",
+              "bedTypeStr": "1张特大床 (1.8m)",
+              "checkInDate": "2026-11-16",
+              "checkOutDate": "2026-11-18",
+              "checkInTime": "14:00",
+              "checkOutTime": "12:00",
+              "numOfRooms": 2,
+              "nights": 2,
+              "mealDesc": "双早",
+              "contact": {"name": "张三", "phone": "13800000000", "email": "san@example.com"},
+              "guestNames": ["ZHANG SAN", "LI SI"]
+            },
+            "priceInfo": {
+              "totalPrice": 1508,
+              "currency": "CNY",
+              "paymentType": "URL",
+              "paymentUrl": "https://rollinggo.cn/pay/H178969795522549201",
+              "paymentDeadline": "2026-11-10 13:04:56"
+            },
+            "policyInfo": {
+              "isCancelable": true,
+              "freeCancelDeadline": "2026-11-15 18:00:00",
+              "cancelPolicyDesc": "11月15日前免费取消"
+            }
+          }
+        }
+    """.trimIndent()
+
+
+    @Test
+    fun liveDetailTextContainsEveryRatePlan() {
+        val raw = requireNotNull(javaClass.classLoader?.getResourceAsStream("fixtures/hotel-detail-live.json"))
+            .bufferedReader()
+            .use { it.readText() }
+        val details = requireNotNull(parseHotelDetail(raw, "广州威珀斯酒店"))
+
+        val text = hotelDetailText(details, zh)
+
+        val missing = details.rooms.filterNot { text.contains(it.ratePlanId.orEmpty()) }
+        assertTrue("missing room plans: ${missing.map { it.ratePlanId }}", missing.isEmpty())
+        assertEquals(70, details.rooms.size)
+    }
+
+    @Test
+    fun ordersTextContainsEveryOrder() {
+        val rows = (1..4).joinToString(",") { index ->
+            """{"orderNo":"H$index","hotelName":"酒店$index","roomName":"大床房","checkInDate":"2026-11-16","checkOutDate":"2026-11-17","orderStatus":"已确认","totalPrice":$index}"""
+        }
+        val details = requireNotNull(parseHotelOrders("""{"message":"查询成功","orderList":[$rows]}"""))
+
+        val text = hotelOrdersText(details, zh)
+
+        assertEquals(4, details.orders.size)
+        (1..4).forEach { assertTrue("missing order $it", text.contains("H$it")) }
+    }
+
+
 }

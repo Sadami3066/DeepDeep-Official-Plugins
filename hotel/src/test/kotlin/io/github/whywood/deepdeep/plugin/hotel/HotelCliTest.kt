@@ -51,6 +51,10 @@ class HotelCliTest {
         val orders = HotelCli.ordersCommand("PENDING")
         assertTrue(orders.startsWith("HOME=/root rgh orders"))
         assertTrue(orders.contains("--status 'PENDING'"))
+
+        val orderDetail = HotelCli.orderDetailCommand("H178969795522549201")
+        assertTrue(orderDetail.startsWith("HOME=/root rgh order-detail"))
+        assertTrue(orderDetail.contains("'H178969795522549201'"))
     }
 
     @Test

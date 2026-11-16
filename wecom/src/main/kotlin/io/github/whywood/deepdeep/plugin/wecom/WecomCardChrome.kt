@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.whywood.deepdeep.design.DdAlpha
+import io.github.whywood.deepdeep.design.DdExpandToggle
 import io.github.whywood.deepdeep.design.DdIcon
 import io.github.whywood.deepdeep.design.DdIcons
 import io.github.whywood.deepdeep.design.DdMotion
@@ -285,13 +286,49 @@ internal fun WecomAvatar(initial: String, size: Dp, style: TextStyle) {
 }
 
 @Composable
+internal fun WecomExpandToggle(
+    host: PluginHost,
+    kind: WecomCommandKind,
+    expanded: Boolean,
+    hidden: Int,
+    onToggle: () -> Unit,
+) {
+    if (hidden <= 0) return
+    DdExpandToggle(
+        expanded = expanded,
+        collapsedLabel = if (host.chinese) {
+            "展开其余 $hidden ${kind.moreUnitZh()}"
+        } else {
+            "$hidden more ${kind.moreUnitEn()}"
+        },
+        expandedLabel = host.t("收起", "Show less"),
+        onToggle = onToggle,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+@Composable
+internal fun WecomDetailText(text: String?, maxLines: Int, modifier: Modifier = Modifier) {
+    val body = text?.trim().orEmpty().takeIf { it.isNotEmpty() } ?: return
+    val colors = deepDeepColors()
+    DdText(
+        text = body,
+        modifier = modifier,
+        style = WecomCardType.secondary,
+        color = colors.inkSecondary,
+        maxLines = maxLines,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+@Composable
 internal fun WecomMoreLine(
     host: PluginHost,
     kind: WecomCommandKind,
-    hidden: Int,
     hasMore: Boolean,
 ) {
-    val text = wecomMoreText(host, kind, hidden, hasMore) ?: return
+    if (!hasMore) return
+    val text = wecomMoreText(host, kind) ?: return
     val colors = deepDeepColors()
     DdText(
         text = text,
@@ -455,15 +492,8 @@ private fun WecomCommandKind.shortCountUnitZh(): String = when (this) {
     WecomCommandKind.CONTACT_USERS -> "位"
 }
 
-private fun wecomMoreText(host: PluginHost, kind: WecomCommandKind, hidden: Int, hasMore: Boolean): String? {
-    if (hidden > 0) {
-        return if (host.chinese) "还有 $hidden ${kind.moreUnitZh()}" else "$hidden more ${kind.moreUnitEn()}"
-    }
-    if (hasMore) {
-        return if (host.chinese) "还有更多${kind.moreNounZh()}" else "More ${kind.moreNounEn()}"
-    }
-    return null
-}
+private fun wecomMoreText(host: PluginHost, kind: WecomCommandKind): String? =
+    if (host.chinese) "还有更多${kind.moreNounZh()}" else "More ${kind.moreNounEn()}"
 
 private fun WecomCommandKind.moreUnitZh(): String = when (this) {
     WecomCommandKind.CHAT_GROUPS -> "个群聊"

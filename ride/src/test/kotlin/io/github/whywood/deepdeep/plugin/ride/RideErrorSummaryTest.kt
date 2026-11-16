@@ -7,13 +7,13 @@ import org.junit.Test
 
 class RideErrorSummaryTest {
     @Test
-    fun removesSecretKeyAndUrls() {
+    fun keepsUrlButRedactsSecretKey() {
         val summary = summarizeDidiError(
             "request failed https://mcp.didichuxing.com?key=abc123 key=abc123 secret",
             secret = "abc123",
         )
         assertFalse(summary.contains("abc123"))
-        assertFalse(summary.contains("https://"))
+        assertTrue(summary.contains("https://mcp.didichuxing.com"))
         assertTrue(summary.contains("***"))
     }
 
@@ -26,10 +26,35 @@ class RideErrorSummaryTest {
     }
 
     @Test
-    fun truncatesLongMessages() {
-        val summary = summarizeDidiError("x".repeat(500), maxLength = 60)
-        assertTrue(summary.length <= 60)
-        assertTrue(summary.endsWith("…"))
+    fun keepsLongErrorsWhole() {
+        val raw = "上游错误 " + "x".repeat(500)
+        val summary = summarizeDidiError(raw)
+        assertEquals(raw, summary)
+        assertFalse(summary.endsWith("…"))
+    }
+
+    @Test
+    fun keepsUpstreamJsonAndOnlyRedactsQuotedSecrets() {
+        val raw = """{"code":-32011,"message":"订单不存在","key":"secret-value","detail":"trailing"}"""
+        val summary = summarizeDidiError(raw)
+        assertTrue(summary.contains("\"code\":-32011"))
+        assertTrue(summary.contains("订单不存在"))
+        assertFalse(summary.contains("secret-value"))
+        assertTrue(summary.contains("\"key\":\"***\""))
+    }
+
+    @Test
+    fun errorTextKeepsUpstreamOriginalAndAddsHint() {
+        val zh: RideTranslate = { text, _ -> text }
+        val text = rideErrorText(
+            DidiException("订单不存在", -32011),
+            null,
+            zh,
+            "查询失败",
+            "Lookup failed",
+        )
+        assertTrue(text.startsWith("查询失败：订单不存在"))
+        assertTrue(text.contains("请确认订单号是否正确"))
     }
 
     @Test

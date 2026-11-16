@@ -44,13 +44,23 @@ async function ensure() {
   return data ? jarFrom(data) : login();
 }
 
-async function get(pathname, jar, referer = `${BASE}/netpay/index.jsp`) {
+const LOGIN_PAGE = /<form[^>]+action=["'][^"']*(?:casLogin|login)[^"']*["']|name=["']password["']|统一身份认证|id=["'](?:fm1|casLoginForm)["']/i;
+
+function isLoginPage(res) {
+  if (/casLogin|\/cas\/login/.test(res.headers.location || '')) return true;
+  if (res.status !== 200 || res.headers.location) return false;
+  const body = String(res.body || '');
+  if (/^\s*[{[]/.test(body)) return false;
+  return LOGIN_PAGE.test(body);
+}
+
+async function get(pathname, jar, referer = `${BASE}/netpay/index.jsp`, retried = false) {
   const res = await http.get(BASE + pathname, { cookie: jar.header('netpay.sysu.edu.cn'), referer });
   jar.absorb(res, 'netpay.sysu.edu.cn');
-  if (/casLogin|\/cas\/login/.test(res.headers.location || '')) {
+  if (isLoginPage(res)) {
+    if (retried) throw new Error('网费会话已失效（返回登录页）。重新登录：sysu netpay login');
     const fresh = await login();
-    const retry = await http.get(BASE + pathname, { cookie: fresh.header('netpay.sysu.edu.cn'), referer });
-    return retry.body;
+    return get(pathname, fresh, referer, true);
   }
   return res.body;
 }

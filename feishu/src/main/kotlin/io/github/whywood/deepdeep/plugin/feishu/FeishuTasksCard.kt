@@ -16,6 +16,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,6 +27,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.whywood.deepdeep.design.DdExpandToggle
 import io.github.whywood.deepdeep.design.DdIcon
 import io.github.whywood.deepdeep.design.DdIcons
 import io.github.whywood.deepdeep.design.DdPressable
@@ -48,10 +53,11 @@ internal fun FeishuTasksCard(host: PluginHost, model: FeishuCardModel) {
 @Composable
 private fun TasksContent(host: PluginHost, model: FeishuCardModel) {
     val colors = deepDeepColors()
-    val count = model.total.coerceAtLeast(model.items.size)
-    val rows = model.items.take(FEISHU_CARD_TASK_ROWS)
-    val hidden = (count - rows.size).coerceAtLeast(0)
-    val open = model.items.count { !it.taskCompleted() }
+    val all = model.items
+    val count = model.total.coerceAtLeast(all.size)
+    var expanded by remember(model) { mutableStateOf(false) }
+    val rows = if (expanded) all else all.take(FEISHU_TASK_PREVIEW_ROWS)
+    val open = all.count { !it.taskCompleted() }
     Column(
         Modifier
             .fillMaxWidth()
@@ -73,8 +79,20 @@ private fun TasksContent(host: PluginHost, model: FeishuCardModel) {
             if (index > 0) DdRowDivider(leadingInset = 30.dp)
             TasksRow(host = host, item = item)
         }
+        if (all.size > FEISHU_TASK_PREVIEW_ROWS) {
+            DdExpandToggle(
+                expanded = expanded,
+                collapsedLabel = host.tf(
+                    "展开其余 %d 条任务",
+                    "Show %d more tasks",
+                    all.size - FEISHU_TASK_PREVIEW_ROWS,
+                ),
+                expandedLabel = host.t("收起任务列表", "Show fewer tasks"),
+                onToggle = { expanded = !expanded },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         val note = model.note?.takeIf { it.isNotBlank() }
-            ?: if (hidden > 0) host.tf("还有 %d 条未显示", "%d more not shown", hidden) else null
         note?.let { line ->
             Spacer(Modifier.height(DdSpacing.Sm))
             DdText(
@@ -148,6 +166,16 @@ private fun TasksRow(host: PluginHost, item: FeishuCardItem) {
                         style = DdType.chip,
                         color = colors.inkSecondary,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                item.body?.takeIf { it.isNotBlank() }?.let { members ->
+                    Spacer(Modifier.height(2.dp))
+                    DdText(
+                        text = members,
+                        style = DdType.numeric,
+                        color = colors.inkTertiary,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }

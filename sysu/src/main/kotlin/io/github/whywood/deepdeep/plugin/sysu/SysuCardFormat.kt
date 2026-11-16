@@ -2,10 +2,12 @@ package io.github.whywood.deepdeep.plugin.sysu
 
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardSection
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.time.temporal.TemporalAdjusters
 
 internal data class SysuPlanDay(
     val weekday: String,
@@ -43,12 +45,21 @@ internal data class SysuGradeRow(
     val point: Double?,
 )
 
-internal data class SysuGradesPlan(
-    val semester: String?,
+internal data class SysuGradeGroup(
+    val label: String,
     val gpa: Double?,
     val credits: Double?,
     val rows: List<SysuGradeRow>,
 )
+
+internal data class SysuGradesPlan(
+    val semester: String?,
+    val gpa: Double?,
+    val credits: Double?,
+    val groups: List<SysuGradeGroup>,
+) {
+    val rows: List<SysuGradeRow> get() = groups.flatMap { it.rows }
+}
 
 internal data class SysuExamEntry(
     val name: String,
@@ -58,6 +69,7 @@ internal data class SysuExamEntry(
     val place: String?,
     val sections: String?,
     val daysUntil: Long?,
+    val details: List<String>,
 )
 
 internal data class SysuExamsPlan(
@@ -70,6 +82,7 @@ internal data class SysuLmsCoursePlan(
     val courseId: String?,
     val progress: Int?,
     val end: LocalDate?,
+    val details: List<String>,
 )
 
 internal data class SysuLmsPlan(
@@ -88,6 +101,8 @@ internal data class SysuTodoEntry(
     val due: LocalDateTime?,
     val hasDueTime: Boolean,
     val daysUntil: Long?,
+    val details: List<String>,
+    val url: String?,
 )
 
 internal data class SysuGymSlotPlan(
@@ -100,7 +115,6 @@ internal data class SysuGymSlotPlan(
 internal data class SysuGymVenuePlan(
     val name: String,
     val slots: List<SysuGymSlotPlan>,
-    val moreSlots: Int,
 )
 
 internal data class SysuGymTypePlan(
@@ -121,6 +135,7 @@ internal data class SysuNetpayServicePlan(
     val address: String?,
     val expiry: LocalDate?,
     val daysLeft: Long?,
+    val details: List<String>,
 )
 
 internal data class SysuNetpayPlan(
@@ -138,28 +153,12 @@ internal object SysuCardFormat {
     private val DATE = Regex("""(\d{4}-\d{2}-\d{2})""")
     private val DAYS_LEFT = Regex("""剩余\s*(\d+)\s*天""")
     private val DAYS_LEFT_EN = Regex("""(\d+)\s*days?\s*left""")
-    private val INTEGRAL_FEE = Regex("""\d+(?:\.\d+)?\s*(?:积分|points?)\s*/\s*(?:时|hour)""")
     private val SLOT_TIME = Regex("""(\d{2}:\d{2})-(\d{2}:\d{2})""")
     private val SLOT_REMAIN = Regex("""余\s*(\d+)""")
     private val SLOT_REMAIN_EN = Regex("""\d{2}:\d{2}\s+(\d+)(?:\s+left)?\s*$""")
     private val DUE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-    private val WEEKDAYS = mapOf(
-        "周一" to 1,
-        "周二" to 2,
-        "周三" to 3,
-        "周四" to 4,
-        "周五" to 5,
-        "周六" to 6,
-        "周日" to 7,
-        "周天" to 7,
-        "星期一" to 1,
-        "星期二" to 2,
-        "星期三" to 3,
-        "星期四" to 4,
-        "星期五" to 5,
-        "星期六" to 6,
-        "星期日" to 7,
-    )
+    private val WINDOW = Regex("""(?:预约窗口|Booking window)\s*(.+?)(?:\s*·|$)""")
+    private val WEEKDAY_NAMES = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
     fun schedulePlan(
         model: CliCardModel,
@@ -167,25 +166,41 @@ internal object SysuCardFormat {
     ): SysuSchedulePlan? {
         val sections = model.sections
         if (sections.isEmpty()) return null
-        val days = sections.mapIndexed { index, section ->
+        val parsed = sections.map { section ->
             val label = section.label.orEmpty().trim()
             val weekday = label.substringBefore(' ').trim()
             val dateText = label.substringAfter(' ', "").trim()
             val date = runCatching { LocalDate.parse(dateText) }.getOrNull()
+            Triple(label, weekday, date)
+        }
+        val rangeStart = DATE.find(model.note.orEmpty())
+            ?.groupValues
+            ?.get(1)
+            ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        val anchor = rangeStart
+            ?: parsed.mapNotNull { it.third }.minOrNull()
+            ?: today
+        val weekStart = anchor.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val days = (0..6).map { offset ->
+            val date = weekStart.plusDays(offset.toLong())
             SysuPlanDay(
-                weekday = weekday.ifEmpty { "周${index + 1}" },
+                weekday = WEEKDAY_NAMES[date.dayOfWeek.value - 1],
                 date = date,
-                dateLabel = dateText.ifEmpty { label },
-                isToday = date != null && date == today,
+                dateLabel = date.toString(),
+                isToday = date == today,
             )
-        }.sortedBy { WEEKDAYS[it.weekday] ?: Int.MAX_VALUE }
+        }
         val rawBlocks = mutableListOf<RawBlock>()
         sections.forEachIndexed { sourceIndex, section ->
-            val sourceWeekday = section.label.orEmpty().trim().substringBefore(' ')
-            val targetIndex = days.indexOfFirst { it.weekday == sourceWeekday }.takeIf { it >= 0 }
-                ?: sourceIndex.coerceIn(days.indices)
+            val (label, sourceWeekday, sourceDate) = parsed[sourceIndex]
+            val targetIndex = when {
+                sourceDate != null -> days.indexOfFirst { it.date == sourceDate }
+                else -> days.indexOfFirst { it.weekday == sourceWeekday }
+            }
+            if (targetIndex < 0) return@forEachIndexed
             section.items.forEachIndexed { itemIndex, item ->
-                val period = PERIOD.find(item.meta.orEmpty()) ?: PERIOD.find(item.subtitle.orEmpty()) ?: return@forEachIndexed
+                val period = PERIOD.find(item.meta.orEmpty()) ?: PERIOD.find(item.subtitle.orEmpty())
+                    ?: return@forEachIndexed
                 val start = period.groupValues[1].toIntOrNull() ?: return@forEachIndexed
                 val end = period.groupValues[2].toIntOrNull()?.coerceAtLeast(start) ?: start
                 rawBlocks += RawBlock(
@@ -276,20 +291,36 @@ internal object SysuCardFormat {
     }
 
     fun gradesPlan(model: CliCardModel): SysuGradesPlan? {
-        val rows = model.sections.flatMap { it.items }.map { item -> gradeRow(item.title, item.subtitle, item.meta) }
-        if (rows.isEmpty() && model.items.isEmpty()) return null
-        val extraRows = model.items.map { item -> gradeRow(item.title, item.subtitle, item.meta) }
-        val allRows = (rows + extraRows).distinctBy { it.name to it.code }
-        if (allRows.isEmpty()) return null
-        val label = model.sections.firstOrNull()?.label.orEmpty()
-        val gpa = GPA.find(label)?.groupValues?.get(1)?.toDoubleOrNull()
-            ?: GPA.find(model.note.orEmpty())?.groupValues?.get(1)?.toDoubleOrNull()
-        val credits = CREDITS.find(model.note.orEmpty())?.groupValues?.get(1)?.toDoubleOrNull()
+        val groups = mutableListOf<SysuGradeGroup>()
+        for (section in model.sections) {
+            val label = section.label.orEmpty()
+            groups += SysuGradeGroup(
+                label = label,
+                gpa = GPA.find(label)?.groupValues?.get(1)?.toDoubleOrNull(),
+                credits = CREDITS.find(label)?.groupValues?.get(1)?.toDoubleOrNull(),
+                rows = section.items.map { gradeRow(it.title, it.subtitle, it.meta) },
+            )
+        }
+        if (model.items.isNotEmpty()) {
+            val rows = model.items.map { gradeRow(it.title, it.subtitle, it.meta) }
+            if (groups.isEmpty()) {
+                groups += SysuGradeGroup(
+                    label = model.context.orEmpty(),
+                    gpa = GPA.find(model.note.orEmpty())?.groupValues?.get(1)?.toDoubleOrNull(),
+                    credits = CREDITS.find(model.note.orEmpty())?.groupValues?.get(1)?.toDoubleOrNull(),
+                    rows = rows,
+                )
+            } else {
+                groups += SysuGradeGroup(label = "", gpa = null, credits = null, rows = rows)
+            }
+        }
+        if (groups.all { it.rows.isEmpty() }) return null
+        val first = groups.firstOrNull()
         return SysuGradesPlan(
             semester = model.context,
-            gpa = gpa,
-            credits = credits,
-            rows = allRows,
+            gpa = first?.gpa ?: GPA.find(model.note.orEmpty())?.groupValues?.get(1)?.toDoubleOrNull(),
+            credits = first?.credits ?: CREDITS.find(model.note.orEmpty())?.groupValues?.get(1)?.toDoubleOrNull(),
+            groups = groups,
         )
     }
 
@@ -322,13 +353,13 @@ internal object SysuCardFormat {
             val date = DATE.find(label)?.groupValues?.get(1)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
             val weekday = label.replace(DATE, "").trim().ifBlank { null }
             for (item in section.items) {
-                entries += examEntry(item.title, item.subtitle, date, weekday, today)
+                entries += examEntry(item, date, weekday, today)
             }
         }
         model.items.forEach { item ->
             val date = DATE.find(item.meta.orEmpty())?.groupValues?.get(1)
                 ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-            entries += examEntry(item.title, item.subtitle, date, null, today)
+            entries += examEntry(item, date, null, today)
         }
         if (entries.isEmpty()) return null
         return SysuExamsPlan(
@@ -338,23 +369,23 @@ internal object SysuCardFormat {
     }
 
     private fun examEntry(
-        title: String,
-        subtitle: String?,
+        item: io.github.whywood.deepdeep.plugin.cli.card.CliCardItem,
         date: LocalDate?,
         weekday: String?,
         today: LocalDate,
     ): SysuExamEntry {
-        val tokens = subtitle.orEmpty().split(" · ").map { it.trim() }.filter { it.isNotEmpty() }
+        val tokens = item.subtitle.orEmpty().split(" · ").map { it.trim() }.filter { it.isNotEmpty() }
         val time = tokens.firstOrNull { it.contains(':') }
         val place = tokens.firstOrNull { it != time }
         return SysuExamEntry(
-            name = title,
+            name = item.title,
             date = date,
             weekday = weekday,
             time = time,
             place = place,
-            sections = null,
+            sections = item.meta?.takeIf { it.isNotBlank() },
             daysUntil = date?.let { ChronoUnit.DAYS.between(today, it) },
+            details = bodyLines(item.body),
         )
     }
 
@@ -370,6 +401,7 @@ internal object SysuCardFormat {
                 },
                 progress = PERCENT.find(meta)?.groupValues?.get(1)?.toIntOrNull(),
                 end = DATE.find(meta)?.groupValues?.get(1)?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
+                details = bodyLines(item.body),
             )
         }
         return SysuLmsPlan(courses)
@@ -386,6 +418,8 @@ internal object SysuCardFormat {
                 due = due,
                 hasDueTime = due != null && item.meta.orEmpty().contains(':'),
                 daysUntil = due?.toLocalDate()?.let { ChronoUnit.DAYS.between(today, it) },
+                details = bodyLines(item.body),
+                url = item.url,
             )
         }
     }
@@ -400,8 +434,7 @@ internal object SysuCardFormat {
 
     fun gymPlan(model: CliCardModel): SysuGymPlan? {
         val types = model.sections.mapNotNull { section -> gymType(section) }
-            .ifEmpty { null }
-            ?: return null
+        if (types.isEmpty()) return null
         val venueCount = model.total.takeIf { it > 0 } ?: types.sumOf { it.venues.size }
         return SysuGymPlan(
             types = types,
@@ -411,17 +444,26 @@ internal object SysuCardFormat {
     }
 
     private fun gymType(section: CliCardSection): SysuGymTypePlan? {
-        val parts = section.label.orEmpty().split(" · ").map { it.trim() }.filter { it.isNotEmpty() }
+        val label = section.label.orEmpty().trim()
+        if (label.isEmpty()) return null
+        val parts = label.split("｜").map { it.trim() }.filter { it.isNotEmpty() }
+        val legacy = label.split(" · ", limit = 2).map { it.trim() }.filter { it.isNotEmpty() }
         val name = parts.firstOrNull() ?: return null
-        val fee = parts.drop(1).firstOrNull { it.contains("积分") || it.contains("point") }
-            ?.let { INTEGRAL_FEE.find(it)?.value ?: it }
+        val fee = when {
+            parts.size > 1 -> parts.drop(1).joinToString(" · ")
+            legacy.size > 1 && (legacy[1].contains("积分") || legacy[1].contains("points") || legacy[1].contains("现金")) -> legacy[1]
+            else -> null
+        }
         val venues = section.items.map { item -> gymVenue(item.title, item.subtitle) }
-        return SysuGymTypePlan(name = name, fee = fee, venues = venues)
+        return SysuGymTypePlan(
+            name = name,
+            fee = fee,
+            venues = venues,
+        )
     }
 
     private fun gymVenue(name: String, subtitle: String?): SysuGymVenuePlan {
         val slots = mutableListOf<SysuGymSlotPlan>()
-        var more = 0
         for (group in subtitle.orEmpty().split("；")) {
             val text = group.trim()
             if (text.isEmpty()) continue
@@ -429,12 +471,10 @@ internal object SysuCardFormat {
             val groupSlots = (if (text.firstOrNull()?.isDigit() == true) text.substringAfter(' ', text) else text).split("、")
             for (slotText in groupSlots) {
                 val slot = parseGymSlot(date, slotText.trim())
-                if (slot != null) {
-                    if (slots.size < MAX_CARD_SLOTS) slots += slot else more += 1
-                }
+                if (slot != null) slots += slot
             }
         }
-        return SysuGymVenuePlan(name = name, slots = slots, moreSlots = more)
+        return SysuGymVenuePlan(name = name, slots = slots)
     }
 
     private fun parseGymSlot(date: String?, text: String): SysuGymSlotPlan? {
@@ -463,11 +503,11 @@ internal object SysuCardFormat {
                 expiry = DATE.find(meta)?.groupValues?.get(1)?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
                 daysLeft = DAYS_LEFT.find(meta)?.groupValues?.get(1)?.toLongOrNull()
                     ?: DAYS_LEFT_EN.find(meta)?.groupValues?.get(1)?.toLongOrNull(),
+                details = bodyLines(item.body),
             )
         }
-        val first = services.firstOrNull()
         val earliestExpiry = services.mapNotNull { it.expiry }.minOrNull()
-        val earliestDaysLeft = first?.daysLeft ?: earliestExpiry?.let { ChronoUnit.DAYS.between(today, it) }
+        val earliestDaysLeft = services.firstOrNull()?.daysLeft ?: earliestExpiry?.let { ChronoUnit.DAYS.between(today, it) }
         return SysuNetpayPlan(
             identity = model.context,
             services = services,
@@ -476,6 +516,8 @@ internal object SysuCardFormat {
         )
     }
 
-    private const val MAX_CARD_SLOTS = 3
-    private val WINDOW = Regex("""(?:预约窗口|Booking window)\s*(.+?)(?:\s*·|$)""")
+    private fun bodyLines(body: String?): List<String> = body.orEmpty()
+        .lines()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
 }

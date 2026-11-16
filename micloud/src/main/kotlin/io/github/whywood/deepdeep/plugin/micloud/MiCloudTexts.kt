@@ -106,12 +106,6 @@ internal fun formatBytes(bytes: Long): String {
     return String.format(Locale.ROOT, "%.1f %s", value, units[unit])
 }
 
-internal fun previewText(raw: String?, maxChars: Int = 240): String {
-    val text = raw?.trim().orEmpty()
-    if (text.length <= maxChars) return text
-    return text.take(maxChars).trimEnd() + "…"
-}
-
 private val XML_NAMED_ENTITIES = mapOf(
     "lt" to "<",
     "gt" to ">",
@@ -203,21 +197,32 @@ internal fun quotaEntryLine(entry: MiCloudQuotaEntry, t: MiCloudText): String {
 
 internal fun notesListObservation(
     items: List<MiCloudNoteItem>,
-    total: Int,
     cursor: String,
     lastPage: Boolean,
     t: MiCloudText,
 ): String {
     if (items.isEmpty()) return t("没有笔记。", "No notes.")
     return buildString {
-        appendLine(t.fmt("笔记（共 %d 条）：", "Notes (%d items):", total))
+        appendLine(t.fmt("笔记（本页 %d 条）：", "Notes (%d on this page):", items.size))
         items.forEach { item ->
             appendLine("- " + noteListLine(item, t))
         }
-        if (cursor.isNotBlank()) {
-            appendLine(t.fmt("下一页游标：%s", "Next cursor: %s", cursor))
-        } else if (lastPage) {
-            appendLine(t("已到最后一页。", "This is the last page."))
+        when {
+            cursor.isNotBlank() -> appendLine(
+                t.fmt(
+                    "还有更多：下一页用 syncTag=%s 继续（action=list）。",
+                    "More pages: continue with syncTag=%s (action=list).",
+                    cursor,
+                ),
+            )
+
+            lastPage -> appendLine(t("已到最后一页。", "This is the last page."))
+            else -> appendLine(
+                t(
+                    "接口未返回分页游标；本次已取到接口给出的全部笔记。",
+                    "No page cursor was returned; all notes from this response are included.",
+                ),
+            )
         }
     }.trim()
 }
@@ -227,7 +232,7 @@ internal fun noteListLine(item: MiCloudNoteItem, t: MiCloudText): String = build
     append(t.fmt("：主题「%s」", ": subject “%s”", item.subject.ifBlank { t("（无主题）", "(No subject)") }))
     val modified = formatTime(item.modifyTime)
     if (modified.isNotBlank()) append(t.fmt("，修改时间 %s", ", modified %s", modified))
-    if (item.snippet.isNotBlank()) append(t.fmt("，摘要：%s", ", preview: %s", previewText(item.snippet, 120)))
+    if (item.snippet.isNotBlank()) append(t.fmt("，摘要：%s", ", preview: %s", item.snippet))
 }
 
 internal fun noteReadObservation(noteId: String, item: MiCloudNoteItem, plainText: String, t: MiCloudText): String =
@@ -258,7 +263,10 @@ internal fun noteWriteObservation(
     if (noteId.isNotBlank()) append(t.fmt("（id=%s）", " (id=%s)", noteId))
     appendLine()
     if (subject.isNotBlank()) appendLine(t.fmt("主题：%s", "Subject: %s", subject))
-    if (content.isNotBlank()) appendLine(t.fmt("正文：%s", "Body: %s", previewText(content, 400)))
+    if (content.isNotBlank()) {
+        appendLine(t("正文：", "Body:"))
+        appendLine(content)
+    }
     val modified = formatTime(modifyTime)
     if (modified.isNotBlank()) appendLine(t.fmt("修改时间：%s", "Modified: %s", modified))
 }.trim()
@@ -272,14 +280,34 @@ internal fun todoListObservation(
     if (items.isEmpty()) return t("没有待办。", "No to-dos.")
     val doneCount = items.count { it.done }
     return buildString {
-        appendLine(t.fmt("待办（共 %d 条，已完成 %d 条）：", "To-dos (%d items, %d done):", items.size, doneCount))
+        appendLine(
+            t.fmt(
+                "待办（本页 %d 条，已完成 %d 条）：",
+                "To-dos (%d on this page, %d done):",
+                items.size,
+                doneCount,
+            ),
+        )
         items.forEach { item ->
             appendLine("- " + todoLine(item, t))
         }
-        if (cursor.isNotBlank()) {
-            appendLine(t.fmt("下一页游标：%s", "Next cursor: %s", cursor))
-        } else if (!hasMore) {
-            appendLine(t("已到最后一页。", "This is the last page."))
+        when {
+            cursor.isNotBlank() -> appendLine(
+                t.fmt(
+                    "还有更多：下一页用 cursor=%s 继续（上游 syncToken，action=list）。",
+                    "More pages: continue with cursor=%s (upstream syncToken, action=list).",
+                    cursor,
+                ),
+            )
+
+            hasMore -> appendLine(
+                t(
+                    "接口标记还有更多待办，但未返回 syncToken。",
+                    "The API reports more to-dos but returned no syncToken.",
+                ),
+            )
+
+            else -> appendLine(t("已到最后一页。", "This is the last page."))
         }
     }.trim()
 }
@@ -321,22 +349,63 @@ internal fun todoWriteObservation(
     if (modified.isNotBlank()) appendLine(t.fmt("修改时间：%s", "Modified: %s", modified))
 }.trim()
 
-internal fun smsObservation(entries: List<JsonObject>, cursor: String, t: MiCloudText): String {
+internal fun smsObservation(
+    entries: List<JsonObject>,
+    nextSyncTag: String,
+    nextSyncThreadTag: String,
+    watermark: String,
+    t: MiCloudText,
+): String {
     if (entries.isEmpty()) return t("没有短信记录。", "No SMS records.")
     return buildString {
-        appendLine(t.fmt("短信与通话（%d 条）：", "SMS and calls (%d items):", entries.size))
+        appendLine(t.fmt("短信与通话（本页 %d 条）：", "SMS and calls (%d on this page):", entries.size))
         entries.forEach { entry -> appendLine("- " + smsLine(entry, t)) }
-        if (cursor.isNotBlank()) appendLine(t.fmt("下一页 watermark：%s", "Next watermark: %s", cursor))
+        val params = buildList {
+            if (nextSyncTag.isNotBlank()) add("syncTag=$nextSyncTag")
+            if (nextSyncThreadTag.isNotBlank()) add("syncThreadTag=$nextSyncThreadTag")
+        }
+        if (params.isNotEmpty()) {
+            val watermarkNote = if (watermark.isNotBlank()) {
+                t.fmt("（watermark=%s）", "(watermark=%s)", watermark)
+            } else {
+                ""
+            }
+            appendLine(
+                t.fmt(
+                    "还有更多：下一页用 %s 继续%s。",
+                    "More pages: continue with %s%s.",
+                    params.joinToString(t("、", ", ")),
+                    watermarkNote,
+                ),
+            )
+        } else {
+            appendLine(
+                t(
+                    "接口未返回分页游标；本次已取到接口给出的全部短信记录。",
+                    "No page cursor was returned; all SMS records from this response are included.",
+                ),
+            )
+        }
     }.trim()
 }
 
-internal fun albumsObservation(items: List<JsonObject>, t: MiCloudText): String {
+internal fun albumsObservation(items: List<JsonObject>, hasMore: Boolean, t: MiCloudText): String {
     if (items.isEmpty()) return t("没有相册。", "No albums.")
     return buildString {
-        appendLine(t.fmt("相册（%d 个）：", "Albums (%d):", items.size))
+        appendLine(t.fmt("相册（本页 %d 个）：", "Albums (%d on this page):", items.size))
         items.forEach { item ->
             appendLine("- " + albumLine(item, t))
         }
+        appendLine(
+            if (hasMore) {
+                t(
+                    "接口标记还有更多相册，但未返回分页游标。",
+                    "The API reports more albums but returned no page cursor.",
+                )
+            } else {
+                t("相册接口无分页参数，本次返回接口给出的全部相册。", "The album API has no page parameter; all albums from this response are included.")
+            },
+        )
     }.trim()
 }
 
@@ -372,7 +441,7 @@ private fun smsLine(entry: JsonObject, t: MiCloudText): String {
         ?: entry.stringOrNull("snippet")
         ?: entry.stringOrNull("content")
         ?: entry.stringOrNull("text")
-    if (!text.isNullOrBlank()) parts += t.fmt("内容「%s」", "text “%s”", previewText(text, 80))
+    if (!text.isNullOrBlank()) parts += t.fmt("内容「%s」", "text “%s”", text)
     val epoch = entry.firstEpoch("date", "time", "timestamp", "dateTime", "ts")
     if (epoch > 0L) parts += formatEpochValue(epoch)
     val unread = entry.intOrNull("unread") ?: entry.intOrNull("unreadCount")
@@ -381,11 +450,45 @@ private fun smsLine(entry: JsonObject, t: MiCloudText): String {
     return parts.joinToString(t("；", "; "))
 }
 
-internal fun contactsObservation(contacts: List<JsonObject>, t: MiCloudText): String {
+internal fun contactsObservation(
+    contacts: List<JsonObject>,
+    nextSyncTag: String,
+    nextSyncIgnoreTag: String,
+    hasMore: Boolean,
+    t: MiCloudText,
+): String {
     if (contacts.isEmpty()) return t("没有联系人。", "No contacts.")
     return buildString {
-        appendLine(t.fmt("联系人（%d 位）：", "Contacts (%d):", contacts.size))
+        appendLine(t.fmt("联系人（本页 %d 位）：", "Contacts (%d on this page):", contacts.size))
         contacts.forEach { contact -> appendLine("- " + contactLine(contact, t)) }
+        val params = buildList {
+            if (nextSyncTag.isNotBlank()) add("syncTag=$nextSyncTag")
+            if (nextSyncIgnoreTag.isNotBlank()) add("syncIgnoreTag=$nextSyncIgnoreTag")
+        }
+        when {
+            params.isNotEmpty() -> appendLine(
+                t.fmt(
+                    "还有更多：下一页用 %s 继续（action=list）。",
+                    "More pages: continue with %s (action=list).",
+                    params.joinToString(t("、", ", ")),
+                ),
+            )
+
+            hasMore -> appendLine(
+                t(
+                    "接口标记还有更多联系人，但未返回分页游标。",
+                    "The API reports more contacts but returned no page cursor.",
+                ),
+            )
+
+            else -> appendLine(
+                t.fmt(
+                    "接口未返回分页参数；本次返回接口给出的 %d 位联系人。",
+                    "The API returned no page parameter; this response contains %d contacts.",
+                    contacts.size,
+                ),
+            )
+        }
     }.trim()
 }
 
@@ -405,11 +508,24 @@ private fun contactLine(contact: JsonObject, t: MiCloudText): String {
     return parts.joinToString(t("；", "; "))
 }
 
-internal fun galleryObservation(items: List<JsonObject>, t: MiCloudText): String {
+internal fun galleryObservation(items: List<JsonObject>, hasMore: Boolean, t: MiCloudText): String {
     if (items.isEmpty()) return t("没有相册内容。", "No gallery items.")
     return buildString {
-        appendLine(t.fmt("相册内容（%d 项）：", "Gallery items (%d):", items.size))
+        appendLine(t.fmt("相册内容（本页 %d 项）：", "Gallery items (%d on this page):", items.size))
         items.forEach { item -> appendLine("- " + galleryLine(item, t)) }
+        appendLine(
+            if (hasMore) {
+                t(
+                    "接口标记还有更多相册内容，但未返回分页游标。",
+                    "The API reports more gallery items but returned no page cursor.",
+                )
+            } else {
+                t(
+                    "相册内容接口无分页参数，本次返回接口给出的全部内容。",
+                    "The gallery API has no page parameter; all items from this response are included.",
+                )
+            },
+        )
     }.trim()
 }
 
@@ -431,11 +547,17 @@ private fun galleryLine(item: JsonObject, t: MiCloudText): String {
 internal fun recordingsObservation(items: List<JsonObject>, nextOffset: Int, t: MiCloudText): String {
     if (items.isEmpty()) return t("没有录音。", "No recordings.")
     return buildString {
-        appendLine(t.fmt("录音（%d 条）：", "Recordings (%d items):", items.size))
+        appendLine(t.fmt("录音（本页 %d 条）：", "Recordings (%d on this page):", items.size))
         items.forEach { item ->
             appendLine("- " + recordingLine(item, t))
         }
-        appendLine(t.fmt("下一页 offset：%d", "Next offset: %d", nextOffset))
+        appendLine(
+            t.fmt(
+                "下一页参数：offset=%d（action=list）。",
+                "Next page parameter: offset=%d (action=list).",
+                nextOffset,
+            ),
+        )
     }.trim()
 }
 
@@ -465,16 +587,12 @@ internal fun recordingDownloadObservation(fileId: String, name: String, size: Lo
 private fun scalarSummary(obj: JsonObject, t: MiCloudText): String = obj.entries
     .mapNotNull { (key, value) ->
         when (value) {
-            is JsonPrimitive -> value.contentOrNull?.takeIf { it.isNotBlank() }?.let { "$key：${previewText(it, 60)}" }
+            is JsonPrimitive -> value.contentOrNull?.takeIf { it.isNotBlank() }?.let { "$key：$it" }
             is JsonArray -> t.fmt("%s 共 %d 项", "%s (%d items)", key, value.size)
             is JsonObject -> t.fmt("%s 共 %d 项", "%s (%d fields)", key, value.size)
-            else -> null
         }
     }
-    .take(MAX_SCALAR_FIELDS)
     .joinToString(t("；", "; "))
-
-private const val MAX_SCALAR_FIELDS = 8
 
 private fun JsonObject.strings(vararg keys: String): List<String> = keys.flatMap { key ->
     when (val value = this[key]) {

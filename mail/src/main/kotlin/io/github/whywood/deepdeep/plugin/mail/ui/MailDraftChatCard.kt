@@ -3,6 +3,8 @@ package io.github.whywood.deepdeep.plugin.mail.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -42,8 +44,6 @@ import io.github.whywood.deepdeep.plugin.mail.tools.MailDraftCardAttachment
 import io.github.whywood.deepdeep.plugin.mail.tools.MailDraftCardPayload
 import kotlinx.coroutines.launch
 
-private const val VisibleRecipients = 2
-private const val VisibleAttachments = 2
 private const val DraftBodyMaxLines = 3
 
 private sealed interface MailCardSendState {
@@ -64,6 +64,7 @@ private object MailCardSends {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun MailDraftChatCard(
     host: PluginHost,
@@ -147,20 +148,18 @@ internal fun MailDraftChatCard(
             empty = host.t("（正文为空）", "(No body text)"),
         )
         if (attachments.isNotEmpty()) {
-            Row(
+            FlowRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = DdSpacing.Lg, end = DdSpacing.Lg, top = DdSpacing.Sm),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                attachments.take(VisibleAttachments).forEach { attachment ->
+                attachments.forEach { attachment ->
                     MailAttachmentPill(
                         name = attachment.name,
                         sizeText = formatFileSize(attachment.sizeBytes).ifBlank { null },
                     )
-                }
-                if (attachments.size > VisibleAttachments) {
-                    MailCardChip(text = "+${attachments.size - VisibleAttachments}")
                 }
             }
         }
@@ -231,12 +230,11 @@ private fun ComposeTopBar(host: PluginHost, account: String, sent: Boolean) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RecipientRow(host: PluginHost, label: String, recipients: List<String>, accent: Boolean) {
     val colors = deepDeepColors()
     if (recipients.isEmpty()) return
-    val visible = recipients.take(VisibleRecipients)
-    val hidden = recipients.size - visible.size
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -251,11 +249,14 @@ private fun RecipientRow(host: PluginHost, label: String, recipients: List<Strin
             maxLines = 1,
         )
         Spacer(Modifier.width(DdSpacing.Sm))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            visible.forEach { recipient ->
+        FlowRow(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            recipients.forEach { recipient ->
                 MailRecipientChip(recipient = recipient, accent = accent)
             }
-            if (hidden > 0) MailCardChip(text = "+$hidden")
         }
     }
 }

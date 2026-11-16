@@ -13,12 +13,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.whywood.deepdeep.design.DdExpandToggle
 import io.github.whywood.deepdeep.design.DdIcon
 import io.github.whywood.deepdeep.design.DdIcons
 import io.github.whywood.deepdeep.design.DdPressable
@@ -45,9 +50,11 @@ internal fun FeishuDocsSearchCard(host: PluginHost, model: FeishuCardModel) {
 @Composable
 private fun DocsSearchContent(host: PluginHost, model: FeishuCardModel) {
     val colors = deepDeepColors()
-    val count = model.total.coerceAtLeast(model.items.size)
-    val rows = model.items.take(FEISHU_CARD_DOC_ROWS)
+    val all = model.items
+    val count = model.total.coerceAtLeast(all.size)
     val query = cardQueryText(model.context)
+    var expanded by remember(model) { mutableStateOf(false) }
+    val rows = if (expanded) all else all.take(FEISHU_DOC_PREVIEW_ROWS)
     Column(
         Modifier
             .fillMaxWidth()
@@ -86,12 +93,22 @@ private fun DocsSearchContent(host: PluginHost, model: FeishuCardModel) {
             if (index > 0) DdRowDivider(leadingInset = 31.dp)
             DocsSearchRow(host = host, item = item)
         }
-        val hidden = (count - rows.size).coerceAtLeast(0)
-        val note = model.note?.takeIf { it.isNotBlank() }
-            ?: if (hidden > 0) host.tf("还有 %d 个未显示", "%d more not shown", hidden) else null
+        if (all.size > FEISHU_DOC_PREVIEW_ROWS) {
+            DdExpandToggle(
+                expanded = expanded,
+                collapsedLabel = host.tf(
+                    "展开其余 %d 个文档",
+                    "Show %d more docs",
+                    all.size - FEISHU_DOC_PREVIEW_ROWS,
+                ),
+                expandedLabel = host.t("收起文档列表", "Show fewer docs"),
+                onToggle = { expanded = !expanded },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         FeishuCardFoot(
             host = host,
-            note = note,
+            note = model.note?.takeIf { it.isNotBlank() },
             actionLabel = if (model.openUrl.isNullOrBlank()) null else host.t("在飞书打开", "Open in Feishu"),
             openUrl = model.openUrl,
         )
@@ -127,6 +144,16 @@ private fun DocsSearchRow(host: PluginHost, item: FeishuCardItem) {
                         style = DdType.numeric,
                         color = colors.inkTertiary,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                item.body?.takeIf { it.isNotBlank() }?.let { summary ->
+                    Spacer(Modifier.height(2.dp))
+                    DdText(
+                        text = summary,
+                        style = DdType.chip,
+                        color = colors.inkSecondary,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
@@ -231,9 +258,10 @@ internal fun FeishuDocsReadCard(host: PluginHost, model: FeishuCardModel) {
 private fun DocsReadContent(host: PluginHost, model: FeishuCardModel) {
     val colors = deepDeepColors()
     val title = model.context?.takeIf { it.isNotBlank() } ?: host.t("文档", "Document")
-    val paragraphs = model.items.map { it.title }.filter { it.isNotBlank() }
-    val lead = paragraphs.firstOrNull()
-    val rest = paragraphs.drop(1).take(2)
+    val body = model.items.firstOrNull()?.body?.takeIf { it.isNotBlank() }
+        ?: model.items.mapNotNull { it.title }.joinToString("\n").takeIf { it.isNotBlank() }
+    val long = body != null && (body.lineSequence().count() > 5 || body.length > 240)
+    var expanded by remember(model) { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxWidth()
@@ -266,8 +294,7 @@ private fun DocsReadContent(host: PluginHost, model: FeishuCardModel) {
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
-        val note = model.note?.takeIf { it.isNotBlank() }
-        note?.let { meta ->
+        model.note?.takeIf { it.isNotBlank() }?.let { meta ->
             Spacer(Modifier.height(DdSpacing.Xs))
             DdText(
                 text = meta,
@@ -284,28 +311,26 @@ private fun DocsReadContent(host: PluginHost, model: FeishuCardModel) {
                 .background(colors.accent, RoundedCornerShape(2.dp)),
         )
         Spacer(Modifier.height(DdSpacing.Md))
-        lead?.let { text ->
+        body?.let { text ->
             DdText(
                 text = text,
                 style = DdType.body,
                 color = colors.ink,
-                maxLines = 3,
+                maxLines = if (expanded) Int.MAX_VALUE else 5,
                 overflow = TextOverflow.Ellipsis,
             )
-        }
-        rest.forEach { text ->
-            Spacer(Modifier.height(DdSpacing.Sm))
-            DdText(
-                text = text,
-                style = DdType.bodySmall,
-                color = colors.inkSecondary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (long) {
+                DdExpandToggle(
+                    expanded = expanded,
+                    collapsedLabel = host.t("展开全文", "Show full text"),
+                    expandedLabel = host.t("收起全文", "Show less"),
+                    onToggle = { expanded = !expanded },
+                )
+            }
         }
         FeishuCardFoot(
             host = host,
-            note = model.note?.takeIf { false },
+            note = null,
             actionLabel = if (model.openUrl.isNullOrBlank()) null else host.t("打开文档", "Open document"),
             openUrl = model.openUrl,
         )

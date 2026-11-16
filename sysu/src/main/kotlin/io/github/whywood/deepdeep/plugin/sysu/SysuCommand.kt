@@ -11,6 +11,15 @@ internal enum class SysuCommandKind {
     LmsTodo,
     GymSlots,
     Netpay,
+    ;
+
+    val site: SysuSite
+        get() = when (this) {
+            Schedule, Scores, Exams, Credits -> SysuSite.Jwxt
+            LmsCourses, LmsTodo -> SysuSite.Lms
+            GymSlots -> SysuSite.Gym
+            Netpay -> SysuSite.Netpay
+        }
 }
 
 internal sealed interface SysuInvocation {
@@ -37,6 +46,16 @@ internal object SysuCommandParser {
         if (CliCommandLine.envPrefixLength(tokens) != 0) return null
         if (!CliCommandLine.isBinary(tokens.first(), EXECUTABLE)) return null
         return match(tokens.drop(1)) ?: SysuInvocation.Other(source)
+    }
+
+    fun site(commandLine: String): SysuSite? {
+        val tokens = CliCommandLine.tokenize(commandLine)
+        if (tokens.size < 2) return null
+        if (!CliCommandLine.isBinary(tokens.first(), EXECUTABLE)) return null
+        return when (tokens[1]) {
+            "login" -> SysuSite.Jwxt
+            else -> SysuSite.fromKey(tokens[1])
+        }
     }
 
     private fun match(args: List<String>): SysuInvocation.Supported? {

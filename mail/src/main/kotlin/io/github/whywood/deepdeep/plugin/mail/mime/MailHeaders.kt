@@ -19,10 +19,12 @@ internal data class MailHeaders(
     val from: List<MailAddress> = emptyList(),
     val to: List<MailAddress> = emptyList(),
     val cc: List<MailAddress> = emptyList(),
+    val replyTo: List<MailAddress> = emptyList(),
     val dateMillis: Long? = null,
     val messageId: String? = null,
     val references: List<String> = emptyList(),
     val inReplyTo: String? = null,
+    val listHeaders: Map<String, String> = emptyMap(),
 ) {
     val sender: MailAddress?
         get() = from.firstOrNull()
@@ -39,23 +41,33 @@ internal data class MailHeaders(
             val from = parseAddressList(fields.firstValue("from"))
             val to = parseAddressList(fields.firstValue("to"))
             val cc = parseAddressList(fields.firstValue("cc"))
+            val replyTo = parseAddressList(fields.firstValue("reply-to"))
             val date = MailDates.parse(fields.firstValue("date"))
             val messageId = normalizeMessageId(fields.firstValue("message-id"))
             val references = fields["references"].orEmpty().flatMap { splitMessageIds(it) }
             val inReplyTo = fields["in-reply-to"].orEmpty()
                 .flatMap { splitMessageIds(it) }
                 .firstOrNull()
+            val listHeaders = fields.entries
+                .filter { it.key.startsWith("list-") }
+                .associate { it.key to it.value.joinToString(", ") }
             return MailHeaders(
                 subject = subject,
                 from = from,
                 to = to,
                 cc = cc,
+                replyTo = replyTo,
                 dateMillis = date,
                 messageId = messageId,
                 references = references,
                 inReplyTo = inReplyTo,
+                listHeaders = listHeaders,
             )
         }
+
+        fun displayName(name: String): String = HEADER_NAMES[name.lowercase()] ?: name
+            .split('-')
+            .joinToString("-") { part -> part.replaceFirstChar { it.uppercase() } }
 
         fun parseFields(value: String): Map<String, List<String>> {
             val fields = LinkedHashMap<String, MutableList<String>>()
@@ -187,6 +199,14 @@ internal data class MailHeaders(
         private val MESSAGE_ID = Regex("<[^<>\\s]+>")
         private val COMMENT = Regex("\\(([^)]*)\\)")
         private val WHITESPACE = Regex("\\s+")
+        private val HEADER_NAMES = mapOf(
+            "message-id" to "Message-ID",
+            "in-reply-to" to "In-Reply-To",
+            "reply-to" to "Reply-To",
+            "list-id" to "List-Id",
+            "list-unsubscribe" to "List-Unsubscribe",
+            "list-help" to "List-Help",
+        )
     }
 }
 

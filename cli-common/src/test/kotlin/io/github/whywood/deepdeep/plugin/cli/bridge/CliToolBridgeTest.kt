@@ -166,16 +166,17 @@ class CliToolBridgeTest {
     )
 
     @Test
-    fun cardBecomesDetailsWithIdHint() = runTest {
+    fun cardBecomesDetailsWithRawPayload() = runTest {
         val hooks = CliToolBridge(config).hooks(FakeHost())
         assertEquals(ToolCallAction.CONTINUE, hooks.beforeToolCall(call("call-1")).action)
         val decision = hooks.afterToolExecution(result("call-1"))
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        assertEquals("第一行\n第二行\n\n卡片 id：call-1", decision.result?.text)
+        assertEquals("第一行\n第二行", decision.result?.text)
         val card = decision.result?.details?.get("deepdeep.card") as JsonObject
         assertEquals("fake.card", card.getValue("customType").jsonPrimitive.content)
         assertEquals("摘要", card.getValue("title").jsonPrimitive.content)
         assertEquals("payload", card.getValue("payload").jsonObject.getValue("value").jsonPrimitive.content)
+        assertEquals("""{"ok":true,"data":[]}""", decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content)
     }
 
     @Test
@@ -198,16 +199,18 @@ class CliToolBridgeTest {
         assertEquals("未登录，请重新授权", decision.result?.text)
         val card = decision.result?.details?.get("deepdeep.card") as JsonObject
         assertEquals("fake.card", card.getValue("customType").jsonPrimitive.content)
+        assertEquals("""{"ok":true,"data":[]}""", decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content)
     }
 
     @Test
-    fun textOnlyObservationHasNoCardOrHint() = runTest {
+    fun textOnlyObservationCarriesRawWithoutCard() = runTest {
         val hooks = CliToolBridge(textOnlyConfig).hooks(FakeHost())
         hooks.beforeToolCall(call("call-1"))
         val decision = hooks.afterToolExecution(result("call-1"))
         assertEquals(ToolResultAction.REPLACE, decision.action)
         assertEquals("第一行\n第二行", decision.result?.text)
-        assertEquals(null, decision.result?.details)
+        assertEquals(null, decision.result?.details?.get("deepdeep.card"))
+        assertEquals("""{"ok":true,"data":[]}""", decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content)
     }
 
     @Test
@@ -227,7 +230,7 @@ class CliToolBridgeTest {
         val decision = hooks.afterToolExecution(errorResult)
         assertEquals(ToolResultAction.REPLACE, decision.action)
         assertEquals("已处理错误", decision.result?.text)
-        assertEquals(null, decision.result?.details)
+        assertEquals("boom", decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content)
     }
 
     @Test
@@ -252,8 +255,8 @@ class CliToolBridgeTest {
         val decision = hooks.afterToolExecution(result("call-1", """{"items":[{"id":1}]}"""))
         assertEquals(ToolResultAction.REPLACE, decision.action)
         val text = decision.result?.text.orEmpty()
-        assertTrue(text.startsWith("条目数 1"))
-        assertTrue(text.endsWith("卡片 id：call-1"))
+        assertEquals("条目数 1", text)
+        assertEquals("""{"items":[{"id":1}]}""", decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content)
     }
 
     @Test
@@ -284,8 +287,71 @@ class CliToolBridgeTest {
         )
         assertEquals(ToolResultAction.REPLACE, decision.action)
         val text = decision.result?.text.orEmpty()
-        assertTrue(text.startsWith("数组条目 2"))
-        assertTrue(text.endsWith("卡片 id：call-1"))
+        assertEquals("数组条目 2", text)
+        assertTrue(decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content.orEmpty().contains("[{\"id\":1},{\"id\":2}]"))
+    }
+
+    @Test
+    fun recoversCompleteOutputFromFullOutputPath() = runTest {
+        val file = File.createTempFile("fake-cli-output", ".log")
+        file.writeText("""{"ok":true,"data":[1,2,3]}""")
+        val hooks = CliToolBridge(config).hooks(FakeHost())
+        hooks.beforeToolCall(call("call-1"))
+        val truncated = ToolExecutionResult(
+            sessionId,
+            "call-1",
+            "bash",
+            textResult(
+                "…tail-only",
+                details = buildJsonObject {
+                    put("truncation", buildJsonObject { put("truncated", true) })
+                    put("fullOutputPath", file.absolutePath)
+                },
+            ),
+        )
+        val decision = hooks.afterToolExecution(truncated)
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        assertEquals("第一行\n第二行", decision.result?.text)
+        assertEquals("""{"ok":true,"data":[1,2,3]}""", decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content)
+        file.delete()
+    }
+
+    @Test
+    fun setsTruncationHintWhenOutputCannotBeRecovered() = runTest {
+        val hooks = CliToolBridge(config).hooks(FakeHost())
+        hooks.beforeToolCall(call("call-1"))
+        val truncated = ToolExecutionResult(
+            sessionId,
+            "call-1",
+            "bash",
+            textResult(
+                "partial output",
+                details = buildJsonObject {
+                    put("truncation", buildJsonObject { put("truncated", true) })
+                },
+            ),
+        )
+        val decision = hooks.afterToolExecution(truncated)
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        assertTrue(decision.result?.text.orEmpty().startsWith("partial output"))
+        assertTrue(decision.result?.text.orEmpty().contains("已被截断"))
+    }
+
+    @Test
+    fun redactRawAppliesToAttachedPayload() = runTest {
+        val redacted = CliBridgeConfig<String, String>(
+            binaryName = "fake-cli",
+            customType = "fake.card",
+            logTag = "fake.bridge",
+            parser = CliCommandParser { raw -> if (raw.trim() == "fake-cli read") "read" else null },
+            observer = CliObservationBuilder { _, _, _ -> CliObservation(summary = "摘要", text = "结果") },
+            cardEncoder = { card -> buildJsonObject { put("value", card) } },
+            redactRaw = { _, raw -> raw.replace("secret", "***") },
+        )
+        val hooks = CliToolBridge(redacted).hooks(FakeHost())
+        hooks.beforeToolCall(call("call-1"))
+        val decision = hooks.afterToolExecution(result("call-1", """{"ok":true,"token":"secret"}"""))
+        assertEquals("""{"ok":true,"token":"***"}""", decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content)
     }
 
     @Test

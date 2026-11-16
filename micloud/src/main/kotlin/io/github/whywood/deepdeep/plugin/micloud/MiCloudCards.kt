@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -41,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.whywood.deepdeep.design.DdAvatar
 import io.github.whywood.deepdeep.design.DdAlpha
+import io.github.whywood.deepdeep.design.DdExpandToggle
 import io.github.whywood.deepdeep.design.DdIcon
 import io.github.whywood.deepdeep.design.DdIcons
 import io.github.whywood.deepdeep.design.DdMotion
@@ -58,13 +60,17 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private const val QUOTA_ENTRY_ROWS = 4
+private const val QUOTA_PREVIEW_ROWS = 4
 
-private const val NOTE_ROWS = 3
+private const val NOTE_PREVIEW_ROWS = 3
 
-private const val TODO_ROWS = 5
+private const val TODO_PREVIEW_ROWS = 5
 
-private const val FILE_ROWS = 5
+private const val FILE_PREVIEW_ROWS = 5
+
+private const val BODY_PREVIEW_LINES = 5
+
+private const val WRITE_PREVIEW_LINES = 3
 
 @Composable
 internal fun MiCloudAccountToolCard(host: PluginHost, state: ToolResultState) {
@@ -253,6 +259,35 @@ private fun MetaText(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
+private fun ExpandableBody(
+    host: PluginHost,
+    text: String,
+    collapsedLines: Int,
+    style: TextStyle,
+    color: Color,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    DdText(
+        text = text,
+        style = style,
+        color = color,
+        maxLines = if (expanded) Int.MAX_VALUE else collapsedLines,
+        overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis,
+    )
+    if (bodyNeedsToggle(text, collapsedLines)) {
+        DdExpandToggle(
+            expanded = expanded,
+            collapsedLabel = host.t("展开全文", "Read full text"),
+            expandedLabel = host.t("收起", "Show less"),
+            onToggle = { expanded = !expanded },
+        )
+    }
+}
+
+private fun bodyNeedsToggle(text: String, collapsedLines: Int): Boolean =
+    text.length > collapsedLines * 24 || text.count { it == '\n' } >= collapsedLines
+
+@Composable
 private fun ProgressBar(
     fraction: Float,
     color: Color,
@@ -380,11 +415,12 @@ private fun CheckCircle(
 private fun AccountQuotaCard(host: PluginHost, data: MiCloudAccountCardData) {
     val colors = deepDeepColors()
     val summary = quotaSummary(data.entries)
+    var expanded by remember { mutableStateOf(false) }
     MiCloudAnswerSurface {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CardLabel(host.t("小米云空间", "Xiaomi Cloud storage"), Modifier.weight(1f))
             if (data.entries.isNotEmpty()) {
-                MetaText(host.tf("%d 项", "%d items", data.entries.size))
+                MetaText(host.tf("共 %d 项", "%d items", data.entries.size))
             }
         }
         if (summary == null) {
@@ -432,12 +468,21 @@ private fun AccountQuotaCard(host: PluginHost, data: MiCloudAccountCardData) {
                 Spacer(Modifier.width(DdSpacing.Md))
                 RingGauge(summary.percent)
             }
-            val entries = data.entries.take(QUOTA_ENTRY_ROWS)
+            val entries = if (expanded) data.entries else data.entries.take(QUOTA_PREVIEW_ROWS)
             if (entries.isNotEmpty()) {
                 Spacer(Modifier.height(DdSpacing.Lg))
                 Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Md)) {
                     entries.forEach { entry -> QuotaEntryRow(host, entry) }
                 }
+            }
+            if (data.entries.size > QUOTA_PREVIEW_ROWS) {
+                Spacer(Modifier.height(DdSpacing.Sm))
+                DdExpandToggle(
+                    expanded = expanded,
+                    collapsedLabel = host.tf("展开全部 %d 项", "Show all %d", data.entries.size),
+                    expandedLabel = host.t("收起", "Show less"),
+                    onToggle = { expanded = !expanded },
+                )
             }
         }
         Spacer(Modifier.height(DdSpacing.Md))
@@ -618,13 +663,12 @@ private fun stickyTint(): Color {
 
 @Composable
 private fun NotesListCard(host: PluginHost, data: MiCloudNotesCardData) {
-    val colors = deepDeepColors()
-    val shown = data.rows.take(NOTE_ROWS)
-    val remaining = (data.total - shown.size).coerceAtLeast(0)
+    var expanded by remember { mutableStateOf(false) }
+    val shown = if (expanded) data.rows else data.rows.take(NOTE_PREVIEW_ROWS)
     MiCloudAnswerSurface {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CardLabel(host.t("我的便签", "My notes"), Modifier.weight(1f))
-            MetaText(host.tf("共 %d 条", "%d notes", data.total))
+            MetaText(host.tf("本页 %d 条", "%d on this page", data.rows.size))
         }
         if (shown.isEmpty()) {
             Spacer(Modifier.height(DdSpacing.Md))
@@ -632,26 +676,23 @@ private fun NotesListCard(host: PluginHost, data: MiCloudNotesCardData) {
         } else {
             Spacer(Modifier.height(DdSpacing.Md))
             Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Sm)) {
-                shown.forEach { item -> NoteSheetRow(host, item) }
+                shown.forEach { item -> NoteSheetRow(host, item, expanded) }
             }
-            if (remaining > 0) {
-                Spacer(Modifier.height(DdSpacing.Md))
-                MetaText(host.tf("还有 %d 条", "%d more", remaining))
+            if (data.rows.size > NOTE_PREVIEW_ROWS) {
+                Spacer(Modifier.height(DdSpacing.Sm))
+                DdExpandToggle(
+                    expanded = expanded,
+                    collapsedLabel = host.tf("展开全部 %d 条", "Show all %d", data.rows.size),
+                    expandedLabel = host.t("收起", "Show less"),
+                    onToggle = { expanded = !expanded },
+                )
             }
-        }
-        if (data.lastPage) {
-            Spacer(Modifier.height(DdSpacing.Sm))
-            DdText(
-                text = host.t("已到最后一页", "This is the last page"),
-                style = DdType.micro,
-                color = colors.inkTertiary,
-            )
         }
     }
 }
 
 @Composable
-private fun NoteSheetRow(host: PluginHost, item: MiCloudNoteItem) {
+private fun NoteSheetRow(host: PluginHost, item: MiCloudNoteItem, expanded: Boolean) {
     val colors = deepDeepColors()
     StickySheet(tint = stickyTint(), foldColor = colors.surface) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -660,7 +701,7 @@ private fun NoteSheetRow(host: PluginHost, item: MiCloudNoteItem) {
                 modifier = Modifier.weight(1f),
                 style = DdType.bodySmall.copy(fontWeight = FontWeight.SemiBold),
                 color = colors.ink,
-                maxLines = 1,
+                maxLines = if (expanded) 2 else 1,
                 overflow = TextOverflow.Ellipsis,
             )
             val modified = formatShortTime(item.modifyTime)
@@ -675,8 +716,8 @@ private fun NoteSheetRow(host: PluginHost, item: MiCloudNoteItem) {
                 text = item.snippet,
                 style = DdType.chip,
                 color = colors.inkSecondary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+                maxLines = if (expanded) Int.MAX_VALUE else 2,
+                overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis,
             )
         }
     }
@@ -735,12 +776,12 @@ private fun NotesReadCard(host: PluginHost, data: MiCloudNotesCardData) {
         }
         if (data.preview.isNotBlank()) {
             Spacer(Modifier.height(DdSpacing.Sm))
-            DdText(
+            ExpandableBody(
+                host = host,
                 text = data.preview,
+                collapsedLines = BODY_PREVIEW_LINES,
                 style = DdType.bodySmall,
                 color = colors.ink,
-                maxLines = 6,
-                overflow = TextOverflow.Ellipsis,
             )
         }
         Spacer(Modifier.height(DdSpacing.Md))
@@ -786,12 +827,12 @@ private fun NotesWriteCard(host: PluginHost, data: MiCloudNotesCardData) {
         )
         if (data.preview.isNotBlank()) {
             Spacer(Modifier.height(DdSpacing.Xxs))
-            DdText(
+            ExpandableBody(
+                host = host,
                 text = data.preview,
+                collapsedLines = WRITE_PREVIEW_LINES,
                 style = DdType.chip,
                 color = colors.inkSecondary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
             )
         }
         if (data.noteId.isNotBlank()) {
@@ -818,18 +859,20 @@ private fun ActionBadge(text: String, tint: Color) {
 @Composable
 private fun TodoListCard(host: PluginHost, data: MiCloudTodoCardData) {
     val colors = deepDeepColors()
-    val total = data.total.coerceAtLeast(data.rows.size)
-    val done = data.doneCount.coerceAtMost(total)
-    val shown = data.rows.take(TODO_ROWS)
-    val remaining = (total - shown.size).coerceAtLeast(0)
+    var expanded by remember { mutableStateOf(false) }
+    val pageTotal = data.rows.size
+    val done = data.rows.count { it.done }
+    val shown = if (expanded) data.rows else data.rows.take(TODO_PREVIEW_ROWS)
     MiCloudAnswerSurface {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CardLabel(host.t("待办清单", "To-do list"), Modifier.weight(1f))
-            MetaText(host.tf("%d / %d 已完成", "%d of %d done", done, total))
+            MetaText(host.tf("本页 %d 条", "%d on this page", pageTotal))
         }
-        if (total > 0) {
+        if (pageTotal > 0) {
             Spacer(Modifier.height(DdSpacing.Sm))
-            ProgressBar(fraction = done.toFloat() / total.toFloat(), color = colors.success)
+            ProgressBar(fraction = done.toFloat() / pageTotal.toFloat(), color = colors.success)
+            Spacer(Modifier.height(DdSpacing.Xxs))
+            MetaText(host.tf("已完成 %d / %d", "%d of %d done", done, pageTotal))
         }
         if (shown.isEmpty()) {
             Spacer(Modifier.height(DdSpacing.Md))
@@ -837,18 +880,23 @@ private fun TodoListCard(host: PluginHost, data: MiCloudTodoCardData) {
         } else {
             Spacer(Modifier.height(DdSpacing.Md))
             Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Md)) {
-                shown.forEach { item -> TodoCheckRow(host, item) }
+                shown.forEach { item -> TodoCheckRow(host, item, expanded) }
             }
-            if (remaining > 0) {
-                Spacer(Modifier.height(DdSpacing.Md))
-                MetaText(host.tf("还有 %d 条", "%d more", remaining))
+            if (data.rows.size > TODO_PREVIEW_ROWS) {
+                Spacer(Modifier.height(DdSpacing.Sm))
+                DdExpandToggle(
+                    expanded = expanded,
+                    collapsedLabel = host.tf("展开全部 %d 条", "Show all %d", data.rows.size),
+                    expandedLabel = host.t("收起", "Show less"),
+                    onToggle = { expanded = !expanded },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun TodoCheckRow(host: PluginHost, item: MiCloudTodoItem) {
+private fun TodoCheckRow(host: PluginHost, item: MiCloudTodoItem, expanded: Boolean) {
     val colors = deepDeepColors()
     Row(verticalAlignment = Alignment.Top) {
         CheckCircle(done = item.done, modifier = Modifier.padding(top = 1.dp))
@@ -862,8 +910,8 @@ private fun TodoCheckRow(host: PluginHost, item: MiCloudTodoItem) {
                 DdType.bodySmall
             },
             color = if (item.done) colors.inkSecondary else colors.ink,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
+            maxLines = if (expanded) Int.MAX_VALUE else 2,
+            overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis,
         )
         TodoTrailing(host, item)
     }
@@ -955,18 +1003,19 @@ private fun TodoWriteCard(host: PluginHost, data: MiCloudTodoCardData) {
         Row(verticalAlignment = Alignment.Top) {
             CheckCircle(done = data.done, diameter = 24.dp, modifier = Modifier.padding(top = 1.dp))
             Spacer(Modifier.width(DdSpacing.Md))
-            DdText(
-                text = data.content.ifBlank { host.t("（无内容）", "(No content)") },
-                modifier = Modifier.weight(1f),
-                style = if (data.done) {
-                    DdType.body.copy(textDecoration = TextDecoration.LineThrough)
-                } else {
-                    DdType.body
-                },
-                color = if (data.done) colors.inkSecondary else colors.ink,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Column(Modifier.weight(1f)) {
+                ExpandableBody(
+                    host = host,
+                    text = data.content.ifBlank { host.t("（无内容）", "(No content)") },
+                    collapsedLines = WRITE_PREVIEW_LINES,
+                    style = if (data.done) {
+                        DdType.body.copy(textDecoration = TextDecoration.LineThrough)
+                    } else {
+                        DdType.body
+                    },
+                    color = if (data.done) colors.inkSecondary else colors.ink,
+                )
+            }
         }
         val meta = buildList {
             val remind = formatShortTime(data.remindTime)
@@ -992,12 +1041,12 @@ private fun TodoWriteCard(host: PluginHost, data: MiCloudTodoCardData) {
 @Composable
 private fun FilesListCard(host: PluginHost, data: MiCloudFileCardData) {
     val colors = deepDeepColors()
-    val shown = data.files.take(FILE_ROWS)
-    val remaining = (data.files.size - shown.size).coerceAtLeast(0)
+    var expanded by remember { mutableStateOf(false) }
+    val shown = if (expanded) data.files else data.files.take(FILE_PREVIEW_ROWS)
     MiCloudAnswerSurface {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CardLabel(host.t("通话录音", "Call recordings"), Modifier.weight(1f))
-            MetaText(host.tf("%d 个", "%d files", data.files.size))
+            MetaText(host.tf("本页 %d 个", "%d on this page", data.files.size))
         }
         if (shown.isEmpty()) {
             Spacer(Modifier.height(DdSpacing.Md))
@@ -1005,11 +1054,16 @@ private fun FilesListCard(host: PluginHost, data: MiCloudFileCardData) {
         } else {
             Spacer(Modifier.height(DdSpacing.Sm))
             Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Md)) {
-                shown.forEach { item -> FileRow(host, item, tint = colors.inkSecondary) }
+                shown.forEach { item -> FileRow(host, item, tint = colors.inkSecondary, expanded = expanded) }
             }
-            if (remaining > 0) {
-                Spacer(Modifier.height(DdSpacing.Md))
-                MetaText(host.tf("还有 %d 个", "%d more", remaining))
+            if (data.files.size > FILE_PREVIEW_ROWS) {
+                Spacer(Modifier.height(DdSpacing.Sm))
+                DdExpandToggle(
+                    expanded = expanded,
+                    collapsedLabel = host.tf("展开全部 %d 个", "Show all %d", data.files.size),
+                    expandedLabel = host.t("收起", "Show less"),
+                    onToggle = { expanded = !expanded },
+                )
             }
         }
     }
@@ -1030,7 +1084,7 @@ private fun FilesDownloadCard(host: PluginHost, data: MiCloudFileCardData) {
             FilesEmptyBody(host)
         } else {
             Spacer(Modifier.height(DdSpacing.Md))
-            FileRow(host, file, tint = colors.accent)
+            FileRow(host, file, tint = colors.accent, expanded = true)
             Spacer(Modifier.height(DdSpacing.Md))
             DdText(
                 text = host.t("文件已保存到手机，可直接打开或分享。", "Saved to your phone; open or share it right away."),
@@ -1042,7 +1096,7 @@ private fun FilesDownloadCard(host: PluginHost, data: MiCloudFileCardData) {
 }
 
 @Composable
-private fun FileRow(host: PluginHost, item: MiCloudFileItem, tint: Color) {
+private fun FileRow(host: PluginHost, item: MiCloudFileItem, tint: Color, expanded: Boolean) {
     val colors = deepDeepColors()
     Row(verticalAlignment = Alignment.CenterVertically) {
         DdIcon(
@@ -1057,8 +1111,8 @@ private fun FileRow(host: PluginHost, item: MiCloudFileItem, tint: Color) {
                 text = item.name.ifBlank { host.t("未命名文件", "Untitled file") },
                 style = DdType.bodySmall.copy(fontWeight = FontWeight.Medium),
                 color = colors.ink,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                maxLines = if (expanded) Int.MAX_VALUE else 1,
+                overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis,
             )
             val meta = fileMeta(host, item)
             if (meta.isNotBlank()) {
@@ -1067,7 +1121,7 @@ private fun FileRow(host: PluginHost, item: MiCloudFileItem, tint: Color) {
                     text = meta,
                     style = DdType.chip,
                     color = colors.inkTertiary,
-                    maxLines = 1,
+                    maxLines = if (expanded) 2 else 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }

@@ -157,16 +157,29 @@ class RailPlugin : DeepDeepPlugin {
             )
         }
         return try {
-            val details = TrainService(host).search(from, to, date)
+            val result = TrainService(host).search(from, to, date)
+            val details = JsonFormat.encodeToJsonElement(TrainSearchDetails.serializer(), result.details) as JsonObject
+            val cardTitle = if (result.details.trains.isEmpty()) {
+                host.t("${result.details.from} → ${result.details.to}", "${result.details.from} → ${result.details.to}")
+            } else {
+                host.t(
+                    "${result.details.from} → ${result.details.to} · ${result.details.trains.size} 趟",
+                    "${result.details.from} → ${result.details.to} · ${result.details.trains.size} trains",
+                )
+            }
             textResult(
-                text = trainSummary(host, details),
-                details = JsonFormat.encodeToJsonElement(TrainSearchDetails.serializer(), details) as JsonObject,
+                text = trainSummary(host, result.details),
+                details = withCard(withRaw(details, result.raw), cardTitle),
             )
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
             host.logs().warn("train search failed: $from -> $to $date", error)
-            textResult(trainErrorMessage(host, error), isError = true)
+            textResult(
+                trainErrorMessage(host, error),
+                details = railRawDetails(error.railRaw()),
+                isError = true,
+            )
         }
     }
 
@@ -183,16 +196,39 @@ class RailPlugin : DeepDeepPlugin {
             )
         }
         return try {
-            val details = TrainService(host).price(from, to, date, trainCode)
+            val result = TrainService(host).price(from, to, date, trainCode)
+            val details = JsonFormat.encodeToJsonElement(TrainPriceDetails.serializer(), result.details) as JsonObject
             textResult(
-                text = trainPriceText(host, details),
-                details = JsonFormat.encodeToJsonElement(TrainPriceDetails.serializer(), details) as JsonObject,
+                text = trainPriceText(host, result.details),
+                details = withRaw(details, result.raw),
             )
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
             host.logs().warn("train price failed: $trainCode $from -> $to $date", error)
-            textResult(trainErrorMessage(host, error), isError = true)
+            textResult(
+                trainErrorMessage(host, error),
+                details = railRawDetails(error.railRaw()),
+                isError = true,
+            )
         }
+    }
+
+    private fun Throwable.railRaw(): String = when (this) {
+        is TrainQueryException -> raw
+        is TrainPriceUnavailableException -> raw
+        else -> ""
+    }
+
+    private fun railRawDetails(raw: String): JsonObject? = raw.takeIf { it.isNotBlank() }?.let {
+        buildJsonObject { put(RAIL_RAW_DETAILS_KEY, it) }
+    }
+
+    private fun withCard(details: JsonObject, title: String): JsonObject = JsonObject(
+        details + (CARD_DETAILS_KEY to buildJsonObject { put("title", title) }),
+    )
+
+    companion object {
+        private const val CARD_DETAILS_KEY = "deepdeep.card"
     }
 }

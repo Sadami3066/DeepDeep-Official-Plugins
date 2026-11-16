@@ -38,6 +38,9 @@ class MimeTest {
         Date: Tue, 12 Nov 2026 10:00:00 +0800
         Message-ID: <abc@example.com>
         References: <root@example.com>
+        Reply-To: Reply Person <reply@example.com>
+        List-Id: <test.lists.example.com>
+        List-Unsubscribe: <mailto:list-unsubscribe@example.com>
         MIME-Version: 1.0
         Content-Type: multipart/mixed; boundary="BOUND"
 
@@ -65,6 +68,11 @@ class MimeTest {
         assertEquals("cc@example.com", parsed.headers.cc.first().address)
         assertEquals("<abc@example.com>", parsed.headers.messageId)
         assertEquals(listOf("<root@example.com>"), parsed.headers.references)
+        assertEquals("Reply Person <reply@example.com>", parsed.headers.replyTo.single().display)
+        assertEquals("<test.lists.example.com>", parsed.headers.listHeaders["list-id"])
+        assertEquals("<mailto:list-unsubscribe@example.com>", parsed.headers.listHeaders["list-unsubscribe"])
+        assertTrue(parsed.hasPlainText)
+        assertFalse(parsed.textTruncated)
         val expectedDate = SimpleDateFormat("EEE, d MMM yyyy HH:mm:ss Z", Locale.US)
             .parse("Tue, 12 Nov 2026 10:00:00 +0800")!!.time
         assertEquals(expectedDate, parsed.headers.dateMillis)
@@ -108,6 +116,39 @@ class MimeTest {
     }
 
     @Test
+    fun keepsEveryTextPartAndConcatenatesThem() {
+        val raw = """
+            Subject: multiple text parts
+            MIME-Version: 1.0
+            Content-Type: multipart/mixed; boundary="TXT"
+
+            --TXT
+            Content-Type: text/plain; charset=UTF-8
+
+            first part
+            --TXT
+            Content-Type: text/plain; charset=UTF-8
+
+            second part
+            --TXT
+            Content-Type: text/html; charset=UTF-8
+
+            <p>first html</p>
+            --TXT
+            Content-Type: text/html; charset=UTF-8
+
+            <p>second html</p>
+            --TXT--
+        """.trimIndent().replace("\n", "\r\n")
+        val parsed = MailMimeParser.parse(raw.toByteArray(Charsets.UTF_8))
+        assertEquals("first part\n\nsecond part", parsed.textBody.trim())
+        val html = parsed.htmlBody.orEmpty()
+        assertTrue(html, html.contains("first html"))
+        assertTrue(html, html.contains("second html"))
+        assertTrue(parsed.hasPlainText)
+    }
+
+    @Test
     fun convertsHtmlBodyToPlainTextWhenNoPlainPart() {
         val raw = """
             Subject: html only
@@ -119,6 +160,7 @@ class MimeTest {
         val parsed = MailMimeParser.parse(raw.toByteArray(Charsets.UTF_8))
         assertEquals("Hello world\n\nSecond line", parsed.textBody)
         assertNotNull(parsed.htmlBody)
+        assertFalse(parsed.hasPlainText)
         assertTrue(parsed.attachments.isEmpty())
     }
 
@@ -215,6 +257,25 @@ class MimeTest {
         val parsed = MailMimeParser.parse(raw.toByteArray(Charsets.UTF_8))
         assertTrue(parsed.textBody.length <= MailLimits.MAX_TEXT_PART_BYTES)
         assertTrue(parsed.textBody.isNotBlank())
+        assertTrue(parsed.textTruncated)
+    }
+
+    @Test
+    fun marksTextTruncatedWhenTotalTextBudgetIsExceeded() {
+        val part = ("c".repeat(1000) + "\n").repeat(MailLimits.MAX_TEXT_PART_BYTES / 500)
+        val raw = "Subject: many huge parts\r\n" +
+            "Content-Type: multipart/mixed; boundary=\"HUGE\"\r\n\r\n" +
+            "--HUGE\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n" +
+            part + "\r\n" +
+            "--HUGE\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n" +
+            part + "\r\n" +
+            "--HUGE\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n" +
+            "tail part that does not fit\r\n" +
+            "--HUGE--\r\n"
+        val parsed = MailMimeParser.parse(raw.toByteArray(Charsets.UTF_8))
+        assertTrue(parsed.textTruncated)
+        assertTrue(parsed.textBody.length <= MailLimits.MAX_TEXT_TOTAL_BYTES + 4)
+        assertTrue(parsed.textBody.length >= MailLimits.MAX_TEXT_TOTAL_BYTES - 2)
     }
 
     @Test
@@ -225,6 +286,7 @@ class MimeTest {
         val parsed = MailMimeParser.parse(raw.toByteArray(Charsets.UTF_8))
         assertEquals("fallback", parsed.headers.subject)
         assertTrue(parsed.textBody.length <= MailLimits.MAX_TEXT_PART_BYTES)
+        assertTrue(parsed.textTruncated)
     }
 
     @Test

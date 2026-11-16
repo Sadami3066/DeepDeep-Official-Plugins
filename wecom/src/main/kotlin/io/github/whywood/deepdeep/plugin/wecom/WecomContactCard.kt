@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -34,7 +38,8 @@ internal fun WecomContactsCard(host: PluginHost, kind: WecomCommandKind, model: 
         WecomStateCard(host, kind, model)
         return
     }
-    val rows = model.items.take(WECOM_CONTACT_ROWS)
+    var expanded by remember(model) { mutableStateOf(false) }
+    val rows = if (expanded) model.items else model.items.take(WECOM_CONTACT_ROWS)
     val total = maxOf(model.total, model.items.size)
     WecomCardSurface {
         Column(
@@ -51,20 +56,26 @@ internal fun WecomContactsCard(host: PluginHost, kind: WecomCommandKind, model: 
             Spacer(Modifier.height(DdSpacing.Xs))
             rows.forEachIndexed { index, item ->
                 if (index > 0) DdRowDivider()
-                ContactRow(item = item)
+                ContactRow(item = item, expanded = expanded)
             }
+            WecomExpandToggle(
+                host = host,
+                kind = kind,
+                expanded = expanded,
+                hidden = model.items.size - WECOM_CONTACT_ROWS,
+                onToggle = { expanded = !expanded },
+            )
             WecomMoreLine(
                 host = host,
                 kind = kind,
-                hidden = total - rows.size,
-                hasMore = false,
+                hasMore = !model.note.isNullOrBlank(),
             )
         }
     }
 }
 
 @Composable
-private fun ContactRow(item: CliCardItem) {
+private fun ContactRow(item: CliCardItem, expanded: Boolean) {
     val colors = deepDeepColors()
     Row(
         modifier = Modifier
@@ -97,8 +108,15 @@ private fun ContactRow(item: CliCardItem) {
                     text = subtitle,
                     style = WecomCardType.secondary,
                     color = colors.inkSecondary,
-                    maxLines = 1,
+                    maxLines = if (expanded) Int.MAX_VALUE else 1,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+            item.body?.takeIf { it.isNotBlank() }?.let { details ->
+                Spacer(Modifier.height(3.dp))
+                WecomDetailText(
+                    text = details,
+                    maxLines = if (expanded) Int.MAX_VALUE else 2,
                 )
             }
         }
@@ -106,10 +124,10 @@ private fun ContactRow(item: CliCardItem) {
             Spacer(Modifier.width(DdSpacing.Sm))
             DdText(
                 text = email,
-                modifier = Modifier.widthIn(max = 132.dp),
+                modifier = Modifier.widthIn(max = if (expanded) 160.dp else 132.dp),
                 style = WecomCardType.micro,
                 color = colors.inkTertiary,
-                maxLines = 1,
+                maxLines = if (expanded) 3 else 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }

@@ -15,6 +15,7 @@ import io.github.whywood.deepdeep.plugin.api.ComponentService
 import io.github.whywood.deepdeep.plugin.api.ContactsService
 import io.github.whywood.deepdeep.plugin.api.CredentialService
 import io.github.whywood.deepdeep.plugin.api.DeviceService
+import io.github.whywood.deepdeep.plugin.api.FileEntry
 import io.github.whywood.deepdeep.plugin.api.FileService
 import io.github.whywood.deepdeep.plugin.api.GoalService
 import io.github.whywood.deepdeep.plugin.api.IntentsService
@@ -61,6 +62,7 @@ internal data class PostedWecomCard(
 internal class FakeWecomHost(
     private val language: String = "zh",
     private val postSucceeds: Boolean = true,
+    private val fileContents: Map<String, String> = emptyMap(),
 ) : PluginHost {
     val posted = mutableListOf<PostedWecomCard>()
 
@@ -90,6 +92,31 @@ internal class FakeWecomHost(
         ): ChatSendResult = throw PluginServiceUnavailable("chat.sendMessageWithAttachments")
     }
 
+    private val baseDir = File(System.getProperty("java.io.tmpdir") ?: "/tmp")
+
+    private val fileService = object : FileService {
+        override val rootDir: String = baseDir.absolutePath
+        override val workspaceDir: String = baseDir.absolutePath
+
+        override suspend fun list(path: String): List<FileEntry> = emptyList()
+
+        override suspend fun readText(path: String): String =
+            fileContents[path] ?: throw PluginServiceUnavailable("files.readText($path)")
+
+        override suspend fun writeText(path: String, content: String, append: Boolean) = Unit
+
+        override suspend fun readBytes(path: String): ByteArray =
+            readText(path).toByteArray()
+
+        override suspend fun writeBytes(path: String, bytes: ByteArray) = Unit
+
+        override suspend fun delete(path: String): Boolean = false
+
+        override suspend fun exists(path: String): Boolean = fileContents.containsKey(path)
+
+        override suspend fun resolve(path: String): String = path
+    }
+
     private val appInfoService = object : AppInfoService {
         override val info: AppInfo = AppInfo(
             versionName = "1.0.0",
@@ -100,7 +127,7 @@ internal class FakeWecomHost(
 
     override val manifest: PluginManifest get() = unavailable("manifest")
     override val context: Context get() = unavailable("context")
-    override val dataDir: File = File(System.getProperty("java.io.tmpdir") ?: "/tmp")
+    override val dataDir: File = baseDir
     override val assetsDir: File = dataDir
     override val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
 
@@ -116,7 +143,7 @@ internal class FakeWecomHost(
     override fun notifications(): NotificationService = unavailable("notifications")
     override fun secrets(): SecretService = unavailable("secrets")
     override fun network(): NetworkService = unavailable("network")
-    override fun files(): FileService = unavailable("files")
+    override fun files(): FileService = fileService
     override fun sessions(): SessionService = unavailable("sessions")
     override fun jobs(): JobService = unavailable("jobs")
     override fun timers(): TimerService = unavailable("timers")

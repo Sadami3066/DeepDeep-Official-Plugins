@@ -6,7 +6,6 @@ import io.github.whywood.deepdeep.plugin.api.textResult
 import java.io.File
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 internal fun galleryTool(client: MiCloudReadApi, text: MiCloudText): PluginTool = pluginTool(
@@ -20,23 +19,27 @@ internal fun galleryTool(client: MiCloudReadApi, text: MiCloudText): PluginTool 
         val args = call.args
         when (val action = args.argString("action") ?: "list") {
             "list" -> {
-                val limit = limitArg(args)
-                val items = client.getJson(galleriesPath(now()))
-                    .payloadArray("galleries")
+                val response = client.getJson(galleriesPath(now()))
+                val payload = response.json.payloadObject()
+                val items = response.json.payloadArray("galleries")
                     .mapNotNull { it as? JsonObject }
-                    .map(::galleryItem)
-                    .take(limit)
-                textResult(galleryObservation(items.take(MAX_OBSERVATION_ITEMS), text))
+                val hasMore = payload.boolOrNull("hasMore") ?: false
+                textResult(
+                    galleryObservation(items, hasMore, text),
+                    details = rawResultDetails(response.body),
+                )
             }
 
             "albums" -> {
-                val limit = limitArg(args)
-                val albums = client.getJson(albumsPath(now()))
-                    .payloadArray("albums")
+                val response = client.getJson(albumsPath(now()))
+                val payload = response.json.payloadObject()
+                val albums = response.json.payloadArray("albums")
                     .mapNotNull { it as? JsonObject }
-                    .map(::compactObject)
-                    .take(limit)
-                textResult(albumsObservation(albums.take(MAX_OBSERVATION_ITEMS), text))
+                val hasMore = payload.boolOrNull("hasMore") ?: false
+                textResult(
+                    albumsObservation(albums, hasMore, text),
+                    details = rawResultDetails(response.body),
+                )
             }
 
             else -> throw IllegalArgumentException("action must be list or albums")
@@ -65,10 +68,9 @@ internal fun recordingsTool(
                 if (offset < 0) {
                     throw IllegalArgumentException("offset must not be negative")
                 }
-                val items = client.getJson(recordingsPath(userId, now(), offset, limit))
-                    .payloadArray("list")
+                val response = client.getJson(recordingsPath(userId, now(), offset, limit))
+                val items = response.json.payloadArray("list")
                     .mapNotNull { it as? JsonObject }
-                    .map(::recordingItem)
                 val files = items.map { item ->
                     MiCloudFileItem(
                         fileId = item.stringOrNull("id").orEmpty(),
@@ -78,9 +80,14 @@ internal fun recordingsTool(
                         durationSeconds = recordingDurationSeconds(item.longOrNull("duration")),
                     )
                 }
+                val card = MiCloudFileCardData(mode = FILES_MODE_LIST, files = files)
                 textResult(
-                    recordingsObservation(items.take(MAX_OBSERVATION_ITEMS), offset + items.size, text),
-                    details = MiCloudFileCardData(mode = FILES_MODE_LIST, files = files).toJson(),
+                    recordingsObservation(items, offset + items.size, text),
+                    details = cardResultDetails(
+                        card = card.toJson(),
+                        raw = response.body,
+                        title = text.fmt("通话录音（%d 条）", "Call recordings (%d)", files.size),
+                    ),
                 )
             }
 
@@ -97,6 +104,7 @@ internal fun recordingsTool(
                     sizeBytes = downloaded.length(),
                     timeMs = now(),
                 )
+                val card = MiCloudFileCardData(mode = FILES_MODE_DOWNLOAD, files = listOf(file))
                 textResult(
                     recordingDownloadObservation(
                         fileId = fileId,
@@ -105,7 +113,11 @@ internal fun recordingsTool(
                         path = downloaded.absolutePath,
                         t = text,
                     ),
-                    details = MiCloudFileCardData(mode = FILES_MODE_DOWNLOAD, files = listOf(file)).toJson(),
+                    details = cardResultDetails(
+                        card = card.toJson(),
+                        raw = "",
+                        title = text("录音已保存", "Recording saved"),
+                    ),
                 )
             }
 
@@ -116,33 +128,10 @@ internal fun recordingsTool(
 
 private suspend fun recordingName(client: MiCloudReadApi, userId: String, fileId: String): String {
     val response = runCatching { client.getJson(recordingsPath(userId, now(), 0, MAX_LIST_LIMIT)) }.getOrNull()
-    val items: List<JsonElement> = response?.payloadArray("list").orEmpty()
+    val items: List<JsonElement> = response?.json?.payloadArray("list").orEmpty()
     val match = items.mapNotNull { it as? JsonObject }
         .firstOrNull { it.stringOrNull("id") == fileId || it.stringOrNull("fileId") == fileId }
-    return match?.let(::recordingItem)?.stringOrNull("name") ?: "recording-$fileId"
-}
-
-private fun galleryItem(item: JsonObject): JsonObject = buildJsonObject {
-    put("id", item.stringOrNull("id") ?: "")
-    put("fileName", item.stringOrNull("fileName") ?: item.stringOrNull("name") ?: "")
-    item.longOrNull("size")?.let { put("size", it) }
-    item.stringOrNull("mimeType")?.let { put("mimeType", it) }
-    item.longOrNull("dateTaken")?.let { put("dateTaken", it) }
-    item.longOrNull("createTime")?.let { put("createTime", it) }
-    item.boolOrNull("isFavorite")?.let { put("favorite", it) }
-    item.stringOrNull("type")?.let { put("type", it) }
-}
-
-private fun recordingItem(item: JsonObject): JsonObject {
-    val id = item.stringOrNull("id") ?: item.stringOrNull("fileId") ?: item.stringOrNull("sid") ?: ""
-    val name = item.stringOrNull("fileName") ?: item.stringOrNull("name") ?: item.stringOrNull("title") ?: id
-    return buildJsonObject {
-        put("id", id)
-        put("name", name)
-        item.longOrNull("size")?.let { put("size", it) }
-        item.longOrNull("duration")?.let { put("duration", it) }
-        item.longOrNull("createTime")?.let { put("createTime", it) }
-    }
+    return match?.stringOrNull("name") ?: match?.stringOrNull("fileName") ?: "recording-$fileId"
 }
 
 private fun uniqueFile(directory: File, name: String): File {
@@ -179,7 +168,6 @@ private val galleryParameters: JsonObject = toolParams {
         "action",
         propEnum("Action to perform: list media items or albums (default list)", listOf("list", "albums")),
     )
-    put("limit", propInt("Number of items to return", minimum = 1, maximum = MAX_LIST_LIMIT, default = 50))
 }
 
 private val recordingsParameters: JsonObject = toolParams(required = listOf("action")) {

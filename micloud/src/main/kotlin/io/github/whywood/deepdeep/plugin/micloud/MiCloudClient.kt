@@ -7,7 +7,6 @@ import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
 
 internal class MiCloudAuthException(message: String) : Exception(message)
 
@@ -20,7 +19,7 @@ internal class MiCloudClient(
 ) {
     suspend fun userId(): String? = cookieProvider()?.let { parseCookie(it)[USER_ID] }
 
-    suspend fun getJson(pathWithQuery: String): JsonElement = withContext(Dispatchers.IO) {
+    suspend fun getJson(pathWithQuery: String): MiCloudResponse = withContext(Dispatchers.IO) {
         val cookie = requireCookie()
         val connection = open(pathWithQuery)
         try {
@@ -35,7 +34,7 @@ internal class MiCloudClient(
             val json = runCatching { Json.parseToJsonElement(body) }.getOrNull()
                 ?: throw IOException("Mi Cloud returned non-JSON content")
             if (isMiCloudAuthFailure(json)) authExpired()
-            json
+            MiCloudResponse(body = body, json = json)
         } finally {
             connection.disconnect()
         }
@@ -70,8 +69,8 @@ internal class MiCloudClient(
     }
 
     suspend fun profile(): MiCloudProfile {
-        val json = getJson("/status/lite/profile?ts=${System.currentTimeMillis()}")
-        return parseProfile(json) ?: throw IOException("Mi Cloud account response format is invalid")
+        val response = getJson("/status/lite/profile?ts=${System.currentTimeMillis()}")
+        return parseProfile(response.json) ?: throw IOException("Mi Cloud account response format is invalid")
     }
 
     private suspend fun requireCookie(): String = cookieProvider()?.takeIf { it.isNotBlank() }

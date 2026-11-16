@@ -2,6 +2,7 @@ package io.github.whywood.deepdeep.plugin.sysu
 
 import io.github.whywood.deepdeep.plugin.api.Contributions
 import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
+import io.github.whywood.deepdeep.plugin.api.LinuxResult
 import io.github.whywood.deepdeep.plugin.api.LinuxService
 import io.github.whywood.deepdeep.plugin.api.LocalizedText
 import io.github.whywood.deepdeep.plugin.api.NotificationActionEvent
@@ -81,6 +82,9 @@ class SysuPlugin : DeepDeepPlugin {
             installedVersion = stored?.installedVersion,
             account = stored?.account,
             loggedIn = stored?.loggedIn == true,
+            lmsConnected = stored?.lmsConnected == true,
+            gymConnected = stored?.gymConnected == true,
+            netpayConnected = stored?.netpayConnected == true,
         )
         return listOf(promptSection(SECTION_ID, SysuContent.promptBody(status), PROMPT_PRIORITY))
     }
@@ -116,7 +120,10 @@ class SysuPlugin : DeepDeepPlugin {
             installedVersion = SysuCli.parseVersion(raw.cli),
             recordedVersion = recorded?.installedVersion,
             account = SysuCli.netId(raw.credentials) ?: savedNetId,
-            loggedIn = SysuCli.isLoggedIn(raw.session),
+            loggedIn = raw.connected(SysuSite.Jwxt),
+            lmsConnected = raw.connected(SysuSite.Lms),
+            gymConnected = raw.connected(SysuSite.Gym),
+            netpayConnected = raw.connected(SysuSite.Netpay),
         )
         recordStored(
             host,
@@ -125,6 +132,9 @@ class SysuPlugin : DeepDeepPlugin {
                 nodeVersion = status.nodeVersion,
                 account = status.account,
                 loggedIn = status.loggedIn,
+                lmsConnected = status.lmsConnected,
+                gymConnected = status.gymConnected,
+                netpayConnected = status.netpayConnected,
                 checkedAt = System.currentTimeMillis(),
             ),
         )
@@ -158,6 +168,9 @@ class SysuPlugin : DeepDeepPlugin {
                 nodeVersion = stored?.nodeVersion,
                 account = netId,
                 loggedIn = if (changed) false else stored?.loggedIn == true,
+                lmsConnected = if (changed) false else stored?.lmsConnected == true,
+                gymConnected = if (changed) false else stored?.gymConnected == true,
+                netpayConnected = if (changed) false else stored?.netpayConnected == true,
                 checkedAt = System.currentTimeMillis(),
             ),
         )
@@ -209,7 +222,7 @@ class SysuPlugin : DeepDeepPlugin {
         val linux = requireLinux(host)
         onProgress(host.text(TEXT_STAGE_LOGIN))
         val result = linux.exec(SysuCli.loginSendCodeCommand(), timeoutMs = LOGIN_TIMEOUT_MS)
-        val output = SysuCli.cleanOutput(result.stdout)
+        val output = loginOutput(result)
         if (result.timedOut) throw SysuException(host.text(TEXT_ERROR_LOGIN_TIMEOUT))
         if (result.exitCode != 0) throw loginError(host, output)
         if (SysuCli.needsCode(output)) return true
@@ -223,11 +236,36 @@ class SysuPlugin : DeepDeepPlugin {
         if (!SysuCli.CODE_PATTERN.matches(code)) throw SysuException(host.text(TEXT_ERROR_CODE_FORMAT))
         onProgress(host.text(TEXT_STAGE_CODE))
         val result = linux.exec(SysuCli.loginCodeCommand(code), timeoutMs = LOGIN_TIMEOUT_MS)
-        val output = SysuCli.cleanOutput(result.stdout)
+        val output = loginOutput(result)
         if (result.timedOut) throw SysuException(host.text(TEXT_ERROR_LOGIN_TIMEOUT))
         if (result.exitCode != 0) throw loginError(host, output)
         if (!loadStatus(host).loggedIn) throw loginError(host, output)
         notifySignedIn(host)
+    }
+
+    internal suspend fun loginSite(
+        host: PluginHost,
+        site: SysuSite,
+        code: String? = null,
+        onProgress: (String) -> Unit,
+    ): SysuSiteLogin {
+        val linux = requireLinux(host)
+        onProgress(host.text(stageText(site)))
+        val command = if (code == null) site.loginCommand() else site.loginCodeCommand(code)
+        val result = linux.exec(command, timeoutMs = LOGIN_TIMEOUT_MS)
+        val output = loginOutput(result)
+        if (result.timedOut) return SysuSiteLogin.Failed(host.text(TEXT_ERROR_LOGIN_TIMEOUT))
+        if (SysuCli.needsCode(output)) return SysuSiteLogin.NeedsCode
+        if (result.exitCode != 0) {
+            val detail = output.takeLast(ERROR_TAIL).trim()
+            val message = if (detail.isEmpty()) {
+                host.text(TEXT_ERROR_LOGIN_EMPTY)
+            } else {
+                host.text(TEXT_ERROR_SITE_LOGIN, host.text(siteText(site)), detail)
+            }
+            return SysuSiteLogin.Failed(message)
+        }
+        return SysuSiteLogin.Connected
     }
 
     internal suspend fun logout(host: PluginHost) {
@@ -235,12 +273,21 @@ class SysuPlugin : DeepDeepPlugin {
         val result = linux.exec(SysuCli.logoutCommand(), timeoutMs = WRITE_TIMEOUT_MS)
         if (result.exitCode != 0) {
             throw SysuException(
-                host.text(TEXT_ERROR_LOGOUT, SysuCli.cleanOutput(result.stdout).takeLast(ERROR_TAIL)),
+                host.text(TEXT_ERROR_LOGOUT, loginOutput(result).takeLast(ERROR_TAIL)),
             )
         }
         val stored = lastStored
         if (stored != null) {
-            recordStored(host, stored.copy(loggedIn = false, checkedAt = System.currentTimeMillis()))
+            recordStored(
+                host,
+                stored.copy(
+                    loggedIn = false,
+                    lmsConnected = false,
+                    gymConnected = false,
+                    netpayConnected = false,
+                    checkedAt = System.currentTimeMillis(),
+                ),
+            )
         }
     }
 
@@ -258,6 +305,9 @@ class SysuPlugin : DeepDeepPlugin {
                 nodeVersion = nodeVersion,
                 account = stored?.account,
                 loggedIn = stored?.loggedIn == true,
+                lmsConnected = stored?.lmsConnected == true,
+                gymConnected = stored?.gymConnected == true,
+                netpayConnected = stored?.netpayConnected == true,
                 checkedAt = System.currentTimeMillis(),
             ),
         )
@@ -295,11 +345,23 @@ class SysuPlugin : DeepDeepPlugin {
         return linux
     }
 
+    private fun loginOutput(result: LinuxResult): String =
+        SysuCli.cleanOutput(
+            listOf(result.stdout, result.stderr).filter { it.isNotBlank() }.joinToString("\n"),
+        )
+
     private fun loginError(host: PluginHost, output: String): SysuException {
         val detail = output.takeLast(ERROR_TAIL).trim()
         return SysuException(
             if (detail.isEmpty()) host.text(TEXT_ERROR_LOGIN_EMPTY) else host.text(TEXT_ERROR_LOGIN, detail),
         )
+    }
+
+    private fun stageText(site: SysuSite): LocalizedText = when (site) {
+        SysuSite.Jwxt -> TEXT_STAGE_LOGIN
+        SysuSite.Lms -> TEXT_STAGE_LMS
+        SysuSite.Gym -> TEXT_STAGE_GYM
+        SysuSite.Netpay -> TEXT_STAGE_NETPAY
     }
 
     private companion object {
@@ -328,6 +390,9 @@ class SysuPlugin : DeepDeepPlugin {
         val TEXT_STAGE_INSTALLING = literal("正在准备校园服务…", "Preparing campus services…")
         val TEXT_STAGE_LOGIN = literal("正在登录…", "Signing in…")
         val TEXT_STAGE_CODE = literal("正在验证…", "Verifying…")
+        val TEXT_STAGE_LMS = literal("正在连接在线教学…", "Connecting to the LMS…")
+        val TEXT_STAGE_GYM = literal("正在连接体育场馆…", "Connecting to sports venues…")
+        val TEXT_STAGE_NETPAY = literal("正在连接网费服务…", "Connecting to campus network…")
         val TEXT_ERROR_NODE_MISSING = literal(
             "运行环境不完整，请在 设置 → 运行环境 重新安装",
             "The runtime is incomplete. Reinstall it in Settings → Runtime.",
@@ -343,6 +408,7 @@ class SysuPlugin : DeepDeepPlugin {
             "Plugin asset is missing: %1\$s. Reinstall the plugin.",
         )
         val TEXT_ERROR_LOGIN = literal("登录失败：%1\$s", "Sign-in failed: %1\$s")
+        val TEXT_ERROR_SITE_LOGIN = literal("%1\$s登录失败：%2\$s", "%1\$s sign-in failed: %2\$s")
         val TEXT_ERROR_LOGIN_EMPTY = literal(
             "登录失败，请检查网络与账号密码后重试",
             "Sign-in failed. Check your network and credentials, then try again.",
@@ -377,3 +443,9 @@ internal class SysuException(message: String) : Exception(message)
 
 internal fun literal(zh: String, en: String): LocalizedText =
     localizedText(mapOf("default" to zh, "zh" to zh, "en" to en))
+
+internal sealed interface SysuSiteLogin {
+    data object Connected : SysuSiteLogin
+    data object NeedsCode : SysuSiteLogin
+    data class Failed(val message: String) : SysuSiteLogin
+}

@@ -41,11 +41,11 @@ class SysuCardCodecTest {
     }
 
     @Test
-    fun sectionsAreCappedAtEightDataRowsButLabelsDoNotCount() {
+    fun allSectionsAndRowsSurviveRoundTrip() {
         val sections = (1..3).map { index ->
             CliCardSection(
                 label = "第 $index 组",
-                items = (1..4).map { row -> CliCardItem(title = "条目 $index-$row") },
+                items = (1..4).map { row -> CliCardItem(title = "条目 $index-$row", body = "详情 $row") },
             )
         }
         val model = CliCardModel(
@@ -56,10 +56,10 @@ class SysuCardCodecTest {
         )
         val decoded = roundTrip(model)
         assertNotNull(decoded)
-        assertEquals(2, decoded!!.sections.size)
-        assertEquals(8, decoded.sections.sumOf { it.items.size })
-        assertEquals(listOf("第 1 组", "第 2 组"), decoded.sections.map { it.label })
-        assertEquals(8, decoded.dataRowCount)
+        assertEquals(3, decoded!!.sections.size)
+        assertEquals(12, decoded.sections.sumOf { it.items.size })
+        assertEquals(12, decoded.dataRowCount)
+        assertEquals("详情 1", decoded.sections.first().items.first().body)
     }
 
     @Test

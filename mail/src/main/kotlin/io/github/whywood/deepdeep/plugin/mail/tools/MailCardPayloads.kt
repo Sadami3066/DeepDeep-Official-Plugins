@@ -22,6 +22,7 @@ internal data class MailSearchCardPayload(
     val type: String = MailChatCardTypes.SEARCH,
     val query: String = "",
     val account: String = "",
+    val folder: String = "",
     val unreadOnly: Boolean = false,
     val total: Int = 0,
     val items: List<MailSearchCardItem> = emptyList(),
@@ -34,9 +35,16 @@ internal data class MailSearchCardItem(
     val threadId: String = "",
     val subject: String = "",
     val from: String = "",
+    val to: List<String> = emptyList(),
+    val preview: String = "",
     val dateMillis: Long = 0L,
     val unread: Boolean = false,
+    val starred: Boolean = false,
     val hasAttachments: Boolean = false,
+    val sizeBytes: Long = 0L,
+    val folderRole: String = "",
+    val sent: Boolean = false,
+    val account: String = "",
     val accountColor: Int = 0,
 )
 
@@ -67,14 +75,23 @@ internal data class MailReadCardPayload(
     val subject: String = "",
     val fromName: String = "",
     val fromAddress: String = "",
+    val to: List<String> = emptyList(),
+    val account: String = "",
+    val folderRole: String = "",
     val dateMillis: Long = 0L,
     val preview: String = "",
+    val body: String = "",
     val unread: Boolean = false,
+    val textTruncated: Boolean = false,
     val attachments: List<MailReadCardAttachment> = emptyList(),
 )
 
 @Serializable
 internal data class MailReadCardAttachment(
+    val id: String = "",
     val name: String = "",
+    val mimeType: String = "",
     val sizeBytes: Long = 0L,
+    val inline: Boolean = false,
+    val contentId: String? = null,
 )

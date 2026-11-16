@@ -16,9 +16,20 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 
-internal class AmapException(message: String) : Exception(message)
+internal class AmapException(message: String, val raw: String? = null) : Exception(message)
 
 internal class AmapSessionExpiredException : Exception()
+
+internal data class AmapCall(val payload: JsonElement, val raw: String)
+
+internal data class AmapMcpTool(val name: String, val inputs: Set<String>)
+
+internal fun sanitizeAmapText(raw: String?, key: String?): String {
+    val text = raw.orEmpty()
+    if (key.isNullOrBlank()) return text
+    val encoded = runCatching { URLEncoder.encode(key, "UTF-8") }.getOrDefault(key)
+    return text.replace(key, "***").replace(encoded, "***")
+}
 
 internal object AmapMcpProtocol {
     fun envelope(body: String?): JsonObject? {
@@ -59,11 +70,19 @@ internal object AmapMcpProtocol {
         return code == -32001 || message.contains("session", ignoreCase = true)
     }
 
-    fun tools(envelope: JsonObject): List<String> =
+    fun toolDefinitions(envelope: JsonObject): List<AmapMcpTool> =
         envelope["result"]?.asObjectOrNull()
             ?.arrayValue("tools")
-            ?.mapNotNull { it.asObjectOrNull()?.textValue("name") }
+            ?.mapNotNull { element ->
+                val tool = element.asObjectOrNull() ?: return@mapNotNull null
+                val name = tool.textValue("name") ?: return@mapNotNull null
+                val schema = tool.objectValue("inputSchema", "input_schema")
+                val inputs = schema?.objectValue("properties")?.keys.orEmpty()
+                AmapMcpTool(name, inputs)
+            }
             .orEmpty()
+
+    fun tools(envelope: JsonObject): List<String> = toolDefinitions(envelope).map { it.name }
 
     fun contentText(result: JsonObject): String =
         (result["content"] as? JsonArray)?.joinToString("\n") { part ->
@@ -109,7 +128,7 @@ internal class AmapClient(private val host: PluginHost) {
         }
         val opened = openSession(key)
         val tools = listTools(opened)
-        if (tools.isEmpty() || tools.none { it in KNOWN_TOOLS }) {
+        if (tools.isEmpty() || tools.none { it.name in KNOWN_TOOLS }) {
             throw AmapException(
                 host.t(
                     "高德服务没有返回可用的地图能力，请稍后重试",
@@ -117,10 +136,10 @@ internal class AmapClient(private val host: PluginHost) {
                 ),
             )
         }
-        return tools
+        return tools.map { it.name }
     }
 
-    suspend fun call(tool: String, arguments: JsonObject): JsonElement {
+    suspend fun call(tool: String, arguments: JsonObject): AmapCall {
         val key = keyStore.currentKey() ?: throw AmapException(
             host.t(
                 "还没有配置高德 Key，请先在插件页填写并验证",
@@ -136,16 +155,29 @@ internal class AmapClient(private val host: PluginHost) {
         }
     }
 
-    private suspend fun availableTools(key: String, session: McpSession): List<String> {
-        toolsCache?.takeIf { it.key == key }?.let { return it.names }
+    suspend fun supportsArgument(tool: String, argument: String): Boolean = runCatching {
+        val key = keyStore.currentKey() ?: return@runCatching false
+        val current = ensureSession(key)
+        val tools = availableTools(key, current)
+        val name = resolveToolName(tools, tool)
+        tools.firstOrNull { it.name == name }?.inputs?.contains(argument) == true
+    }.getOrDefault(false)
+
+    private suspend fun availableTools(key: String, session: McpSession): List<AmapMcpTool> {
+        toolsCache?.takeIf { it.key == key }?.let { return it.tools }
         return sessionLock.withLock {
-            toolsCache?.takeIf { it.key == key }?.names
+            toolsCache?.takeIf { it.key == key }?.tools
                 ?: listTools(session).also { toolsCache = ToolsCache(key, it) }
         }
     }
 
     private suspend fun resolveTool(session: McpSession, tool: String): String {
-        val names = runCatching { availableTools(session.key, session) }.getOrDefault(emptyList())
+        val tools = runCatching { availableTools(session.key, session) }.getOrDefault(emptyList())
+        return resolveToolName(tools, tool)
+    }
+
+    private fun resolveToolName(tools: List<AmapMcpTool>, tool: String): String {
+        val names = tools.map { it.name }
         if (names.isEmpty() || tool in names) return tool
         return TOOL_ALIASES[tool]?.firstOrNull { it in names } ?: tool
     }
@@ -179,12 +211,12 @@ internal class AmapClient(private val host: PluginHost) {
             timeoutMs = INIT_TIMEOUT_MS,
         )
         val envelope = AmapMcpProtocol.envelope(response.body)
-            ?: throw AmapException(failureMessage(AmapFailure.UNKNOWN))
+            ?: throw AmapException(failureMessage(AmapFailure.UNKNOWN, response.body, key), rawOf(response.body, key))
         envelope["error"]?.asObjectOrNull()?.let { error ->
-            throw AmapException(toolFailureMessage(error.textValue("message"), key))
+            throw AmapException(toolFailureMessage(response.body, key), rawOf(response.body, key))
         }
         val initResult = envelope["result"]?.asObjectOrNull()
-            ?: throw AmapException(failureMessage(AmapFailure.UNKNOWN))
+            ?: throw AmapException(failureMessage(AmapFailure.UNKNOWN, response.body, key), rawOf(response.body, key))
         val protocolVersion = initResult.textValue("protocolVersion") ?: PROTOCOL_VERSION
         val opened = McpSession(key, AmapMcpProtocol.sessionId(response.headers), protocolVersion)
         runCatching {
@@ -202,7 +234,7 @@ internal class AmapClient(private val host: PluginHost) {
         return opened
     }
 
-    private suspend fun listTools(session: McpSession): List<String> {
+    private suspend fun listTools(session: McpSession): List<AmapMcpTool> {
         val response = requestJson(
             key = session.key,
             id = counter.getAndIncrement(),
@@ -213,15 +245,15 @@ internal class AmapClient(private val host: PluginHost) {
             timeoutMs = LIST_TIMEOUT_MS,
         )
         val envelope = AmapMcpProtocol.envelope(response.body)
-            ?: throw AmapException(failureMessage(AmapFailure.UNKNOWN))
+            ?: throw AmapException(failureMessage(AmapFailure.UNKNOWN, response.body, session.key), rawOf(response.body, session.key))
         if (AmapMcpProtocol.isSessionExpired(envelope)) throw AmapSessionExpiredException()
-        envelope["error"]?.asObjectOrNull()?.let { error ->
-            throw AmapException(toolFailureMessage(error.textValue("message"), session.key))
+        envelope["error"]?.asObjectOrNull()?.let {
+            throw AmapException(toolFailureMessage(response.body, session.key), rawOf(response.body, session.key))
         }
-        return AmapMcpProtocol.tools(envelope)
+        return AmapMcpProtocol.toolDefinitions(envelope)
     }
 
-    private suspend fun executeCall(session: McpSession, tool: String, arguments: JsonObject): JsonElement {
+    private suspend fun executeCall(session: McpSession, tool: String, arguments: JsonObject): AmapCall {
         val response = requestJson(
             key = session.key,
             id = counter.getAndIncrement(),
@@ -234,23 +266,24 @@ internal class AmapClient(private val host: PluginHost) {
             protocolVersion = session.protocolVersion,
             timeoutMs = CALL_TIMEOUT_MS,
         )
+        val raw = sanitizeAmapText(response.body, session.key)
         val envelope = AmapMcpProtocol.envelope(response.body)
-            ?: throw AmapException(failureMessage(AmapFailure.UNKNOWN))
+            ?: throw AmapException(failureMessage(AmapFailure.UNKNOWN, response.body, session.key), raw)
         if (AmapMcpProtocol.isSessionExpired(envelope)) throw AmapSessionExpiredException()
-        envelope["error"]?.asObjectOrNull()?.let { error ->
-            throw AmapException(toolFailureMessage(error.textValue("message"), session.key))
+        envelope["error"]?.asObjectOrNull()?.let {
+            throw AmapException(toolFailureMessage(response.body, session.key), raw)
         }
         val result = envelope["result"]?.asObjectOrNull()
-            ?: throw AmapException(failureMessage(AmapFailure.UNKNOWN))
-        val structured = result["structuredContent"]
-        if (structured != null && structured !is JsonNull) return structured
+            ?: throw AmapException(failureMessage(AmapFailure.UNKNOWN, response.body, session.key), raw)
         val text = AmapMcpProtocol.contentText(result)
         if ((result["isError"] as? JsonPrimitive)?.booleanOrNull == true) {
-            throw AmapException(toolFailureMessage(text, session.key))
+            throw AmapException(toolFailureMessage(text.ifBlank { response.body }, session.key), raw)
         }
-        parseJsonText(text)?.let { return it }
-        if (text.isBlank()) return JsonObject(emptyMap())
-        return JsonObject(mapOf("text" to JsonPrimitive(text)))
+        val structured = result["structuredContent"]
+        if (structured != null && structured !is JsonNull) return AmapCall(structured, raw)
+        parseJsonText(text)?.let { return AmapCall(it, raw) }
+        if (text.isBlank()) return AmapCall(JsonObject(emptyMap()), raw)
+        return AmapCall(JsonObject(mapOf("text" to JsonPrimitive(text))), raw)
     }
 
     private suspend fun requestJson(
@@ -292,16 +325,26 @@ internal class AmapClient(private val host: PluginHost) {
             throw AmapException(failureMessage(AmapFailure.NETWORK))
         }
         if (response.statusCode == 401 || response.statusCode == 403) {
-            throw AmapException(failureMessage(AmapFailure.INVALID_KEY))
+            throw AmapException(
+                failureMessage(AmapFailure.INVALID_KEY, response.body, key),
+                rawOf(response.body, key),
+            )
         }
         if (response.statusCode == 404 && sessionId != null) throw AmapSessionExpiredException()
         if (response.statusCode !in 200..299) {
             val failure = classifyAmapFailure(response.statusCode, response.body)
-            throw AmapException(failureMessage(if (failure == AmapFailure.UNKNOWN) AmapFailure.SERVICE else failure))
+            throw AmapException(
+                failureMessage(if (failure == AmapFailure.UNKNOWN) AmapFailure.SERVICE else failure, response.body, key),
+                rawOf(response.body, key),
+            )
         }
         if (!expectBody) return HttpResult(response.headers, response.body)
-        if (response.body.isBlank()) throw AmapException(failureMessage(AmapFailure.UNKNOWN))
-        restFailure(response.body)?.let { failure -> throw AmapException(failureMessage(failure)) }
+        if (response.body.isBlank()) {
+            throw AmapException(failureMessage(AmapFailure.UNKNOWN, response.body, key), rawOf(response.body, key))
+        }
+        restFailure(response.body)?.let { failure ->
+            throw AmapException(failureMessage(failure, response.body, key), rawOf(response.body, key))
+        }
         return HttpResult(response.headers, response.body)
     }
 
@@ -311,32 +354,35 @@ internal class AmapClient(private val host: PluginHost) {
         return classifyAmapFailure(0, root.textValue("info", "infocode"))
     }
 
-    private fun failureMessage(failure: AmapFailure): String = when (failure) {
-        AmapFailure.INVALID_KEY -> host.t(
-            "高德 Key 无效或没有权限，请检查后重试",
-            "The Amap key is invalid or unauthorized. Check it and try again.",
-        )
-        AmapFailure.QUOTA -> host.t(
-            "高德调用太频繁或今日额度已用完，请稍后再试",
-            "Amap is receiving too many requests or today's quota is used up. Try again later.",
-        )
-        AmapFailure.SERVICE -> host.t(
-            "高德服务暂时不可用，请稍后重试",
-            "Amap is temporarily unavailable. Try again later.",
-        )
-        AmapFailure.NETWORK -> host.t(
-            "网络连接失败，请检查网络后重试",
-            "Network unavailable. Check your connection and try again.",
-        )
-        AmapFailure.UNKNOWN -> host.t(
-            "高德返回了无法识别的结果，请稍后重试",
-            "Amap returned an unexpected result. Try again later.",
-        )
+    private fun failureMessage(failure: AmapFailure, raw: String? = null, key: String? = null): String {
+        val suggestion = when (failure) {
+            AmapFailure.INVALID_KEY -> host.t(
+                "高德 Key 无效或没有权限，请检查后重试",
+                "The Amap key is invalid or unauthorized. Check it and try again.",
+            )
+            AmapFailure.QUOTA -> host.t(
+                "高德调用太频繁或今日额度已用完，请稍后再试",
+                "Amap is receiving too many requests or today's quota is used up. Try again later.",
+            )
+            AmapFailure.SERVICE -> host.t(
+                "高德服务暂时不可用，请稍后重试",
+                "Amap is temporarily unavailable. Try again later.",
+            )
+            AmapFailure.NETWORK -> host.t(
+                "网络连接失败，请检查网络后重试",
+                "Network unavailable. Check your connection and try again.",
+            )
+            AmapFailure.UNKNOWN -> host.t(
+                "高德返回了无法识别的结果，请稍后重试",
+                "Amap returned an unexpected result. Try again later.",
+            )
+        }
+        return withRawDetail(suggestion, raw, key)
     }
 
     private fun toolFailureMessage(raw: String?, key: String?): String {
-        val text = sanitize(raw, key)
-        return when (classifyAmapFailure(0, text)) {
+        val text = sanitizeAmapText(raw, key).trim()
+        val suggestion = when (classifyAmapFailure(0, text)) {
             AmapFailure.INVALID_KEY -> failureMessage(AmapFailure.INVALID_KEY)
             AmapFailure.QUOTA -> failureMessage(AmapFailure.QUOTA)
             AmapFailure.SERVICE -> failureMessage(AmapFailure.SERVICE)
@@ -345,16 +391,20 @@ internal class AmapClient(private val host: PluginHost) {
                 "Amap did not return a usable result. Try again later.",
             )
         }
+        return withRawDetail(suggestion, text, null)
     }
 
-    private fun sanitize(raw: String?, key: String?): String {
-        val text = raw.orEmpty().take(500)
-        return if (key.isNullOrBlank()) text else text.replace(key, "***")
+    private fun withRawDetail(suggestion: String, raw: String?, key: String?): String {
+        val detail = sanitizeAmapText(raw, key).trim()
+        return if (detail.isEmpty()) suggestion else "${suggestion}\n上游返回：$detail"
     }
+
+    private fun rawOf(raw: String?, key: String): String? =
+        sanitizeAmapText(raw, key).trim().takeIf { it.isNotEmpty() }
 
     private data class McpSession(val key: String, val id: String?, val protocolVersion: String)
 
-    private data class ToolsCache(val key: String, val names: List<String>)
+    private data class ToolsCache(val key: String, val tools: List<AmapMcpTool>)
 
     private data class HttpResult(val headers: Map<String, String>, val body: String)
 
@@ -362,7 +412,7 @@ internal class AmapClient(private val host: PluginHost) {
         const val ENDPOINT = "https://mcp.amap.com/mcp"
         const val PROTOCOL_VERSION = "2025-03-26"
         const val CLIENT_NAME = "deepdeep-amap"
-        const val CLIENT_VERSION = "1.2.0"
+        const val CLIENT_VERSION = "1.3.0"
         const val INIT_TIMEOUT_MS = 20_000L
         const val LIST_TIMEOUT_MS = 20_000L
         const val CALL_TIMEOUT_MS = 30_000L

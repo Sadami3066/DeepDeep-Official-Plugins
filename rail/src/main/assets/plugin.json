@@ -1,8 +1,8 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.rail",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "apiLevel": 6,
-  "minHostVersion": "1.1.0",
+  "minHostVersion": "1.3.0",
   "capabilities": [
     "logs",
     "network",
@@ -21,8 +21,8 @@
     "en": "Search 12306 trains, times and seats, then book on 12306"
   },
   "description": {
-    "default": "按出发站、到达站和出发日期查询中国铁路 12306 车次、时刻、历时与余票，保存最近路线；结果可在聊天里查看前几趟并一键打开 12306 完成登录与购票。",
-    "zh": "按出发站、到达站和出发日期查询中国铁路 12306 车次、时刻、历时与余票，保存最近路线；结果可在聊天里查看前几趟并一键打开 12306 完成登录与购票。",
+    "default": "按出发站、到达站和出发日期查询中国铁路 12306 车次、时刻、历时与余票，保存最近路线；结果可在聊天里查看全部车次并一键打开 12306 完成登录与购票。",
+    "zh": "按出发站、到达站和出发日期查询中国铁路 12306 车次、时刻、历时与余票，保存最近路线；结果可在聊天里查看全部车次并一键打开 12306 完成登录与购票。",
     "en": "Search China Railway 12306 trains by route and date with times, duration and seat availability, keep recent routes, and jump to 12306 to sign in and book."
   },
   "publisher": {

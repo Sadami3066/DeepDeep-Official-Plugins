@@ -22,6 +22,9 @@ import io.github.whywood.deepdeep.plugin.mail.transport.SmtpEndpoint
 import io.github.whywood.deepdeep.plugin.mail.tools.MAIL_OPEN_ACTION_ID
 import io.github.whywood.deepdeep.plugin.mail.tools.MAIL_SYNC_TASK_ID
 import io.github.whywood.deepdeep.plugin.mail.tools.MailChatCardTypes
+import io.github.whywood.deepdeep.plugin.mail.tools.MailReadCardPayload
+import io.github.whywood.deepdeep.plugin.mail.tools.MailSearchCardPayload
+import io.github.whywood.deepdeep.plugin.mail.tools.mailCardJson
 import io.github.whywood.deepdeep.plugin.mail.tools.mailHooks
 import io.github.whywood.deepdeep.plugin.mail.tools.mailNotificationPayload
 import io.github.whywood.deepdeep.plugin.mail.tools.mailTools
@@ -35,6 +38,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -408,7 +412,6 @@ class MailRuntimeIntegrationTest {
             assertFalse(draftResult.text.orEmpty(), draftResult.isError)
             val draft = rig.runtime.state.value.drafts.single()
             assertTrue(draftResult.text.orEmpty().contains(draft.id))
-            assertTrue(draftResult.text.orEmpty().contains("卡片 id：call-draft"))
             val draftCard = draftResult.details?.get("deepdeep.card")?.jsonObject
             assertNotNull(draftCard)
             assertEquals(MailChatCardTypes.DRAFT, (draftCard!!["customType"] as JsonPrimitive).contentOrNull)
@@ -1025,12 +1028,17 @@ class MailRuntimeIntegrationTest {
             )
             assertFalse(result.text.orEmpty(), result.isError)
             val text = result.text.orEmpty()
+            assertTrue(text, text.contains("匹配 1 封，返回 1 封"))
             assertTrue(text, text.contains("id=${summary.id}"))
             assertTrue(text, text.contains("quarterly report"))
             assertTrue(text, text.contains(summary.fromName))
+            assertTrue(text, text.contains("文件夹：收件箱"))
+            assertTrue(text, text.contains("账户：user@example.com"))
+            assertTrue(text, text.contains("收件人：User <user@example.com>"))
+            assertTrue(text, text.contains("会话：${summary.threadId}"))
             assertTrue(text, Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}").containsMatchIn(text))
             assertTrue(text, text.contains("含附件"))
-            assertTrue(text, text.contains("卡片 id：call-search"))
+            assertFalse(text, text.contains("卡片 id："))
             val card = result.details?.get("deepdeep.card")?.jsonObject
             assertNotNull(card)
             assertEquals(MailChatCardTypes.SEARCH, (card!!["customType"] as JsonPrimitive).contentOrNull)
@@ -1063,14 +1071,179 @@ class MailRuntimeIntegrationTest {
             val text = result.text.orEmpty()
             assertTrue(text, text.contains("id：${summary.id}"))
             assertTrue(text, text.contains("主题：quarterly report"))
+            assertTrue(text, text.contains("文件夹：收件箱"))
             assertTrue(text, text.contains("发件人：Sender"))
+            assertTrue(text, text.contains("收件人：User <user@example.com>"))
             assertTrue(text, text.contains("时间："))
             assertTrue(text, Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}").containsMatchIn(text))
+            assertTrue(text, text.contains("Message-ID：<1@example.com>"))
+            assertTrue(text, text.contains("正文："))
+            assertTrue(text, text.contains("hello body"))
             assertTrue(text, text.contains("附件：1 个"))
-            assertTrue(text, text.contains("卡片 id：call-read"))
+            assertTrue(text, text.contains("report.pdf（application/pdf，9 B，id=att-0）"))
+            assertFalse(text, text.contains("卡片 id："))
             val card = result.details?.get("deepdeep.card")?.jsonObject
             assertNotNull(card)
             assertEquals(MailChatCardTypes.READ, (card!!["customType"] as JsonPrimitive).contentOrNull)
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    @Test
+    fun mailSearchFiltersByFolderAndMatchesRecipients() = runBlocking {
+        val inbox = FakeFolder("INBOX", messages = mutableListOf(fixtureMessage(1, "inbox mail", "hello")))
+        val sent = FakeFolder(
+            "已发送",
+            flags = setOf("\\Sent"),
+            messages = mutableListOf(outgoingFixture(7, "sent note", "Alice", "alice@example.com")),
+        )
+        val rig = createRig(listOf(inbox, sent))
+        try {
+            rig.connectAccount(expectedMessages = 2)
+            val tools = mailTools(rig.host, rig.runtime).tools.associateBy { it.name }
+            suspend fun search(vararg args: Pair<String, String>): String {
+                val result = tools.getValue("mail_search").execute(
+                    FakeToolCall(
+                        callId = "call-search-folder",
+                        args = buildJsonObject { args.forEach { (key, value) -> put(key, value) } },
+                        sessionId = "session-folder",
+                    ),
+                )
+                assertFalse(result.text.orEmpty(), result.isError)
+                return result.text.orEmpty()
+            }
+
+            val all = search("query" to "alice@example.com")
+            assertTrue(all, all.contains("匹配 1 封，返回 1 封"))
+            assertTrue(all, all.contains("文件夹：已发送"))
+            assertTrue(all, all.contains("收件人：Alice <alice@example.com>"))
+
+            val sentOnly = search("query" to "Alice", "folder" to "sent")
+            assertTrue(sentOnly, sentOnly.contains("匹配 1 封，返回 1 封"))
+            assertTrue(sentOnly, sentOnly.contains("sent note"))
+
+            val inboxOnly = search("query" to "alice@example.com", "folder" to "inbox")
+            assertTrue(inboxOnly, inboxOnly.contains("匹配 0 封，返回 0 封"))
+            assertFalse(inboxOnly, inboxOnly.contains("sent note"))
+
+            val drafts = search("query" to "alice@example.com", "folder" to "drafts")
+            assertTrue(drafts, drafts.contains("匹配 0 封，返回 0 封"))
+
+            val archive = search("query" to "alice@example.com", "folder" to "archive")
+            assertTrue(archive, archive.contains("匹配 0 封，返回 0 封"))
+
+            val allFolder = search("query" to "alice@example.com", "folder" to "all")
+            assertTrue(allFolder, allFolder.contains("匹配 1 封，返回 1 封"))
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    @Test
+    fun mailSearchPagingAndCardCarryEveryRowWithSentFields() = runBlocking {
+        val inbox = FakeFolder(
+            "INBOX",
+            messages = (1L..6L).mapTo(mutableListOf()) { uid ->
+                fixtureMessage(uid, "inbox $uid", "body $uid")
+            },
+        )
+        val sent = FakeFolder(
+            "已发送",
+            flags = setOf("\\Sent"),
+            messages = mutableListOf(outgoingFixture(9, "sent subject", "Alice", "alice@example.com")),
+        )
+        val rig = createRig(listOf(inbox, sent))
+        try {
+            rig.connectAccount(expectedMessages = 7)
+            val tools = mailTools(rig.host, rig.runtime).tools.associateBy { it.name }
+            val page = tools.getValue("mail_search").execute(
+                FakeToolCall(
+                    callId = "call-search-page",
+                    args = buildJsonObject {
+                        put("limit", 3)
+                        put("offset", 2)
+                    },
+                    sessionId = "session-page",
+                ),
+            )
+            assertFalse(page.text.orEmpty(), page.isError)
+            val text = page.text.orEmpty()
+            assertTrue(text, text.contains("匹配 7 封，返回 3 封"))
+            assertTrue(text, text.contains("可用 offset 继续（offset=5）"))
+            val pageCard = page.details?.get("deepdeep.card")?.jsonObject
+            assertNotNull(pageCard)
+            val pagePayload = mailCardJson.decodeFromJsonElement(
+                MailSearchCardPayload.serializer(),
+                pageCard!!["payload"]!!.jsonObject,
+            )
+            assertEquals(3, pagePayload.items.size)
+            assertEquals(7, pagePayload.total)
+
+            val all = tools.getValue("mail_search").execute(
+                FakeToolCall(
+                    callId = "call-search-all",
+                    args = buildJsonObject { put("folder", "all") },
+                    sessionId = "session-all",
+                ),
+            )
+            assertFalse(all.text.orEmpty(), all.isError)
+            val card = all.details?.get("deepdeep.card")?.jsonObject
+            assertNotNull(card)
+            val payload = mailCardJson.decodeFromJsonElement(
+                MailSearchCardPayload.serializer(),
+                card!!["payload"]!!.jsonObject,
+            )
+            assertEquals(7, payload.total)
+            assertEquals(7, payload.items.size)
+            val sentItem = payload.items.first { item -> item.subject == "sent subject" }
+            assertTrue(sentItem.sent)
+            assertEquals("sent", sentItem.folderRole)
+            assertEquals(listOf("Alice <alice@example.com>"), sentItem.to)
+            assertEquals("user@example.com", sentItem.account)
+            assertTrue(payload.items.filterNot { it.sent }.all { item -> item.to == listOf("User <user@example.com>") })
+        } finally {
+            closeRig(rig)
+        }
+    }
+
+    @Test
+    fun mailReadIncludesHtmlSourceAndFullCardBody() = runBlocking {
+        val paragraph = "完整的 HTML 正文段落。".repeat(40)
+        val inbox = FakeFolder("INBOX", messages = mutableListOf(htmlFixture(1, paragraph)))
+        val rig = createRig(listOf(inbox))
+        try {
+            val accountId = rig.connectAccount(expectedMessages = 1)
+            val summary = rig.runtime.state.value.messages.single()
+            val detail = rig.runtime.message(accountId, summary.id)
+            assertNotNull(detail)
+            assertFalse(detail!!.hasPlainText)
+            assertNull(detail.headers.firstOrNull { it.name == "Reply-To" })
+            assertTrue(detail.textBody.trim().contains("Hello HTML world"))
+            val tools = mailTools(rig.host, rig.runtime).tools.associateBy { it.name }
+            val result = tools.getValue("mail_read").execute(
+                FakeToolCall(
+                    callId = "call-read-html",
+                    args = buildJsonObject { put("message_id", summary.id) },
+                    sessionId = "session-read-html",
+                ),
+            )
+            assertFalse(result.text.orEmpty(), result.isError)
+            val text = result.text.orEmpty()
+            assertTrue(text, text.contains("HTML 原文："))
+            assertTrue(text, text.contains("<p>Hello <b>HTML</b> world</p>"))
+            assertTrue(text, text.contains(paragraph))
+            assertTrue(text, text.contains("Message-ID：<html-1@example.com>"))
+            val card = result.details?.get("deepdeep.card")?.jsonObject
+            assertNotNull(card)
+            val payload = mailCardJson.decodeFromJsonElement(
+                MailReadCardPayload.serializer(),
+                card!!["payload"]!!.jsonObject,
+            )
+            assertTrue(payload.body.length > 240)
+            assertTrue(payload.body, payload.body.contains("完整的 HTML 正文段落。"))
+            assertEquals("inbox", payload.folderRole)
+            assertEquals(listOf("User <user@example.com>"), payload.to)
         } finally {
             closeRig(rig)
         }
@@ -1182,6 +1355,53 @@ class MailRuntimeIntegrationTest {
         }
         fail("condition was not met within ${timeoutMs}ms")
     }
+
+    private fun outgoingFixture(
+        uid: Long,
+        subject: String,
+        toName: String,
+        toAddress: String,
+    ): FakeMessage = FakeMessage(
+        uid = uid,
+        flags = mutableSetOf("\\Seen"),
+        subject = subject,
+        fromName = "User",
+        fromAddress = "user@example.com",
+        toName = toName,
+        toAddress = toAddress,
+        messageId = "<out-$uid@example.com>",
+        raw = (
+            "From: User <user@example.com>\r\n" +
+                "To: $toName <$toAddress>\r\n" +
+                "Subject: $subject\r\n" +
+                "Date: Tue, 12 Nov 2026 10:00:00 +0800\r\n" +
+                "Message-ID: <out-$uid@example.com>\r\n" +
+                "Content-Type: text/plain; charset=UTF-8\r\n" +
+                "\r\n" +
+                "sent body\r\n"
+            ).toByteArray(Charsets.UTF_8),
+    )
+
+    private fun htmlFixture(uid: Long, paragraph: String): FakeMessage = FakeMessage(
+        uid = uid,
+        flags = mutableSetOf(),
+        subject = "html only",
+        fromName = "Sender",
+        fromAddress = "sender$uid@example.com",
+        toName = "User",
+        toAddress = "user@example.com",
+        messageId = "<html-$uid@example.com>",
+        raw = (
+            "From: Sender <sender$uid@example.com>\r\n" +
+                "To: User <user@example.com>\r\n" +
+                "Subject: html only\r\n" +
+                "Date: Tue, 12 Nov 2026 10:00:00 +0800\r\n" +
+                "Message-ID: <html-$uid@example.com>\r\n" +
+                "Content-Type: text/html; charset=UTF-8\r\n" +
+                "\r\n" +
+                "<html><body><p>Hello <b>HTML</b> world</p><p>$paragraph</p></body></html>\r\n"
+            ).toByteArray(Charsets.UTF_8),
+    )
 
     private fun inlineFixture(uid: Long, contentId: String, image: ByteArray): FakeMessage = FakeMessage(
         uid = uid,

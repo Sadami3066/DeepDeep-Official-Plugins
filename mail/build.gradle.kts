@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.whywood.deepdeep.plugin.mail"
         minSdk = 29
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.5.0"
+        versionCode = 10
+        versionName = "1.6.0"
     }
 
     compileOptions {
@@ -40,7 +40,7 @@ kotlin {
 
 dependencies {
     compileOnly("io.github.sadami3066.deepdeep:plugin-api:1.2.0")
-    compileOnly("io.github.sadami3066.deepdeep:design:0.9.0")
+    compileOnly("io.github.sadami3066.deepdeep:design:0.10.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     compileOnly("androidx.activity:activity:1.12.4")

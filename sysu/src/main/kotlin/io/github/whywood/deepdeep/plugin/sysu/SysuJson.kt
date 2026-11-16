@@ -64,8 +64,10 @@ internal data class SysuExamTerm(
 
 @Serializable
 internal data class SysuExam(
+    val week: JsonElement? = null,
     val date: String? = null,
     val weekday: String? = null,
+    val type: String? = null,
     val name: String? = null,
     val teacher: String? = null,
     val place: String? = null,
@@ -84,6 +86,7 @@ internal data class SysuCreditPlan(
     val minGraduationCredit: JsonElement? = null,
     val finishCredit: JsonElement? = null,
     val publicMinGraduationCredit: JsonElement? = null,
+    val publicMinCredit: JsonElement? = null,
     val publicFinishCredit: JsonElement? = null,
     val majorMinCredit: JsonElement? = null,
     val majorFinishCredit: JsonElement? = null,
@@ -143,11 +146,19 @@ internal data class SysuGymWindow(
 
 @Serializable
 internal data class SysuGymFee(
-    val id: String? = null,
+    @SerialName("Identity") val identity: String? = null,
     @SerialName("Name") val name: String? = null,
     @SerialName("UserRole") val userRole: String? = null,
+    @SerialName("Timeslot") val timeslot: SysuGymTimeslot? = null,
     @SerialName("CreditFee") val creditFee: JsonElement? = null,
     @SerialName("CashFee") val cashFee: JsonElement? = null,
+)
+
+@Serializable
+internal data class SysuGymTimeslot(
+    @SerialName("DayType") val dayType: String? = null,
+    @SerialName("StartTime") val startTime: String? = null,
+    @SerialName("EndTime") val endTime: String? = null,
 )
 
 @Serializable

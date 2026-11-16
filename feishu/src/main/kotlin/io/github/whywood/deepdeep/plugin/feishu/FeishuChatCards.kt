@@ -1,6 +1,7 @@
 package io.github.whywood.deepdeep.plugin.feishu
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,12 +15,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.whywood.deepdeep.design.DdExpandToggle
 import io.github.whywood.deepdeep.design.DdIcon
 import io.github.whywood.deepdeep.design.DdIcons
 import io.github.whywood.deepdeep.design.DdPressable
@@ -44,10 +51,10 @@ internal fun FeishuChatListCard(host: PluginHost, model: FeishuCardModel) {
 
 @Composable
 private fun ChatListContent(host: PluginHost, model: FeishuCardModel) {
-    val colors = deepDeepColors()
-    val count = model.total.coerceAtLeast(model.items.size)
-    val rows = model.items.take(FEISHU_CARD_CHAT_ROWS)
-    val hidden = (count - rows.size).coerceAtLeast(0)
+    val all = model.items
+    val count = model.total.coerceAtLeast(all.size)
+    var expanded by remember(model) { mutableStateOf(false) }
+    val rows = if (expanded) all else all.take(FEISHU_CHAT_PREVIEW_ROWS)
     Column(
         Modifier
             .fillMaxWidth()
@@ -65,16 +72,17 @@ private fun ChatListContent(host: PluginHost, model: FeishuCardModel) {
             if (index > 0) DdRowDivider(leadingInset = 48.dp)
             ChatListRow(host = host, item = item)
         }
-        val note = model.note?.takeIf { it.isNotBlank() }
-            ?: if (hidden > 0) host.tf("还有 %d 个未显示", "%d more not shown", hidden) else null
-        note?.let { line ->
-            Spacer(Modifier.height(DdSpacing.Sm))
-            DdText(
-                text = line,
-                style = DdType.chip,
-                color = colors.inkTertiary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+        if (all.size > FEISHU_CHAT_PREVIEW_ROWS) {
+            DdExpandToggle(
+                expanded = expanded,
+                collapsedLabel = host.tf(
+                    "展开其余 %d 个会话",
+                    "Show %d more chats",
+                    all.size - FEISHU_CHAT_PREVIEW_ROWS,
+                ),
+                expandedLabel = host.t("收起会话列表", "Show fewer chats"),
+                onToggle = { expanded = !expanded },
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
@@ -92,23 +100,30 @@ private fun ChatListRow(host: PluginHost, item: FeishuCardItem) {
                 .padding(vertical = DdSpacing.Sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ChatAvatar(initialOf(item.title), 36)
+            FeishuAvatar(host = host, avatarUrl = item.avatar, name = item.title, size = 36)
             Spacer(Modifier.width(DdSpacing.Md))
             Column(Modifier.weight(1f)) {
-                DdText(
-                    text = item.title,
-                    style = feishuItemTitleStyle(),
-                    color = colors.ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    DdText(
+                        text = item.title,
+                        modifier = Modifier.weight(1f, fill = false),
+                        style = feishuItemTitleStyle(),
+                        color = colors.ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    item.badgeTokens().forEach { token ->
+                        Spacer(Modifier.width(DdSpacing.Xs))
+                        FeishuChip(text = token, tint = colors.inkSecondary, background = colors.wash)
+                    }
+                }
                 item.subtitle?.takeIf { it.isNotBlank() }?.let { subtitle ->
                     Spacer(Modifier.height(2.dp))
                     DdText(
                         text = subtitle,
                         style = DdType.chip,
                         color = colors.inkSecondary,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
@@ -142,28 +157,6 @@ private fun ChatListRow(host: PluginHost, item: FeishuCardItem) {
         )
     } else {
         Box(Modifier.fillMaxWidth()) { content() }
-    }
-}
-
-@Composable
-internal fun ChatAvatar(initial: String, size: Int) {
-    val colors = deepDeepColors()
-    Box(
-        modifier = Modifier
-            .size(size.dp)
-            .background(colors.accentSoft, CircleShape),
-        contentAlignment = Alignment.Center,
-    ) {
-        DdText(
-            text = initial.ifBlank { "?" },
-            style = if (size >= 32) {
-                DdType.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, fontSize = 15.sp)
-            } else {
-                DdType.chip.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, fontSize = 12.sp)
-            },
-            color = colors.ink,
-            maxLines = 1,
-        )
     }
 }
 
@@ -234,7 +227,6 @@ internal fun FeishuMessagesCard(host: PluginHost, model: FeishuCardModel) {
 
 @Composable
 private fun MessagesContent(host: PluginHost, model: FeishuCardModel) {
-    val colors = deepDeepColors()
     val count = model.total.coerceAtLeast(model.items.size)
     Column(
         Modifier
@@ -249,15 +241,12 @@ private fun MessagesContent(host: PluginHost, model: FeishuCardModel) {
                 ?: if (count > 0) host.tf("%d 条", "%d messages", count) else null,
         )
         Spacer(Modifier.height(DdSpacing.Xs))
-        model.items.take(FEISHU_CARD_MESSAGE_ROWS).forEach { item ->
+        model.items.forEach { item ->
             MessageBubbleRow(host = host, item = item)
         }
-        val hidden = (count - minOf(model.items.size, FEISHU_CARD_MESSAGE_ROWS)).coerceAtLeast(0)
-        val note = model.note?.takeIf { it.isNotBlank() }
-            ?: if (hidden > 0) host.tf("还有 %d 条未显示", "%d more not shown", hidden) else null
         FeishuCardFoot(
             host = host,
-            note = note,
+            note = model.note?.takeIf { it.isNotBlank() },
             actionLabel = if (model.openUrl.isNullOrBlank()) null else host.t("打开会话", "Open chat"),
             openUrl = model.openUrl,
         )
@@ -270,6 +259,12 @@ private fun MessageBubbleRow(host: PluginHost, item: FeishuCardItem) {
     val sender = item.messageSender()
     val kindLabel = item.messageKindLabel()
     val time = item.timePart()
+    val markers = item.badgeTokens()
+    val recalled = markers.any { it == "已撤回" || it == "Recalled" }
+    val attachments = item.subtitle?.split(" · ")?.drop(2)?.filter { it.isNotBlank() }.orEmpty()
+    val text = (item.body?.takeIf { it.isNotBlank() } ?: if (attachments.isEmpty()) item.title else "").trim()
+    val long = text.lineSequence().count() > FEISHU_MESSAGE_PREVIEW_LINES || text.length > 160
+    var expanded by remember(item) { mutableStateOf(false) }
     val onOpen = item.url?.let { url -> { host.openFeishuLink(url) } }
     val content: @Composable () -> Unit = {
         Row(
@@ -278,7 +273,7 @@ private fun MessageBubbleRow(host: PluginHost, item: FeishuCardItem) {
                 .padding(vertical = DdSpacing.Sm),
             verticalAlignment = Alignment.Top,
         ) {
-            ChatAvatar(initialOf(sender ?: item.title), 28)
+            FeishuAvatar(host = host, avatarUrl = null, name = sender ?: item.title, size = 28)
             Spacer(Modifier.width(DdSpacing.Sm))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -303,6 +298,19 @@ private fun MessageBubbleRow(host: PluginHost, item: FeishuCardItem) {
                         DdText(text = it, style = DdType.numeric, color = colors.inkTertiary, maxLines = 1)
                     }
                 }
+                if (markers.isNotEmpty()) {
+                    Spacer(Modifier.height(DdSpacing.Xs))
+                    val shown = markers.take(3)
+                    val extra = markers.size - shown.size
+                    Row(horizontalArrangement = Arrangement.spacedBy(DdSpacing.Xs)) {
+                        shown.forEach { marker ->
+                            FeishuChip(text = marker, tint = colors.inkSecondary, background = colors.wash)
+                        }
+                        if (extra > 0) {
+                            FeishuChip(text = "+$extra", tint = colors.inkTertiary, background = colors.wash)
+                        }
+                    }
+                }
                 Spacer(Modifier.height(DdSpacing.Xs))
                 Box(
                     modifier = Modifier
@@ -318,12 +326,35 @@ private fun MessageBubbleRow(host: PluginHost, item: FeishuCardItem) {
                         )
                         .padding(horizontal = DdSpacing.Md, vertical = DdSpacing.Sm),
                 ) {
-                    DdText(
-                        text = item.title,
-                        style = DdType.bodySmall,
-                        color = colors.ink,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                    Column {
+                        attachments.forEach { name ->
+                            FeishuChip(
+                                text = name,
+                                tint = colors.inkSecondary,
+                                background = colors.surface,
+                                shape = RoundedCornerShape(DdSpacing.Sm),
+                            )
+                            Spacer(Modifier.height(DdSpacing.Xs))
+                        }
+                        if (text.isNotBlank()) {
+                            DdText(
+                                text = text,
+                                style = DdType.bodySmall.copy(
+                                    textDecoration = if (recalled) TextDecoration.LineThrough else TextDecoration.None,
+                                ),
+                                color = if (recalled) colors.inkTertiary else colors.ink,
+                                maxLines = if (expanded) Int.MAX_VALUE else FEISHU_MESSAGE_PREVIEW_LINES,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+                if (long) {
+                    DdExpandToggle(
+                        expanded = expanded,
+                        collapsedLabel = host.t("展开全文", "Show full message"),
+                        expandedLabel = host.t("收起全文", "Show less"),
+                        onToggle = { expanded = !expanded },
                     )
                 }
             }

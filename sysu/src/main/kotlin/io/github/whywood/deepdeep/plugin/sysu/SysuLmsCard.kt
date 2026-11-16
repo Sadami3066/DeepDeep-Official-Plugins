@@ -13,7 +13,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -29,6 +32,8 @@ import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
 
+private const val LMS_PREVIEW = 4
+
 @Composable
 internal fun SysuLmsCard(host: PluginHost, model: CliCardModel) {
     val plan = remember(model.sections, model.items) { SysuCardFormat.lmsPlan(model) }
@@ -36,6 +41,7 @@ internal fun SysuLmsCard(host: PluginHost, model: CliCardModel) {
         SysuFallbackListCard(host, model)
         return
     }
+    var expanded by remember { mutableStateOf(false) }
     val colors = deepDeepColors()
     SysuCardSurface {
         SysuTopLine(
@@ -53,7 +59,7 @@ internal fun SysuLmsCard(host: PluginHost, model: CliCardModel) {
             )
         }
         Spacer(Modifier.height(DdSpacing.Sm))
-        val rows = plan.courses.take(4)
+        val rows = if (expanded) plan.courses else plan.courses.take(LMS_PREVIEW)
         rows.forEachIndexed { index, course ->
             if (index > 0) {
                 Box(
@@ -76,7 +82,7 @@ internal fun SysuLmsCard(host: PluginHost, model: CliCardModel) {
                         text = course.name,
                         style = SysuCardType.bodyStrong,
                         color = colors.ink,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                     val end = course.end?.toString()
@@ -88,6 +94,10 @@ internal fun SysuLmsCard(host: PluginHost, model: CliCardModel) {
                             color = colors.inkSecondary,
                             maxLines = 1,
                         )
+                    }
+                    if (course.details.isNotEmpty()) {
+                        Spacer(Modifier.height(2.dp))
+                        SysuDetailLines(lines = course.details)
                     }
                 }
                 course.courseId?.takeIf { it.isNotBlank() }?.let { id ->
@@ -101,14 +111,12 @@ internal fun SysuLmsCard(host: PluginHost, model: CliCardModel) {
                 }
             }
         }
-        if (plan.courses.size > rows.size) {
-            DdText(
-                text = host.t("还有 ${plan.courses.size - rows.size} 门", "${plan.courses.size - rows.size} more"),
-                modifier = Modifier.padding(top = DdSpacing.Sm),
-                style = SysuCardType.caption,
-                color = colors.inkTertiary,
-            )
-        }
+        SysuExpandToggle(
+            host = host,
+            hidden = (plan.courses.size - LMS_PREVIEW).coerceAtLeast(0),
+            expanded = expanded,
+            onToggle = { expanded = !expanded },
+        )
     }
 }
 

@@ -35,11 +35,11 @@ internal fun todoTool(
                 val response = client.getJson(
                     todoRecordsPath(now(), limit, args.argString("cursor")),
                 )
-                val payload = response.payloadObject()
+                val payload = response.json.payloadObject()
                 val items = payload.arrayOrNull("records").orEmpty()
                     .mapNotNull { it as? JsonObject }
                     .map(::todoItem)
-                val cursor = payload.stringOrNull("syncToken").orEmpty()
+                val cursor = cursorValue(payload.stringOrNull("syncToken"))
                 val hasMore = payload.boolOrNull("hasMore") ?: false
                 val card = MiCloudTodoCardData(
                     action = TODO_ACTION_LIST,
@@ -47,11 +47,15 @@ internal fun todoTool(
                     doneCount = items.count { it.done },
                     cursor = cursor,
                     hasMore = hasMore,
-                    rows = items.take(MAX_CARD_ROWS),
+                    rows = items,
                 )
                 textResult(
-                    todoListObservation(items.take(MAX_OBSERVATION_ITEMS), cursor, hasMore, text),
-                    details = card.toJson(),
+                    todoListObservation(items, cursor, hasMore, text),
+                    details = cardResultDetails(
+                        card = card.toJson(),
+                        raw = response.body,
+                        title = text.fmt("待办清单（%d 条）", "To-do list (%d)", items.size),
+                    ),
                 )
             }
 
@@ -65,7 +69,8 @@ internal fun todoTool(
                     now = timestamp,
                     remindAt = remindAt,
                 )
-                val response = parseResponseObject(writer.post(todoCreatePath(), todoCreateForm(record)))
+                val responseBody = writer.post(todoCreatePath(), todoCreateForm(record))
+                val response = parseResponseObject(responseBody)
                 val todoId = responseId(response)
                 val card = MiCloudTodoCardData(
                     action = TODO_ACTION_CREATE,
@@ -77,7 +82,11 @@ internal fun todoTool(
                 )
                 textResult(
                     todoWriteObservation(TODO_ACTION_CREATE, todoId, content, false, remindAt ?: 0L, timestamp, text),
-                    details = card.toJson(),
+                    details = cardResultDetails(
+                        card = card.toJson(),
+                        raw = responseBody,
+                        title = text("已新建待办", "To-do created"),
+                    ),
                 )
             }
 
@@ -96,7 +105,8 @@ internal fun todoTool(
                     ?: throw IllegalArgumentException("To-do has no eTag; cannot update")
                 val timestamp = now()
                 val updated = updatedTodoRecord(existing, content, done, remindAt, timestamp)
-                parseResponseObject(writer.post(todoUpdatePath(id), todoUpdateForm(eTag, updated)))
+                val responseBody = writer.post(todoUpdatePath(id), todoUpdateForm(eTag, updated))
+                parseResponseObject(responseBody)
                 val updatedContent = content ?: existingItem.content
                 val updatedDone = done ?: existingItem.done
                 val updatedRemind = remindAt ?: existingItem.remindTime
@@ -119,7 +129,11 @@ internal fun todoTool(
                         timestamp,
                         text,
                     ),
-                    details = card.toJson(),
+                    details = cardResultDetails(
+                        card = card.toJson(),
+                        raw = responseBody,
+                        title = text("已修改待办", "To-do updated"),
+                    ),
                 )
             }
 
@@ -130,7 +144,8 @@ internal fun todoTool(
                 val existingItem = todoItem(existing)
                 val eTag = etagOf(existing)
                     ?: throw IllegalArgumentException("To-do has no eTag; cannot delete")
-                parseResponseObject(writer.post(todoDeletePath(id), todoDeleteForm(eTag)))
+                val responseBody = writer.post(todoDeletePath(id), todoDeleteForm(eTag))
+                parseResponseObject(responseBody)
                 val card = MiCloudTodoCardData(
                     action = TODO_ACTION_DELETE,
                     total = 1,
@@ -148,7 +163,11 @@ internal fun todoTool(
                         0L,
                         text,
                     ),
-                    details = card.toJson(),
+                    details = cardResultDetails(
+                        card = card.toJson(),
+                        raw = responseBody,
+                        title = text("已删除待办", "To-do deleted"),
+                    ),
                 )
             }
 
@@ -158,7 +177,7 @@ internal fun todoTool(
 }
 
 private suspend fun todoRecord(client: MiCloudReadApi, id: String): JsonObject {
-    val payload = client.getJson(todoRecordPath(id)).payloadObject()
+    val payload = client.getJson(todoRecordPath(id)).json.payloadObject()
     return payload.objectOrNull("record") ?: payload ?: throw IOException("To-do data format is invalid")
 }
 

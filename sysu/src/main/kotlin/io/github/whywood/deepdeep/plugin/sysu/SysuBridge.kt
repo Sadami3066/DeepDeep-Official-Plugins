@@ -2,6 +2,10 @@ package io.github.whywood.deepdeep.plugin.sysu
 
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.PluginHooks
+import io.github.whywood.deepdeep.plugin.api.RunFinishedEvent
+import io.github.whywood.deepdeep.plugin.api.SessionClosedEvent
+import io.github.whywood.deepdeep.plugin.api.ToolCallDecision
+import io.github.whywood.deepdeep.plugin.api.ToolCallRequest
 import io.github.whywood.deepdeep.plugin.api.ToolExecutionResult
 import io.github.whywood.deepdeep.plugin.api.ToolResultAction
 import io.github.whywood.deepdeep.plugin.api.ToolResultDecision
@@ -19,11 +23,16 @@ import io.github.whywood.deepdeep.plugin.cli.card.CliCardCodec
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
 
 internal const val SYSU_CARD_TYPE = "sysu.card"
 
 private const val SYSU_BINARY = "sysu"
 private const val BASH_TOOL = "bash"
+private const val RAW_KEY = "deepdeep.raw"
 
 private val SYSU_OBSERVER: CliObservationBuilder<SysuInvocation, CliCardModel> =
     object : CliObservationBuilder<SysuInvocation, CliCardModel> {
@@ -52,6 +61,7 @@ private val SYSU_BRIDGE_CONFIG: CliBridgeConfig<SysuInvocation, CliCardModel> = 
     errorMapper = CliErrorMapper { host, request, command ->
         mapSysuError(host, request, command)
     },
+    redactRaw = { host, raw -> SysuFailures.redactSensitive(raw, host.sysuStrings()) ?: raw },
 )
 
 private fun observe(
@@ -69,6 +79,11 @@ private fun observe(
     )
 }
 
+internal fun SysuInvocation.site(): SysuSite? = when (this) {
+    is SysuInvocation.Supported -> kind.site
+    is SysuInvocation.Other -> SysuCommandParser.site(commandLine)
+}
+
 private fun mapSysuError(
     host: PluginHost,
     request: ToolExecutionResult,
@@ -76,23 +91,24 @@ private fun mapSysuError(
 ): ToolResultDecision? {
     val strings = host.sysuStrings()
     val raw = request.result.text.orEmpty()
-    SysuFailures.actionable(raw, strings)?.let { message ->
-        return resultReplace(textResult(message, isError = true))
-    }
-    SysuFailures.redactSensitive(raw, strings)?.let { safe ->
-        return resultReplace(textResult(safe, isError = true))
-    }
+    val site = command.site()
     val kind = (command as? SysuInvocation.Supported)?.kind
     if (kind == SysuCommandKind.GymSlots) {
         val payload = CliJsonEnvelope.LENIENT.element(raw)
         val message = payload?.let { SysuJson.gymSlots(it)?.error?.message }
         if (!message.isNullOrBlank()) {
-            val text = SysuFailures.actionable(message, strings) ?: strings.text(
+            val text = SysuFailures.actionable(message, SysuSite.Gym, strings) ?: strings.text(
                 "场馆查询失败：${SysuText.cleanInline(message)}",
                 "Venue query failed: ${SysuText.cleanInline(message)}",
             )
             return resultReplace(textResult(text, isError = true))
         }
+    }
+    SysuFailures.actionable(raw, site, strings)?.let { message ->
+        return resultReplace(textResult(message, isError = true))
+    }
+    SysuFailures.redactSensitive(raw, strings)?.let { safe ->
+        return resultReplace(textResult(safe, isError = true))
     }
     return null
 }
@@ -104,24 +120,78 @@ internal fun PluginHost.sysuStrings(): SysuStrings = SysuStrings { zh, en ->
 internal class SysuToolBridge {
     private val bridge = CliToolBridge(SYSU_BRIDGE_CONFIG)
 
+    private val tracked = object : LinkedHashMap<String, Boolean>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?): Boolean =
+            size > MAX_TRACKED
+    }
+
     fun hooks(host: PluginHost): PluginHooks {
         val base = bridge.hooks(host)
         return object : PluginHooks by base {
-            override suspend fun afterToolExecution(request: ToolExecutionResult): ToolResultDecision {
-                val decision = base.afterToolExecution(request)
-                if (decision.action != ToolResultAction.KEEP) return decision
-                if (request.toolName != BASH_TOOL) return decision
-                val strings = host.sysuStrings()
-                val raw = request.result.text.orEmpty()
-                SysuFailures.redactSensitive(raw, strings)?.let { safe ->
-                    return resultReplace(textResult(safe, isError = request.result.isError))
-                }
-                SysuFailures.legacyHint(raw, strings)?.let { hint ->
-                    return resultReplace(textResult(hint, isError = request.result.isError))
+            override suspend fun beforeToolCall(request: ToolCallRequest): ToolCallDecision {
+                val decision = base.beforeToolCall(request)
+                if (request.toolName == BASH_TOOL) {
+                    val raw = (request.args[COMMAND_ARGUMENT] as? JsonPrimitive)?.contentOrNull.orEmpty()
+                    if (SysuCommandParser.parse(raw) != null) {
+                        synchronized(tracked) { tracked[request.callId] = true }
+                    }
                 }
                 return decision
             }
+
+            override suspend fun afterToolExecution(request: ToolExecutionResult): ToolResultDecision {
+                val decision = base.afterToolExecution(request)
+                if (request.toolName != BASH_TOOL) {
+                    tracked.remove(request.callId)
+                    return decision
+                }
+                val isTracked = synchronized(tracked) { tracked.remove(request.callId) == true }
+                if (decision.action == ToolResultAction.REPLACE) {
+                    return decision.withRaw(host, request, isTracked)
+                }
+                val text = request.result.text ?: return decision
+                val strings = host.sysuStrings()
+                val safe = SysuFailures.redactSensitive(text, strings)
+                val hint = if (safe == null) SysuFailures.legacyHint(text, strings) else null
+                if (!isTracked && safe == null && hint == null) return decision
+                val body = safe ?: hint ?: text
+                val details = if (isTracked) request.result.details.withRaw(text, strings) else request.result.details
+                return resultReplace(textResult(body, details = details, isError = request.result.isError))
+            }
+
+            override suspend fun runFinished(event: RunFinishedEvent) {
+                base.runFinished(event)
+                synchronized(tracked) { tracked.clear() }
+            }
+
+            override suspend fun sessionClosed(event: SessionClosedEvent) {
+                base.sessionClosed(event)
+                synchronized(tracked) { tracked.clear() }
+            }
         }
+    }
+
+    private fun ToolResultDecision.withRaw(
+        host: PluginHost,
+        request: ToolExecutionResult,
+        isTracked: Boolean,
+    ): ToolResultDecision {
+        if (!isTracked) return this
+        val result = result ?: return this
+        if (result.details?.get(RAW_KEY) != null) return this
+        val text = result.text ?: request.result.text ?: return this
+        if (text.isBlank()) return this
+        return resultReplace(textResult(text, details = result.details.withRaw(text, host.sysuStrings()), isError = result.isError))
+    }
+
+    private fun JsonObject?.withRaw(text: String, strings: SysuStrings): JsonObject {
+        val raw = SysuFailures.redactSensitive(text, strings) ?: text
+        return JsonObject((this ?: JsonObject(emptyMap())) + buildJsonObject { put(RAW_KEY, raw) })
+    }
+
+    private companion object {
+        const val MAX_TRACKED = 64
+        const val COMMAND_ARGUMENT = "command"
     }
 }
 
@@ -143,33 +213,46 @@ internal object SysuFailures {
         "已失效（cas",
         "已失效(cas",
         "login --code",
+        "返回登录页",
     )
     private val SENSITIVE = Regex(
         "(?i)(tgc|set-cookie|jsessionid|session\\.json|mfa\\.json|cookie\\s*[:=]|ticket\\s*=|password\\s*=)",
     )
+    private val SENSITIVE_VALUE = Regex(
+        "(?i)\\b(tgc|ticket|jsessionid|cookie|session)\\s*[=:]\\s*[^\\s;，。]+",
+    )
+    private val SENSITIVE_WORD = Regex("(?i)\\btgc\\b")
+    private val SESSION_FILE = Regex("(?i)(?:jwxt/)?(?:session|mfa)\\.json|lms\\.json|gym\\.json|netpay\\.json")
+    private val EXIT_MARKER = Regex("""\n*\s*\[exit:\s*\d+]""")
 
-    fun actionable(text: String?, strings: SysuStrings): String? {
+    fun actionable(text: String?, site: SysuSite?, strings: SysuStrings): String? {
         val source = text?.takeIf { it.isNotBlank() } ?: return null
         val lower = source.lowercase()
-        if (CODE_MARKERS.none { lower.contains(it) } && LOGIN_MARKERS.none { lower.contains(it) }) return null
-        if (CODE_MARKERS.any { lower.contains(it) } && mentionsVerificationCode(lower)) {
-            return strings.text(
-                "登录需要企业微信验证码：请在「中山大学 CLI」插件页点「登录」，输入页面提示的验证码后重试。",
-                "A WeCom verification code is required: open the SYSU CLI plugin page, tap Sign in, enter the code shown there, then retry.",
+        val code = CODE_MARKERS.any { lower.contains(it) } && mentionsVerificationCode(lower)
+        val login = LOGIN_MARKERS.any { lower.contains(it) }
+        if (!code && !login) return null
+        val original = sanitizeSensitive(source, strings)
+        val command = site?.loginCommand() ?: "sysu login"
+        val advice = if (code) {
+            strings.text(
+                "需要企业微信验证码：打开「中山大学 CLI」插件页点「登录」，在提示处输入验证码；也可以在拿到验证码后执行 `$command --code <4 位>`。",
+                "A WeCom verification code is required: open the SYSU CLI plugin page, tap Sign in, and enter the code. Or run `$command --code <4 digits>` after receiving it.",
+            )
+        } else {
+            strings.text(
+                "先在对话里执行 `$command` 重试（会复用统一认证）；仍失败再打开「中山大学 CLI」插件页重新登录。",
+                "Run `$command` first to retry with the existing CAS session; if it still fails, sign in again from the SYSU CLI plugin page.",
             )
         }
-        return strings.text(
-            "登录已失效：请在「中山大学 CLI」插件页重新登录后重试。",
-            "Sign-in expired: open the SYSU CLI plugin page, sign in again, then retry.",
-        )
+        return listOf(original, advice).filter { it.isNotBlank() }.joinToString("\n\n")
     }
 
     fun legacyHint(text: String, strings: SysuStrings): String? {
         if (!text.contains("undefined")) return null
         if (!text.contains("名下没有网络服务") && !text.contains("·  ·")) return null
         return strings.text(
-            "网费服务数据读取不完整：请用 `sysu netpay --json` 重新查询；如果仍未登录，请在「中山大学 CLI」插件页重新登录。",
-            "Network service data was incomplete. Re-query with `sysu netpay --json`; if it is still signed out, sign in again from the SYSU CLI plugin page.",
+            "网费服务数据读取不完整：请用 `sysu netpay --json` 重新查询；如果仍未登录，先执行 `sysu netpay login`，需要验证码再到「中山大学 CLI」插件页。",
+            "Network service data was incomplete. Re-query with `sysu netpay --json`; if it is still signed out, run `sysu netpay login` and use the SYSU CLI plugin page if a code is required.",
         )
     }
 
@@ -177,11 +260,21 @@ internal object SysuFailures {
         if (!SENSITIVE.containsMatchIn(text)) return null
         val kept = text.lines().filterNot { SENSITIVE.containsMatchIn(it) }
         val note = strings.text(
-            "（输出包含登录票据或会话信息，已省略。）",
-            "(Output contained sign-in or session data and was omitted.)",
+            "（输出中的登录票据、Cookie 与会话信息已隐去）",
+            "(Sign-in tickets, cookies and session data were removed.)",
         )
         val body = kept.joinToString("\n").trim()
         return if (body.isEmpty()) note else "$note\n\n$body"
+    }
+
+    private fun sanitizeSensitive(text: String, strings: SysuStrings): String {
+        val masked = strings.text("<已隐去>", "<removed>")
+        val cleaned = EXIT_MARKER.replace(text, "").trim()
+        return cleaned
+            .replace(SENSITIVE_VALUE) { match -> "${match.groupValues[1]}=$masked" }
+            .replace(SENSITIVE_WORD, strings.text("统一认证票据", "CAS ticket"))
+            .replace(SESSION_FILE, strings.text("会话文件", "session file"))
+            .trim()
     }
 
     private fun mentionsVerificationCode(lower: String): Boolean =

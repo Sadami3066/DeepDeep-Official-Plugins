@@ -15,6 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,7 +48,8 @@ internal fun WecomScheduleCard(host: PluginHost, kind: WecomCommandKind, model: 
         WecomStateCard(host, kind, model)
         return
     }
-    val rows = model.items.take(WECOM_SCHEDULE_ROWS)
+    var expanded by remember(model) { mutableStateOf(false) }
+    val rows = if (expanded) model.items else model.items.take(WECOM_SCHEDULE_ROWS)
     val total = maxOf(model.total, model.items.size)
     val entries = rows.map { wecomScheduleParts(it) }
     val nextIndex = entries.indexOfFirst { it.isUpcoming() }
@@ -73,14 +78,21 @@ internal fun WecomScheduleCard(host: PluginHost, kind: WecomCommandKind, model: 
                         isFirst = eventIndex == 0,
                         isLast = eventIndex == events.lastIndex,
                         isNext = indexed.index == nextIndex,
+                        expanded = expanded,
                     )
                 }
             }
+            WecomExpandToggle(
+                host = host,
+                kind = kind,
+                expanded = expanded,
+                hidden = model.items.size - WECOM_SCHEDULE_ROWS,
+                onToggle = { expanded = !expanded },
+            )
             WecomMoreLine(
                 host = host,
                 kind = kind,
-                hidden = total - rows.size,
-                hasMore = false,
+                hasMore = !model.note.isNullOrBlank(),
             )
         }
     }
@@ -126,6 +138,7 @@ private fun ScheduleEvent(
     isFirst: Boolean,
     isLast: Boolean,
     isNext: Boolean,
+    expanded: Boolean,
 ) {
     val colors = deepDeepColors()
     Box(Modifier.fillMaxWidth()) {
@@ -201,10 +214,17 @@ private fun ScheduleEvent(
                             modifier = Modifier.weight(1f, fill = false),
                             style = WecomCardType.secondary,
                             color = colors.inkSecondary,
-                            maxLines = 1,
+                            maxLines = if (expanded) Int.MAX_VALUE else 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
+                }
+                item.body?.takeIf { it.isNotBlank() }?.let { details ->
+                    Spacer(Modifier.height(3.dp))
+                    WecomDetailText(
+                        text = details,
+                        maxLines = if (expanded) Int.MAX_VALUE else 2,
+                    )
                 }
             }
             item.meta?.takeIf { it.isNotBlank() }?.let { people ->

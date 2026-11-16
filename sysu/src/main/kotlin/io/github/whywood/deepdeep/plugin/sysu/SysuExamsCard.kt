@@ -1,11 +1,11 @@
 package io.github.whywood.deepdeep.plugin.sysu
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -13,7 +13,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +31,8 @@ import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
 
+private const val EXAMS_PREVIEW = 3
+
 @Composable
 internal fun SysuExamsCard(host: PluginHost, model: CliCardModel) {
     val plan = remember(model.sections, model.items) { SysuCardFormat.examsPlan(model) }
@@ -35,72 +40,81 @@ internal fun SysuExamsCard(host: PluginHost, model: CliCardModel) {
         SysuFallbackListCard(host, model)
         return
     }
+    var expanded by remember { mutableStateOf(false) }
     val colors = deepDeepColors()
-    val upcoming = plan.entries.filter { it.daysUntil == null || it.daysUntil >= 0 }
-    val visible = upcoming.take(3)
-    val pastCount = plan.entries.count { it.daysUntil != null && it.daysUntil < 0 }
+    val entries = remember(plan) {
+        plan.entries.sortedWith(
+            compareBy(
+                { (it.daysUntil ?: 0L) < 0L },
+                { it.date?.toEpochDay() ?: Long.MAX_VALUE },
+                { it.time.orEmpty() },
+            ),
+        )
+    }
+    val visible = if (expanded) entries else entries.take(EXAMS_PREVIEW)
+    val pastCount = entries.count { it.daysUntil != null && it.daysUntil < 0 }
     SysuCardSurface {
         SysuTopLine(
             kicker = plan.term?.let { "$it · ${host.t("考试安排", "Exams")}" } ?: host.t("考试安排", "Exams"),
-            title = host.t("${plan.entries.size} 场考试", "${plan.entries.size} exams"),
+            title = host.t("${entries.size} 场考试", "${entries.size} exams"),
             trailing = null,
         )
         Spacer(Modifier.height(DdSpacing.Sm))
-        if (visible.isEmpty()) {
-            DdText(
-                text = host.t("没有即将到来的考试", "No upcoming exams"),
-                modifier = Modifier.padding(top = DdSpacing.Sm),
-                style = SysuCardType.body,
-                color = colors.inkSecondary,
-            )
-        } else {
-            visible.forEachIndexed { index, entry ->
-                if (index > 0) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(top = DdSpacing.Xs)
-                            .height(1.dp)
-                            .background(colors.hairline.copy(alpha = 0.55f)),
-                    )
-                }
-                Row(
-                    modifier = Modifier
+        visible.forEachIndexed { index, entry ->
+            if (index > 0) {
+                Box(
+                    Modifier
                         .fillMaxWidth()
-                        .padding(vertical = DdSpacing.Sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    SysuExamDateBlock(host = host, entry = entry)
-                    Spacer(Modifier.width(DdSpacing.Md))
-                    Column(Modifier.weight(1f)) {
+                        .padding(top = DdSpacing.Xs)
+                        .height(1.dp)
+                        .background(colors.hairline.copy(alpha = 0.55f)),
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = DdSpacing.Sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SysuExamDateBlock(host = host, entry = entry)
+                Spacer(Modifier.width(DdSpacing.Md))
+                Column(Modifier.weight(1f)) {
+                    DdText(
+                        text = entry.name,
+                        style = DdType.label.copy(fontSize = 14.5.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold),
+                        color = colors.ink,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    val detail = listOfNotNull(entry.time, entry.place).joinToString(" · ")
+                    if (detail.isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
                         DdText(
-                            text = entry.name,
-                            style = DdType.label.copy(fontSize = 14.5.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold),
-                            color = colors.ink,
-                            maxLines = 1,
+                            text = detail,
+                            style = SysuCardType.caption,
+                            color = colors.inkSecondary,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        val detail = listOfNotNull(entry.time, entry.place).joinToString(" · ")
-                        if (detail.isNotBlank()) {
-                            Spacer(Modifier.height(2.dp))
-                            DdText(
-                                text = detail,
-                                style = SysuCardType.caption,
-                                color = colors.inkSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
                     }
-                    Spacer(Modifier.width(DdSpacing.Sm))
-                    SysuCountdownPill(host = host, days = entry.daysUntil)
+                    if (entry.sections != null || entry.details.isNotEmpty()) {
+                        Spacer(Modifier.height(2.dp))
+                        SysuDetailLines(
+                            lines = listOfNotNull(entry.sections) + entry.details,
+                        )
+                    }
                 }
+                Spacer(Modifier.width(DdSpacing.Sm))
+                SysuCountdownPill(host = host, days = entry.daysUntil)
             }
         }
-        val moreCount = plan.entries.size - visible.size
+        SysuExpandToggle(
+            host = host,
+            hidden = (entries.size - EXAMS_PREVIEW).coerceAtLeast(0),
+            expanded = expanded,
+            onToggle = { expanded = !expanded },
+        )
         val footnote = when {
-            moreCount > 0 && pastCount > 0 -> host.t("还有 $moreCount 场 · 已结束 $pastCount 场", "$moreCount more · $pastCount ended")
-            moreCount > 0 -> host.t("还有 $moreCount 场", "$moreCount more")
             pastCount > 0 -> host.t("已结束 $pastCount 场", "$pastCount ended")
             else -> null
         }

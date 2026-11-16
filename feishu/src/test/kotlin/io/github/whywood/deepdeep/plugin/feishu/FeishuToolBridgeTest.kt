@@ -10,7 +10,9 @@ import io.github.whywood.deepdeep.plugin.api.ToolResultDecision
 import io.github.whywood.deepdeep.plugin.api.textResult
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -54,6 +56,9 @@ class FeishuToolBridgeTest {
     private fun cardPayload(decision: ToolResultDecision): JsonObject? =
         cardOf(decision)?.get("payload") as? JsonObject
 
+    private fun rawText(decision: ToolResultDecision): String? =
+        (decision.result?.details?.get("deepdeep.raw") as? JsonPrimitive)?.contentOrNull
+
     private fun ToolResultDecision.text(): String = result?.text.orEmpty()
 
     @Test
@@ -70,8 +75,12 @@ class FeishuToolBridgeTest {
         val text = decision.text()
         assertTrue(text.contains("飞书聊天列表（共 3 个）"))
         assertTrue(text.contains("产品研发群"))
-        assertTrue(text.endsWith("卡片 id：call-1"))
+        assertFalse(text.contains("卡片 id"))
         assertFalse(text.contains("{\"ok\":true}"))
+        val raw = rawText(decision)
+        assertNotNull(raw)
+        assertTrue(raw!!.contains("\"产品研发群\""))
+        assertTrue(raw.contains("\"ok\": true"))
         val card = cardOf(decision)
         assertNotNull(card)
         assertEquals(FeishuCardTypes.CHAT_CARD, card?.getValue("customType")?.jsonPrimitive?.content)
@@ -226,6 +235,19 @@ class FeishuToolBridgeTest {
             decodeFeishuCardPayload(cardPayload(decision) ?: return@mapNotNull null)?.kind
         }
         assertEquals(listOf(FeishuCardTypes.KIND_DOCS_SEARCH, FeishuCardTypes.KIND_TASKS), kinds)
+    }
+
+    @Test
+    fun authenticationErrorKeepsOriginalTextAndAddsHint() = runTest {
+        val host = FakeFeishuHost()
+        val hooks = FeishuToolBridge().hooks(host)
+        hooks.beforeToolCall(request("call-18", "lark-cli im +chat-list"))
+        val output = """{"ok":false,"error":{"type":"authentication","message":"invalid token"}}"""
+        val decision = hooks.afterToolExecution(result("call-18", output, isError = true))
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        assertTrue(decision.text().contains("invalid token"))
+        assertTrue(decision.text().contains("重新登录"))
+        assertNotNull(rawText(decision))
     }
 
     @Test

@@ -575,4 +575,244 @@ class AmapModelsTest {
         assertEquals("风景名胜", decoded.items[1].typeName)
     }
 
+
+    @Test
+    fun parsesPoiPhoneRatingBusinessAreaPhotosAndCount() {
+        val payload = objectOf(
+            """
+            {
+              "status": "1",
+              "count": "126",
+              "pois": [
+                {
+                  "name": "西湖风景名胜区",
+                  "address": "龙井路1号",
+                  "cityname": "杭州市",
+                  "tel": ["0571-87179617", "0571-87977767"],
+                  "biz_ext": {"rating": "4.7"},
+                  "business_area": "西湖风景区",
+                  "photos": [
+                    {"title": "断桥", "url": "https://store.is.autonavi.com/showpic/1"},
+                    {"url": "https://store.is.autonavi.com/showpic/2"}
+                  ],
+                  "location": "120.145,30.256"
+                }
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        val places = parsePlaces(payload)
+
+        assertEquals(1, places.size)
+        assertEquals("0571-87179617, 0571-87977767", places[0].tel)
+        assertEquals("杭州市", places[0].cityName)
+        assertEquals(4.7, places[0].rating ?: 0.0, 0.001)
+        assertEquals("西湖风景区", places[0].businessArea)
+        assertEquals(2, places[0].photos.size)
+        assertEquals("https://store.is.autonavi.com/showpic/2", places[0].photos[1])
+        assertEquals(126, parsePlaceCount(payload))
+    }
+
+    @Test
+    fun parsesEveryDrivingPathAndStepDuration() {
+        val payload = objectOf(
+            """
+            {
+              "route": {
+                "origin": "120.1,30.2",
+                "destination": "120.3,30.4",
+                "paths": [
+                  {
+                    "distance": "12345",
+                    "duration": "1500",
+                    "steps": [
+                      {"instruction": "向北行驶", "road": "文一西路", "distance": "500", "duration": "60"},
+                      {"instruction": "右转进入学院路", "road": "学院路", "distance": "1200", "duration": "180"}
+                    ]
+                  },
+                  {
+                    "distance": "15600",
+                    "duration": "2100",
+                    "steps": [
+                      {"instruction": "沿文一西路向西", "road": "文一西路", "distance": "900", "duration": "120"}
+                    ]
+                  }
+                ]
+              }
+            }
+            """.trimIndent(),
+        )
+
+        val route = parseRoute(payload, AmapRouteMode.DRIVING)
+
+        assertEquals(2, route?.paths?.size)
+        assertEquals(12345, route?.distanceMeters)
+        assertEquals(60, route?.paths?.get(0)?.steps?.get(0)?.durationSeconds)
+        assertEquals(2100, route?.paths?.get(1)?.durationSeconds)
+        assertEquals("沿文一西路向西", route?.paths?.get(1)?.steps?.get(0)?.instruction)
+    }
+
+    @Test
+    fun parsesEveryTransitOptionSegmentBuslineAndStop() {
+        val payload = objectOf(
+            """
+            {
+              "route": {
+                "origin": "120.1,30.2",
+                "destination": "120.3,30.4",
+                "distance": "8600",
+                "transits": [
+                  {
+                    "duration": "2400",
+                    "walking_distance": "600",
+                    "segments": [
+                      {
+                        "walking": {"distance": "300", "duration": "240"},
+                        "entrance": {"name": "龙翔桥站B口"},
+                        "exit": {"name": "武林广场站A口"},
+                        "bus": {
+                          "buslines": [
+                            {
+                              "name": "地铁1号线(湘湖--萧山机场)",
+                              "departure_stop": {"name": "龙翔桥"},
+                              "arrival_stop": {"name": "武林广场"},
+                              "via_num": "3",
+                              "via_stops": [{"name": "龙翔桥"}, {"name": "凤起路"}, {"name": "武林广场"}],
+                              "distance": "8300",
+                              "duration": "2100",
+                              "start_time": "06:00",
+                              "end_time": "22:30"
+                            },
+                            {
+                              "name": "公交 12 路",
+                              "departure_stop": {"name": "龙翔桥"},
+                              "arrival_stop": {"name": "武林广场"}
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "duration": "3000",
+                    "segments": [
+                      {
+                        "walking": {"distance": "500", "duration": "400"},
+                        "railway": {"name": "G1234", "departure_stop": "杭州东", "arrival_stop": "上海虹桥"}
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+            """.trimIndent(),
+        )
+
+        val route = parseRoute(payload, AmapRouteMode.TRANSIT)
+
+        assertEquals(2, route?.paths?.size)
+        assertEquals(600, route?.paths?.get(0)?.walkingDistanceMeters)
+        val first = route?.paths?.get(0)?.transitLines?.first()
+        assertEquals("地铁1号线(湘湖--萧山机场) / 公交 12 路", first?.lineName)
+        assertEquals(listOf("地铁1号线(湘湖--萧山机场)", "公交 12 路"), first?.buslineNames)
+        assertEquals("龙翔桥", first?.departureStop)
+        assertEquals("武林广场", first?.arrivalStop)
+        assertEquals("龙翔桥站B口", first?.entrance)
+        assertEquals("武林广场站A口", first?.exit)
+        assertEquals(300, first?.walkingMeters)
+        assertEquals(240, first?.walkingSeconds)
+        assertEquals(3, first?.viaCount)
+        assertEquals(listOf("龙翔桥", "凤起路", "武林广场"), first?.viaStops)
+        assertEquals(8300, first?.lineDistanceMeters)
+        assertEquals("06:00", first?.startTime)
+        assertEquals(2, first?.options?.size)
+        assertEquals("公交 12 路", first?.options?.get(1)?.name)
+        assertEquals(8300, first?.options?.get(0)?.distanceMeters)
+        val railway = route?.paths?.get(1)?.transitLines?.first()
+        assertEquals("G1234", railway?.lineName)
+        assertEquals("杭州东", railway?.departureStop)
+        assertEquals("上海虹桥", railway?.arrivalStop)
+    }
+
+    @Test
+    fun parsesEveryWeatherForecastAndCast() {
+        val payload = objectOf(
+            """
+            {
+              "forecasts": [
+                {
+                  "city": "杭州市",
+                  "casts": [
+                    {"date": "2026-11-15", "dayweather": "晴", "nightweather": "多云", "daytemp": "20", "nighttemp": "12"},
+                    {"date": "2026-11-16", "dayweather": "小雨", "nightweather": "阴", "daytemp": "18", "nighttemp": "11"}
+                  ]
+                },
+                {
+                  "city": "杭州市",
+                  "casts": [
+                    {"date": "2026-11-17", "dayweather": "多云", "nightweather": "晴", "daytemp": "21", "nighttemp": "13"}
+                  ]
+                }
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        val weather = parseWeather(payload)
+
+        assertEquals("杭州市", weather?.city)
+        assertEquals(3, weather?.days?.size)
+        assertEquals("2026-11-17", weather?.days?.get(2)?.date)
+        assertEquals(21, weather?.days?.get(2)?.dayTemp)
+    }
+
+    @Test
+    fun decodesNewPlaceAndRouteDetailsFields() {
+        val places = decodePlacesDetails(
+            objectOf(
+                """
+                {
+                  "kind": "places",
+                  "count": 126,
+                  "items": [
+                    {
+                      "name": "西湖",
+                      "cityName": "杭州市",
+                      "tel": "0571-87179617",
+                      "rating": 4.7,
+                      "businessArea": "西湖风景区",
+                      "photos": ["https://a/1.jpg"]
+                    }
+                  ]
+                }
+                """.trimIndent(),
+            ),
+        )
+        assertEquals(126, places.totalCount)
+        assertEquals("杭州市", places.items[0].cityName)
+        assertEquals(4.7, places.items[0].rating ?: 0.0, 0.001)
+        assertEquals(listOf("https://a/1.jpg"), places.items[0].photos)
+
+        val route = decodeRouteDetails(
+            objectOf(
+                """
+                {
+                  "kind": "route",
+                  "mode": "driving",
+                  "distanceMeters": 1000,
+                  "durationSeconds": 600,
+                  "steps": [{"instruction": "直行", "distanceMeters": 1000, "durationSeconds": 600}],
+                  "paths": [
+                    {"distanceMeters": 1000, "durationSeconds": 600, "steps": [{"instruction": "直行", "distanceMeters": 1000, "durationSeconds": 600}]},
+                    {"distanceMeters": 1300, "durationSeconds": 720, "steps": [{"instruction": "绕行", "distanceMeters": 1300}]}
+                  ]
+                }
+                """.trimIndent(),
+            ),
+        )
+        assertEquals(2, route?.allPaths?.size)
+        assertEquals(720, route?.allPaths?.get(1)?.durationSeconds)
+        assertEquals(600, route?.steps?.first()?.durationSeconds)
+    }
 }

@@ -14,6 +14,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.whywood.deepdeep.design.DeepDeepColors
+import io.github.whywood.deepdeep.design.DdExpandToggle
 import io.github.whywood.deepdeep.design.DdIcon
 import io.github.whywood.deepdeep.design.DdIcons
 import io.github.whywood.deepdeep.design.DdShapes
@@ -186,6 +191,44 @@ internal fun sysuCountdownLabel(host: PluginHost, days: Long?): String? = when {
     days == 1L -> host.t("明天", "Tomorrow")
     days <= 60L -> host.t("${days} 天后", "in $days days")
     else -> host.t("${days} 天后", "in $days days")
+}
+
+@Composable
+internal fun SysuExpandToggle(
+    host: PluginHost,
+    hidden: Int,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    if (hidden <= 0) return
+    DdExpandToggle(
+        expanded = expanded,
+        collapsedLabel = host.t("展开其余 $hidden 项", "$hidden more"),
+        expandedLabel = host.t("收起", "Show less"),
+        onToggle = onToggle,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+@Composable
+internal fun SysuDetailLines(
+    lines: List<String>,
+    modifier: Modifier = Modifier,
+) {
+    if (lines.isEmpty()) return
+    val colors = deepDeepColors()
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        lines.forEach { line ->
+            DdText(
+                text = line,
+                style = SysuCardType.caption,
+                color = colors.inkSecondary,
+            )
+        }
+    }
 }
 
 @Composable
@@ -357,8 +400,6 @@ internal fun SysuErrorCard(host: PluginHost, model: CliCardModel) {
                     text = message,
                     style = SysuCardType.bodyStrong,
                     color = colors.ink,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.height(2.dp))
                 DdText(
@@ -394,6 +435,9 @@ internal fun SysuErrorCard(host: PluginHost, model: CliCardModel) {
 @Composable
 internal fun SysuFallbackListCard(host: PluginHost, model: CliCardModel) {
     val colors = deepDeepColors()
+    var expanded by remember { mutableStateOf(false) }
+    val allRows = model.sections.flatMap { it.items } + model.items
+    val rows = if (expanded) allRows else allRows.take(FALLBACK_PREVIEW)
     SysuCardSurface {
         SysuTopLine(
             kicker = model.context,
@@ -401,7 +445,6 @@ internal fun SysuFallbackListCard(host: PluginHost, model: CliCardModel) {
             trailing = model.trailing,
         )
         Spacer(Modifier.height(DdSpacing.Sm))
-        val rows = (model.sections.flatMap { it.items } + model.items).take(6)
         rows.forEachIndexed { index, item ->
             if (index > 0) {
                 Box(
@@ -454,6 +497,12 @@ internal fun SysuFallbackListCard(host: PluginHost, model: CliCardModel) {
                 style = SysuCardType.caption,
                 color = colors.inkSecondary,
             )
+        } else {
+            SysuExpandToggle(
+                host = host,
+                hidden = (allRows.size - FALLBACK_PREVIEW).coerceAtLeast(0),
+                expanded = expanded,
+            ) { expanded = !expanded }
         }
     }
 }
@@ -539,6 +588,8 @@ private fun sysuEmptyTitle(host: PluginHost, kind: String): String = when (SysuC
     SysuCardKind.Netpay -> host.t("名下没有网络服务", "No network services")
     null -> host.t("没有内容", "Nothing here")
 }
+
+private const val FALLBACK_PREVIEW = 6
 
 private fun sysuEmptyHint(host: PluginHost, kind: String): String = when (SysuCardKind.fromWire(kind)) {
     SysuCardKind.Schedule -> host.t("可以在对话里换一个周次再查", "Ask for another week in the chat")

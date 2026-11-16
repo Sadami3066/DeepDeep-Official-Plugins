@@ -2,8 +2,8 @@ package io.github.whywood.deepdeep.plugin.sysu
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,7 +26,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.whywood.deepdeep.design.DdSpacing
@@ -34,9 +38,12 @@ import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
 
+private val SCHEDULE_DAY_WIDTH = 104.dp
+private val SCHEDULE_LABEL_WIDTH = 22.dp
+
 @Composable
 internal fun SysuScheduleCard(host: PluginHost, model: CliCardModel) {
-    val plan = remember(model.sections, model.total) { SysuCardFormat.schedulePlan(model) }
+    val plan = remember(model.sections, model.total, model.note) { SysuCardFormat.schedulePlan(model) }
     if (plan == null || plan.blocks.isEmpty()) {
         SysuFallbackListCard(host, model)
         return
@@ -64,73 +71,85 @@ internal fun SysuScheduleCard(host: PluginHost, model: CliCardModel) {
 private fun SysuWeekGrid(plan: SysuSchedulePlan) {
     val colors = deepDeepColors()
     val rowHeight = if (plan.maxPeriod - plan.minPeriod >= 12) 20.dp else 22.dp
-    val labelWidth = 22.dp
-    Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth()) {
-            Spacer(Modifier.width(labelWidth))
-            plan.days.forEach { day ->
-                SysuDayHeader(
-                    day = day,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+    val dayWidth = SCHEDULE_DAY_WIDTH
+    val labelWidth = SCHEDULE_LABEL_WIDTH
+    val totalWidth = labelWidth + dayWidth * plan.days.size
+    val scroll = rememberScrollState()
+    val density = LocalDensity.current
+    val todayIndex = plan.days.indexOfFirst { it.isToday }
+    LaunchedEffect(todayIndex, density) {
+        if (todayIndex > 0) {
+            scroll.scrollTo(with(density) { (dayWidth * (todayIndex - 1)).roundToPx() })
         }
-        Spacer(Modifier.height(DdSpacing.Xs))
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val totalRows = (plan.maxPeriod - plan.minPeriod + 1).coerceAtLeast(1)
-            val gridHeight = rowHeight * totalRows
-            val colWidth = (maxWidth - labelWidth) / plan.days.size
-            Box(Modifier.fillMaxWidth().height(gridHeight)) {
-                Canvas(Modifier.fillMaxSize()) {
-                    val hairline = colors.hairline.copy(alpha = 0.5f)
-                    val columnLine = colors.hairline.copy(alpha = 0.28f)
-                    val step = rowHeight.toPx()
-                    for (row in 1 until totalRows) {
-                        drawLine(
-                            color = hairline,
-                            start = Offset(0f, step * row),
-                            end = Offset(size.width, step * row),
-                            strokeWidth = 1f,
-                        )
-                    }
-                    val colStep = colWidth.toPx()
-                    val start = labelWidth.toPx()
-                    for (column in 1 until plan.days.size) {
-                        drawLine(
-                            color = columnLine,
-                            start = Offset(start + colStep * column, 0f),
-                            end = Offset(start + colStep * column, size.height),
-                            strokeWidth = 1f,
-                        )
+    }
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scroll),
+        ) {
+            Column(Modifier.width(totalWidth)) {
+                Row(Modifier.width(totalWidth)) {
+                    Spacer(Modifier.width(labelWidth))
+                    plan.days.forEach { day ->
+                        SysuDayHeader(day = day, modifier = Modifier.width(dayWidth))
                     }
                 }
-                Column(Modifier.width(labelWidth).height(gridHeight)) {
-                    repeat(totalRows) { index ->
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(rowHeight),
-                            contentAlignment = Alignment.CenterEnd,
-                        ) {
-                            Box(Modifier.padding(end = DdSpacing.Xs)) {
-                                DdText(
-                                    text = "${plan.minPeriod + index}",
-                                    style = SysuCardType.micro.copy(fontSize = 9.sp, letterSpacing = 0.sp),
-                                    color = colors.inkTertiary,
-                                    maxLines = 1,
-                                )
+                Spacer(Modifier.height(DdSpacing.Xs))
+                Box(Modifier.width(totalWidth).height(rowHeight * (plan.maxPeriod - plan.minPeriod + 1).coerceAtLeast(1))) {
+                    val totalRows = (plan.maxPeriod - plan.minPeriod + 1).coerceAtLeast(1)
+                    val gridHeight = rowHeight * totalRows
+                    Canvas(Modifier.fillMaxSize()) {
+                        val hairline = colors.hairline.copy(alpha = 0.5f)
+                        val columnLine = colors.hairline.copy(alpha = 0.28f)
+                        val step = rowHeight.toPx()
+                        for (row in 1 until totalRows) {
+                            drawLine(
+                                color = hairline,
+                                start = Offset(0f, step * row),
+                                end = Offset(size.width, step * row),
+                                strokeWidth = 1f,
+                            )
+                        }
+                        val colStep = dayWidth.toPx()
+                        val start = labelWidth.toPx()
+                        for (column in 1 until plan.days.size) {
+                            drawLine(
+                                color = columnLine,
+                                start = Offset(start + colStep * column, 0f),
+                                end = Offset(start + colStep * column, size.height),
+                                strokeWidth = 1f,
+                            )
+                        }
+                    }
+                    Column(Modifier.width(labelWidth).height(gridHeight)) {
+                        repeat(totalRows) { index ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(rowHeight),
+                                contentAlignment = Alignment.CenterEnd,
+                            ) {
+                                Box(Modifier.padding(end = DdSpacing.Xs)) {
+                                    DdText(
+                                        text = "${plan.minPeriod + index}",
+                                        style = SysuCardType.micro.copy(fontSize = 9.sp, letterSpacing = 0.sp),
+                                        color = colors.inkTertiary,
+                                        maxLines = 1,
+                                    )
+                                }
                             }
                         }
                     }
-                }
-                plan.blocks.forEach { block ->
-                    SysuScheduleBlockView(
-                        block = block,
-                        plan = plan,
-                        rowHeight = rowHeight,
-                        colWidth = colWidth,
-                        labelWidth = labelWidth,
-                    )
+                    plan.blocks.forEach { block ->
+                        SysuScheduleBlockView(
+                            block = block,
+                            plan = plan,
+                            rowHeight = rowHeight,
+                            colWidth = dayWidth,
+                            labelWidth = labelWidth,
+                        )
+                    }
                 }
             }
         }
@@ -141,9 +160,9 @@ private fun SysuWeekGrid(plan: SysuSchedulePlan) {
 private fun SysuScheduleBlockView(
     block: SysuPlanBlock,
     plan: SysuSchedulePlan,
-    rowHeight: androidx.compose.ui.unit.Dp,
-    colWidth: androidx.compose.ui.unit.Dp,
-    labelWidth: androidx.compose.ui.unit.Dp,
+    rowHeight: Dp,
+    colWidth: Dp,
+    labelWidth: Dp,
 ) {
     val colors = deepDeepColors()
     val hue = if (block.isExam) colors.danger else sysuHue(colors, block.title)
@@ -199,8 +218,8 @@ private fun SysuDayHeader(day: SysuPlanDay, modifier: Modifier = Modifier) {
             maxLines = 1,
         )
         DdText(
-            text = day.date?.dayOfMonth?.toString()?.padStart(2, '0') ?: "—",
-            style = DdType.label.copy(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold),
+            text = day.date?.let { "%02d-%02d".format(it.monthValue, it.dayOfMonth) } ?: "—",
+            style = DdType.label.copy(fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.SemiBold),
             color = if (day.isToday) colors.accent else colors.ink,
             maxLines = 1,
         )

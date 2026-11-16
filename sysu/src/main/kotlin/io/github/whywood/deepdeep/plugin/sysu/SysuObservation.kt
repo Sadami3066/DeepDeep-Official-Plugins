@@ -1,6 +1,5 @@
 package io.github.whywood.deepdeep.plugin.sysu
 
-import io.github.whywood.deepdeep.plugin.cli.card.CliCardCodec
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardItem
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardSection
@@ -123,10 +122,9 @@ internal object SysuObservation {
             sections += CliCardSection(label = dayLabel, items = rows)
         }
         val trailing = strings.text("$rowCount 门", "$rowCount classes")
-        val note = overflowNote(range, rowCount, strings)
         return SysuRendered(
             summary = cardSummary(title, trailing, subtitle),
-            text = SysuFormat.bounded(lines),
+            text = lines.joinToString("\n").trimEnd(),
             card = readyCard(
                 kind = SysuCardKind.Schedule,
                 title = title,
@@ -134,7 +132,7 @@ internal object SysuObservation {
                 context = subtitle,
                 total = rowCount,
                 sections = sections,
-                note = note,
+                note = range,
             ),
         )
     }
@@ -184,20 +182,24 @@ internal object SysuObservation {
                 rowCount += 1
             }
             sections += CliCardSection(
-                label = listOfNotNull(semester.semester, gpa?.let { strings.text("加权绩点 $it", "GPA $it") }).joinToString(" · "),
+                label = listOfNotNull(
+                    semester.semester,
+                    credit?.let { strings.text("$it 学分", "$it credits") },
+                    gpa?.let { strings.text("加权绩点 $it", "GPA $it") },
+                ).joinToString(" · "),
                 items = rows,
             )
         }
         val first = semesters.first()
         val count = first.count.scalarText() ?: first.courses.size.toString()
         val trailing = strings.text("$count 门", "$count courses")
-        val footerBase = listOfNotNull(
+        val footer = listOfNotNull(
             SysuFormat.decimal(first.credit, 1)?.let { strings.text("$it 学分", "$it credits") },
             SysuFormat.decimal(first.gpa, 3)?.let { strings.text("加权绩点 $it（自算）", "GPA $it (self-calculated)") },
         ).joinToString(" · ").ifEmpty { null }
         return SysuRendered(
             summary = cardSummary(title, trailing, first.semester),
-            text = SysuFormat.bounded(lines),
+            text = lines.joinToString("\n").trimEnd(),
             card = readyCard(
                 kind = SysuCardKind.Grades,
                 title = title,
@@ -205,7 +207,7 @@ internal object SysuObservation {
                 context = first.semester,
                 total = rowCount,
                 sections = sections,
-                note = overflowNote(footerBase, rowCount, strings),
+                note = footer,
             ),
         )
     }
@@ -223,7 +225,7 @@ internal object SysuObservation {
         val lines = mutableListOf(header)
         val byDate = linkedMapOf<String, MutableList<SysuExam>>()
         for (exam in data.exams) {
-            val date = SysuFormat.date(exam.date) ?: continue
+            val date = SysuFormat.date(exam.date) ?: strings.text("未排期", "Unscheduled")
             byDate.getOrPut(date) { mutableListOf() } += exam
         }
         val sections = mutableListOf<CliCardSection>()
@@ -238,11 +240,30 @@ internal object SysuObservation {
                 val time = exam.time?.takeIf { it.isNotBlank() }
                 val place = SysuFormat.place(exam.place)
                 val sectionsLabel = SysuFormat.sections(exam.sections)
-                lines += "  - " + listOfNotNull(time, exam.name.orDash(), place, sectionsLabel).joinToString("｜")
+                val teacher = exam.teacher?.takeIf { it.isNotBlank() }
+                val week = exam.week.scalarText()
+                val weekLabel = week?.let { strings.text("第 $it 周", "week $it") }
+                val typeLabel = exam.type?.takeIf { it.isNotBlank() }?.let { raw ->
+                    if (raw == "exam") strings.text("考试", "exam") else raw
+                }
+                lines += "  - " + listOfNotNull(
+                    time,
+                    exam.name.orDash(),
+                    place,
+                    sectionsLabel,
+                    teacher?.let { strings.text("教师 $it", "teacher $it") },
+                    weekLabel,
+                    typeLabel,
+                ).joinToString("｜")
                 rows += CliCardItem(
                     title = exam.name.orDash(),
                     subtitle = listOfNotNull(time, place).joinToString(" · ").ifEmpty { null },
                     meta = sectionsLabel,
+                    body = bodyLines(
+                        strings.text("教师", "Teacher") to teacher,
+                        strings.text("周次", "Week") to weekLabel,
+                        strings.text("类型", "Type") to typeLabel,
+                    ),
                 )
                 rowCount += 1
             }
@@ -251,7 +272,7 @@ internal object SysuObservation {
         val trailing = strings.text("$count 场", "$count")
         return SysuRendered(
             summary = cardSummary(title, trailing, term),
-            text = SysuFormat.bounded(lines),
+            text = lines.joinToString("\n").trimEnd(),
             card = readyCard(
                 kind = SysuCardKind.Exams,
                 title = title,
@@ -259,7 +280,6 @@ internal object SysuObservation {
                 context = term,
                 total = rowCount,
                 sections = sections,
-                note = overflowNote(null, rowCount, strings),
             ),
         )
     }
@@ -280,8 +300,17 @@ internal object SysuObservation {
                 append(strings.text("培养方案 ${index + 1}", "Plan ${index + 1}")).append("：")
                 append(plan.grade?.takeIf { it.isNotBlank() }?.let { "$it ${strings.text("级", "grade")}" } ?: strings.text("年级未知", "unknown grade"))
                 append(" · ").append(strings.text("专业代码 ", "programme code ")).append(plan.professionNumber.orDash())
+                plan.gradeProfessionCode?.takeIf { it.isNotBlank() }?.let {
+                    append(" · ").append(strings.text("年级专业代码 ", "grade programme code ")).append(it)
+                }
                 plan.trainCateCode?.takeIf { it.isNotBlank() }?.let {
                     append(" · ").append(strings.text("培养类别 ", "category ")).append(it)
+                }
+                plan.teachPlanNumber?.takeIf { it.isNotBlank() }?.let {
+                    append(" · ").append(strings.text("教学计划 ", "teaching plan ")).append(it)
+                }
+                SysuFormat.decimal(plan.publicMinCredit, 0)?.let {
+                    append(" · ").append(strings.text("公共课下限 ", "public minimum ")).append(it)
                 }
             }
             val finish = SysuFormat.decimal(plan.finishCredit, 1) ?: "0.0"
@@ -293,7 +322,8 @@ internal object SysuObservation {
             )
             for (category in creditsCategories(plan, strings)) lines += "  - $category"
         }
-        return SysuRendered(SysuFormat.bounded(lines), SysuFormat.bounded(lines), card = null)
+        val text = lines.joinToString("\n").trimEnd()
+        return SysuRendered(text, text, card = null)
     }
 
     private fun creditsCategories(plan: SysuCreditPlan, strings: SysuStrings): List<String> {
@@ -325,25 +355,36 @@ internal object SysuObservation {
             val id = course.id.scalarText()
             val name = course.name.orDash()
             val progress = course.progress.scalarText()?.let { "$it%" } ?: "—"
+            val start = SysuFormat.date(course.start)
             val end = SysuFormat.date(course.end)
-            lines += "  - ${id?.let { "$it " } ?: ""}$name｜${strings.text("进度", "progress")} $progress｜${strings.text("结课", "ends")} ${end.orDash()}"
+            val short = course.short?.takeIf { it.isNotBlank() }
+            val hidden = course.hidden == true
+            lines += "  - ${id?.let { "$it " } ?: ""}$name｜${strings.text("进度", "progress")} $progress｜" +
+                "${strings.text("结课", "ends")} ${end.orDash()}" +
+                (start?.let { "｜${strings.text("开课", "starts")} $it" } ?: "") +
+                (short?.let { "｜${strings.text("课程代码", "code")} $it" } ?: "") +
+                (if (hidden) "｜${strings.text("已隐藏", "hidden")}" else "")
             rows += CliCardItem(
                 title = name,
                 subtitle = id?.let { strings.text("课程 ID $it", "Course ID $it") },
                 meta = listOfNotNull(progress, end?.let { strings.text("结课 $it", "ends $it") }).joinToString(" · "),
+                body = listOfNotNull(
+                    short?.let { "${strings.text("课程代码", "Code")} $it" },
+                    start?.let { "${strings.text("开课", "Starts")} $it" },
+                    if (hidden) strings.text("已隐藏", "Hidden") else null,
+                ).joinToString("\n").ifEmpty { null },
             )
         }
         val trailing = strings.text("${courses.size} 门", "${courses.size}")
         return SysuRendered(
             summary = cardSummary(title, trailing, null),
-            text = SysuFormat.bounded(lines),
+            text = lines.joinToString("\n").trimEnd(),
             card = readyCard(
                 kind = SysuCardKind.Lms,
                 title = title,
                 trailing = trailing,
                 total = rows.size,
                 items = rows,
-                note = overflowNote(null, rows.size, strings),
             ),
         )
     }
@@ -362,21 +403,27 @@ internal object SysuObservation {
             val name = item.name.orDash()
             val course = item.course?.takeIf { it.isNotBlank() }
             val action = item.action?.takeIf { it.isNotBlank() }
+            val url = item.url?.takeIf { it.isNotBlank() }
             lines += "  - " + listOfNotNull(whenText, name, course, action).joinToString("｜")
-            item.url?.takeIf { it.isNotBlank() }?.let { lines += "    $it" }
-            rows += CliCardItem(title = name, subtitle = course, meta = whenText)
+            if (url != null) lines += "    $url"
+            rows += CliCardItem(
+                title = name,
+                subtitle = course,
+                meta = whenText,
+                url = url,
+                body = action?.let { listOf(strings.text("动作", "Action"), it).joinToString(" ") },
+            )
         }
         val trailing = strings.text("${items.size} 项", "${items.size}")
         return SysuRendered(
             summary = cardSummary(title, trailing, null),
-            text = SysuFormat.bounded(lines),
+            text = lines.joinToString("\n").trimEnd(),
             card = readyCard(
                 kind = SysuCardKind.Todo,
                 title = title,
                 trailing = trailing,
                 total = rows.size,
                 items = rows,
-                note = overflowNote(null, rows.size, strings),
             ),
         )
     }
@@ -384,26 +431,35 @@ internal object SysuObservation {
     private fun gymSlots(payload: JsonElement, strings: SysuStrings): SysuRendered? {
         val data = SysuJson.gymSlots(payload) ?: return null
         val title = strings.text("体育场馆空位", "Venue availability")
+        val failures = data.errors.mapNotNull { error ->
+            error.error?.takeIf { it.isNotBlank() }?.let { message ->
+                listOfNotNull(error.name, error.id).joinToString(" · ") + "：" + message
+            }
+        }
         val failure = data.error?.message
         if (failure != null) {
-            val body = SysuFailures.actionable(failure, strings) ?: strings.text(
-                "场馆查询失败：${SysuText.cleanInline(failure)}",
-                "Venue query failed: ${SysuText.cleanInline(failure)}",
-            )
+            val body = failureMessage(failure, SysuSite.Gym, strings)
             return SysuRendered(body, body, errorCard(SysuCardKind.Gym, title, body), isError = true)
         }
-        val types = data.types.filter { it.error != null || it.venues.isNotEmpty() || it.name != null }
-        if (types.isEmpty()) {
-            val body = strings.text(
-                data.errors.firstOrNull()?.error?.let { "场馆查询失败：${SysuText.cleanInline(it)}" } ?: "没有可预约的场馆时段。",
-                data.errors.firstOrNull()?.error?.let { "Venue query failed: ${SysuText.cleanInline(it)}" } ?: "No bookable venue slots.",
-            )
-            return SysuRendered(body, body, emptyCard(SysuCardKind.Gym, title, null, body))
+        if (data.types.isEmpty()) {
+            val body = when {
+                failures.isNotEmpty() -> failureMessage(failures.joinToString("\n"), SysuSite.Gym, strings)
+                else -> strings.text("没有可预约的场馆时段。", "No bookable venue slots.")
+            }
+            val card = if (failures.isNotEmpty()) {
+                errorCard(SysuCardKind.Gym, title, body)
+            } else {
+                emptyCard(SysuCardKind.Gym, title, null, body)
+            }
+            return SysuRendered(body, body, card, isError = failures.isNotEmpty())
         }
         val lines = mutableListOf(title)
+        if (data.ok == false) {
+            lines += strings.text("本次查询有失败项。", "Some queries failed.")
+        }
         val sections = mutableListOf<CliCardSection>()
         var venueCount = 0
-        for (type in types) {
+        for (type in data.types) {
             val window = type.window
             val windowLabel = listOfNotNull(
                 SysuFormat.date(window?.start),
@@ -413,11 +469,15 @@ internal object SysuObservation {
             lines += ""
             lines += buildString {
                 append("· ").append(type.name.orDash())
+                type.id?.takeIf { it.isNotBlank() }?.let { append("（").append(strings.text("类型 $it", "type $it")).append("）") }
                 if (windowLabel != null) append("（").append(windowLabel).append("）")
                 if (feeLabel != null) append(" · ").append(feeLabel)
             }
             if (type.error != null) {
-                lines += "  " + strings.text("查询失败：", "Query failed: ") + SysuText.cleanInline(type.error)
+                lines += "  " + (
+                    SysuFailures.actionable(type.error, SysuSite.Gym, strings)
+                        ?: (strings.text("查询失败：", "Query failed: ") + SysuText.cleanInline(type.error))
+                    )
                 continue
             }
             if (type.venues.isEmpty()) {
@@ -430,35 +490,59 @@ internal object SysuObservation {
             for (venue in type.venues) {
                 val venueName = SysuFormat.venueName(type.name, venue)
                 val display = SysuGymDisplay.slots(venue, strings)
-                lines += "  ${venueName.orDash()}"
+                lines += "  ${venueName.orDash()}" +
+                    venue.id?.takeIf { it.isNotBlank() }?.let { "（${strings.text("场地 $it", "venue $it")}）" }.orEmpty()
                 for (line in display.observationLines) lines += "    $line"
                 rows += CliCardItem(
                     title = venueName.orDash(),
-                    subtitle = display.cardSummary,
-                    meta = display.cardCount,
+                    subtitle = display.cardText,
+                    meta = display.countLabel,
                 )
                 venueCount += 1
             }
             if (rows.isNotEmpty()) {
-                sections += CliCardSection(label = listOfNotNull(type.name, feeLabel).joinToString(" · "), items = rows)
+                sections += CliCardSection(
+                    label = listOfNotNull(type.name, feeLabel).joinToString("｜"),
+                    items = rows,
+                )
             }
             if (type.notice?.isNotBlank() == true) {
                 lines += "  " + strings.text("公告：${SysuText.cleanInline(type.notice)}", "Notice: ${SysuText.cleanInline(type.notice)}")
             }
         }
-        val windows = types.mapNotNull { listOfNotNull(SysuFormat.date(it.window?.start), SysuFormat.date(it.window?.end)).distinct().joinToString(" ~ ").ifEmpty { null } }.distinct()
+        if (failures.isNotEmpty()) {
+            lines += ""
+            for (failed in failures) {
+                lines += "  " + (
+                    SysuFailures.actionable(failed, SysuSite.Gym, strings)
+                        ?: (strings.text("错误：", "Error: ") + SysuText.cleanInline(failed))
+                    )
+            }
+        }
+        val windows = data.types.mapNotNull {
+            listOfNotNull(SysuFormat.date(it.window?.start), SysuFormat.date(it.window?.end))
+                .distinct()
+                .joinToString(" ~ ")
+                .ifEmpty { null }
+        }.distinct()
         val footer = windows.singleOrNull()?.let { strings.text("预约窗口 $it", "Booking window $it") }
         val trailing = strings.text("$venueCount 个场地", "$venueCount venues")
+        val text = lines.joinToString("\n").trimEnd()
+        val hasErrors = failures.isNotEmpty() || data.types.any { it.error != null }
+        if (sections.isEmpty()) {
+            val card = if (hasErrors) errorCard(SysuCardKind.Gym, title, text) else emptyCard(SysuCardKind.Gym, title, null, text)
+            return SysuRendered(text, text, card, isError = hasErrors)
+        }
         return SysuRendered(
             summary = cardSummary(title, trailing, null),
-            text = SysuFormat.bounded(lines),
+            text = text,
             card = readyCard(
                 kind = SysuCardKind.Gym,
                 title = title,
                 trailing = trailing,
                 total = venueCount,
                 sections = sections,
-                note = overflowNote(footer, venueCount, strings),
+                note = footer,
             ),
         )
     }
@@ -471,10 +555,13 @@ internal object SysuObservation {
         val message = info?.let { it["msg"].scalarText() ?: it["message"].scalarText() }
         val identity = SysuFormat.netpayIdentity(info)
         if (success == false) {
-            val body = SysuFailures.actionable(message, strings) ?: strings.text(
-                "网费服务登录已失效：请在「中山大学 CLI」插件页重新登录后重试。",
-                "The network service sign-in expired. Sign in again from the SYSU CLI plugin page, then retry.",
-            )
+            val original = message?.takeIf { it.isNotBlank() }
+                ?: strings.text("网费服务返回未登录。", "The network service returned a signed-out state.")
+            val body = SysuFailures.actionable(original, SysuSite.Netpay, strings)
+                ?: strings.text(
+                    "网费服务登录已失效：$original",
+                    "The network service sign-in expired: $original",
+                )
             return SysuRendered(body, body, errorCard(SysuCardKind.Netpay, title, body), isError = true)
         }
         val identityLine = identity.label
@@ -495,6 +582,14 @@ internal object SysuObservation {
             val expire = SysuFormat.date(service.expire)
             val daysLeft = service.daysLeft.intOrNull()
             val address = service.address?.takeIf { it.isNotBlank() }
+            val details = listOfNotNull(
+                service.no?.takeIf { it.isNotBlank() }?.let { strings.text("编号 $it", "No. $it") },
+                service.mac?.takeIf { it.isNotBlank() }?.let { strings.text("MAC $it", "MAC $it") },
+                service.dept?.takeIf { it.isNotBlank() }?.let { strings.text("部门 $it", "Dept. $it") },
+                service.user?.takeIf { it.isNotBlank() }?.let { strings.text("用户 $it", "User $it") },
+                service.id?.takeIf { it.isNotBlank() }?.let { strings.text("服务 ID $it", "Service ID $it") },
+                service.paused?.takeIf { it.isNotBlank() }?.let { strings.text("暂停信息 $it", "Paused $it") },
+            )
             lines += "  - " + listOfNotNull(
                 name,
                 status,
@@ -502,9 +597,7 @@ internal object SysuObservation {
                 daysLeft?.let { strings.text("剩余 $it 天", "$it days left") },
                 address,
             ).joinToString("｜")
-            service.paused?.takeIf { it.isNotBlank() }?.let {
-                lines += "    " + strings.text("暂停信息：$it", "Paused: $it")
-            }
+            if (details.isNotEmpty()) lines += "    " + details.joinToString("｜")
             rows += CliCardItem(
                 title = name,
                 subtitle = listOfNotNull(status, address).joinToString(" · ").ifEmpty { null },
@@ -512,12 +605,13 @@ internal object SysuObservation {
                     expire?.let { strings.text("到期 $it", "expires $it") },
                     daysLeft?.let { strings.text("剩余 $it 天", "$it days left") },
                 ).joinToString(" · ").ifEmpty { null },
+                body = details.joinToString("\n").ifEmpty { null },
             )
         }
         val trailing = strings.text("${data.services.size} 个服务", "${data.services.size} services")
         return SysuRendered(
             summary = cardSummary(title, trailing, identityLine),
-            text = SysuFormat.bounded(lines),
+            text = lines.joinToString("\n").trimEnd(),
             card = readyCard(
                 kind = SysuCardKind.Netpay,
                 title = title,
@@ -525,22 +619,23 @@ internal object SysuObservation {
                 context = identityLine,
                 total = rows.size,
                 items = rows,
-                note = overflowNote(null, rows.size, strings),
             ),
         )
     }
 
+    private fun bodyLines(vararg pairs: Pair<String, String?>): String? = pairs.mapNotNull { (label, value) ->
+        val text = value?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        "$label $text"
+    }.joinToString("\n").ifEmpty { null }
+
+    private fun failureMessage(raw: String, site: SysuSite, strings: SysuStrings): String =
+        SysuFailures.actionable(raw, site, strings)
+            ?: listOf(raw.trim(), strings.text("请稍后重试；仍失败时到「中山大学 CLI」插件页重新登录。", "Try again later; if it still fails, sign in again from the SYSU CLI plugin page."))
+                .filter { it.isNotBlank() }
+                .joinToString("\n")
+
     private fun cardSummary(title: String, trailing: String?, context: String?): String =
         listOfNotNull(title, trailing, context).filter { it.isNotBlank() }.joinToString(" · ")
-
-    private fun overflowNote(base: String?, rowCount: Int, strings: SysuStrings): String? {
-        val overflow = rowCount - CliCardCodec.MAX_ROWS
-        val notes = listOfNotNull(
-            base?.takeIf { it.isNotBlank() },
-            if (overflow > 0) strings.text("还有 $overflow 项未显示", "$overflow more not shown") else null,
-        )
-        return notes.joinToString(" · ").ifEmpty { null }
-    }
 
     private fun readyCard(
         kind: SysuCardKind,
@@ -653,16 +748,29 @@ internal object SysuFormat {
 
     fun fee(fee: SysuGymFee?, strings: SysuStrings): String? {
         if (fee == null) return null
-        val credit = decimal(fee.creditFee, 1)
-        val cash = decimal(fee.cashFee, 1)
-        val role = fee.name?.takeIf { it.isNotBlank() }
+        val price = listOfNotNull(
+            decimal(fee.creditFee, 1)?.let { strings.text("$it 积分/时", "$it points/hour") },
+            decimal(fee.cashFee, 1)?.let { strings.text("现金 $it 元/时", "¥$it/hour") },
+        ).joinToString(" · ")
+        val timeslot = fee.timeslot?.let { slot ->
+            val range = listOfNotNull(
+                slot.startTime?.takeIf { it.isNotBlank() },
+                slot.endTime?.takeIf { it.isNotBlank() },
+            ).joinToString("-")
+            listOfNotNull(slot.dayType?.takeIf { it.isNotBlank() }, range.ifEmpty { null })
+                .joinToString(" ")
+                .ifEmpty { null }
+        }
+        val meta = listOfNotNull(
+            fee.name?.takeIf { it.isNotBlank() },
+            fee.userRole?.takeIf { it.isNotBlank() }?.let { strings.text("身份 $it", "role $it") },
+            timeslot,
+            fee.identity?.takeIf { it.isNotBlank() }?.let { strings.text("价格 $it", "price $it") },
+        ).joinToString(" · ")
         return when {
-            credit != null -> strings.text(
-                "$credit 积分/时" + (role?.let { "（$it）" } ?: ""),
-                "$credit points/hour" + (role?.let { " ($it)" } ?: ""),
-            )
-
-            cash != null -> strings.text("现金 $cash 元/时", "¥$cash/hour")
+            price.isNotEmpty() && meta.isNotEmpty() -> "$price（$meta）"
+            price.isNotEmpty() -> price
+            meta.isNotEmpty() -> meta
             else -> null
         }
     }
@@ -703,16 +811,6 @@ internal object SysuFormat {
         3 -> 1000.0
         else -> Math.pow(10.0, digits.toDouble())
     }
-
-    fun bounded(lines: List<String>, maxLines: Int = MAX_OBSERVATION_LINES): String {
-        if (lines.size <= maxLines) return lines.joinToString("\n").trimEnd()
-        val hidden = lines.size - maxLines
-        return (lines.take(maxLines) + "…（结果较长，已省略 $hidden 行；可用 --date / --days / --week 等参数缩小范围）")
-            .joinToString("\n")
-            .trimEnd()
-    }
-
-    const val MAX_OBSERVATION_LINES = 80
 }
 
 internal data class SysuNetpayIdentity(

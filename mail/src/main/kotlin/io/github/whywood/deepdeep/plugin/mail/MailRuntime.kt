@@ -9,6 +9,7 @@ import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeException
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeFailure
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeLimits
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposer
+import io.github.whywood.deepdeep.plugin.mail.mime.MailHeaders
 import io.github.whywood.deepdeep.plugin.mail.mime.MailLimits
 import io.github.whywood.deepdeep.plugin.mail.mime.MailMimeParser
 import io.github.whywood.deepdeep.plugin.mail.mime.OutgoingAttachment
@@ -203,10 +204,14 @@ internal class MailRuntime(
         sendDraftInternal(draftId)
     }
 
-    override suspend fun search(query: String, accountId: String?): List<MailMessageSummary> = boundary(
+    override suspend fun search(
+        query: String,
+        accountId: String?,
+        folder: MailFolderRole?,
+    ): List<MailMessageSummary> = boundary(
         fallback = { emptyList() },
     ) {
-        searchInternal(query, accountId)
+        searchInternal(query, accountId, folder)
     }
 
     override suspend fun loadAttachment(accountId: String, messageId: String, attachmentId: String): String? = boundary(
@@ -453,7 +458,24 @@ internal class MailRuntime(
                     contentId = attachment.contentId,
                 )
             },
+            headers = parsed.headers.toDetailFields(),
+            hasPlainText = parsed.hasPlainText,
+            textTruncated = parsed.textTruncated,
         )
+    }
+
+    private fun MailHeaders.toDetailFields(): List<MailHeaderField> = buildList {
+        messageId?.let { add(MailHeaderField("Message-ID", it)) }
+        if (replyTo.isNotEmpty()) {
+            add(MailHeaderField("Reply-To", replyTo.joinToString(", ") { it.display }))
+        }
+        inReplyTo?.let { add(MailHeaderField("In-Reply-To", it)) }
+        if (references.isNotEmpty()) {
+            add(MailHeaderField("References", references.joinToString(" ")))
+        }
+        listHeaders.forEach { (name, value) ->
+            add(MailHeaderField(MailHeaders.displayName(name), value))
+        }
     }
 
     private suspend fun markInternal(accountId: String, messageId: String, unread: Boolean) {
@@ -696,11 +718,16 @@ internal class MailRuntime(
         MailComposeFailure.TOTAL_TOO_LARGE -> texts.draftAttachmentsTooLarge()
     }
 
-    private suspend fun searchInternal(query: String, accountId: String?): List<MailMessageSummary> {
+    private suspend fun searchInternal(
+        query: String,
+        accountId: String?,
+        folder: MailFolderRole?,
+    ): List<MailMessageSummary> {
         val term = query.trim()
         val messages = stateMutex.withLock { indexes.values.flatMap { it.messages } }
         return messages.asSequence()
             .filter { accountId == null || it.accountId == accountId }
+            .filter { folder == null || it.folderRole == folder }
             .filter { matches(it, term) }
             .sortedWith(compareByDescending<MailMessageSummary> { it.dateMillis }.thenByDescending { it.uid })
             .toList()
@@ -1398,7 +1425,8 @@ internal class MailRuntime(
         return message.subject.contains(term, ignoreCase = true) ||
             message.fromName.contains(term, ignoreCase = true) ||
             message.fromAddress.contains(term, ignoreCase = true) ||
-            message.preview.contains(term, ignoreCase = true)
+            message.preview.contains(term, ignoreCase = true) ||
+            message.to.any { it.contains(term, ignoreCase = true) }
     }
 
     private fun secretKey(accountId: String): String = "mail-$accountId"

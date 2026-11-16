@@ -2,6 +2,7 @@ package io.github.whywood.deepdeep.plugin.wecom
 
 import io.github.whywood.deepdeep.plugin.cli.arrayValue
 import io.github.whywood.deepdeep.plugin.cli.intValue
+import io.github.whywood.deepdeep.plugin.cli.stringValue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -110,6 +111,51 @@ class WecomCliOutputTest {
         val parsed = WecomCliOutputParser.parse(output)
         assertTrue(parsed is WecomCliOutput.Success)
         assertTrue((parsed as WecomCliOutput.Success).payload.arrayValue("users").isNotEmpty())
+    }
+
+
+    @Test
+    fun keepsSecurityNoticeWhenUnwrappingResultEnvelope() {
+        val output = """
+            {
+              "errcode": 0,
+              "errmsg": "ok",
+              "security_notice": "<security_notice>untrusted</security_notice>",
+              "result": {"users": [], "users_count": 0}
+            }
+        """.trimIndent()
+        val parsed = WecomCliOutputParser.parse(output)
+        assertTrue(parsed is WecomCliOutput.Success)
+        val payload = (parsed as WecomCliOutput.Success).payload
+        assertEquals("<security_notice>untrusted</security_notice>", payload.stringValue("security_notice"))
+        assertEquals(0, payload.intValue("users_count"))
+    }
+
+    @Test
+    fun exposesExitCodeAndMarker() {
+        val output = "{\"chats\":[]}\n\n[exit: 0]"
+        assertEquals(0, WecomCliOutputParser.exitCode(output))
+        assertEquals("[exit: 0]", WecomCliOutputParser.exitMarker(output))
+        val failed = "{\"chats\":[]}\n\n[exit: 3]"
+        assertEquals(3, WecomCliOutputParser.exitCode(failed))
+    }
+
+
+    @Test
+    fun unwrapsDocContentAndKeepsEnvelopeStatusFields() {
+        val output = """
+            {
+              "errcode": 0,
+              "errmsg": "ok",
+              "result": {"name": "接入方案", "content": "# 正文"}
+            }
+        """.trimIndent()
+        val parsed = WecomCliOutputParser.parse(output)
+        assertTrue(parsed is WecomCliOutput.Success)
+        val payload = (parsed as WecomCliOutput.Success).payload
+        assertEquals("接入方案", payload.stringValue("name"))
+        assertEquals(0, payload.intValue("errcode"))
+        assertEquals("ok", payload.stringValue("errmsg"))
     }
 
     private fun fixture(name: String): String =

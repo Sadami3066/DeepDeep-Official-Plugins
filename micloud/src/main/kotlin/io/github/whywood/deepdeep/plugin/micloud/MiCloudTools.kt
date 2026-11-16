@@ -4,14 +4,13 @@ import io.github.whywood.deepdeep.plugin.api.PluginTool
 import io.github.whywood.deepdeep.plugin.api.pluginTool
 import io.github.whywood.deepdeep.plugin.api.textResult
 import java.io.File
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.put
 
 private class ClientReadApi(private val client: MiCloudClient) : MiCloudReadApi {
     override suspend fun userId(): String? = client.userId()
 
-    override suspend fun getJson(pathWithQuery: String): JsonElement = client.getJson(pathWithQuery)
+    override suspend fun getJson(pathWithQuery: String): MiCloudResponse = client.getJson(pathWithQuery)
 
     override suspend fun download(pathWithQuery: String, dest: File): File = client.download(pathWithQuery, dest)
 }
@@ -81,9 +80,9 @@ private fun accountTool(client: MiCloudReadApi, text: MiCloudText): PluginTool =
         val action = call.args.argString("action") ?: "profile"
         when (action) {
             "profile" -> {
-                val raw = client.getJson("/status/lite/profile?ts=${now()}")
-                val profile = parseProfile(raw)
-                val data = miCloudResponseData(raw) ?: JsonObject(emptyMap())
+                val response = client.getJson("/status/lite/profile?ts=${now()}")
+                val profile = parseProfile(response.json)
+                val data = miCloudResponseData(response.json) ?: JsonObject(emptyMap())
                 val card = MiCloudAccountCardData(
                     mode = ACCOUNT_MODE_PROFILE,
                     nickname = profile?.nickname.orEmpty(),
@@ -91,14 +90,28 @@ private fun accountTool(client: MiCloudReadApi, text: MiCloudText): PluginTool =
                     email = data.stringOrNull("email") ?: data.stringOrNull("mail").orEmpty(),
                     phone = data.stringOrNull("phone") ?: data.stringOrNull("mobile").orEmpty(),
                 )
-                textResult(accountProfileObservation(profile, data, text), details = card.toJson())
+                textResult(
+                    accountProfileObservation(profile, data, text),
+                    details = cardResultDetails(
+                        card = card.toJson(),
+                        raw = response.body,
+                        title = text("小米账号", "Xiaomi account"),
+                    ),
+                )
             }
 
             "quota" -> {
-                val raw = client.getJson("/status/vip/quota/summary?ts=${now()}")
-                val entries = parseQuotaEntries(raw)
+                val response = client.getJson("/status/vip/quota/summary?ts=${now()}")
+                val entries = parseQuotaEntries(response.json)
                 val card = MiCloudAccountCardData(mode = ACCOUNT_MODE_QUOTA, entries = entries)
-                textResult(quotaObservation(entries, text), details = card.toJson())
+                textResult(
+                    quotaObservation(entries, text),
+                    details = cardResultDetails(
+                        card = card.toJson(),
+                        raw = response.body,
+                        title = text.fmt("小米云空间（%d 项）", "Xiaomi Cloud storage (%d items)", entries.size),
+                    ),
+                )
             }
 
             else -> throw IllegalArgumentException("action must be profile or quota")

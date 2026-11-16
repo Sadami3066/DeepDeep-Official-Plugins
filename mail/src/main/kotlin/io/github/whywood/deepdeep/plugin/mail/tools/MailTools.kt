@@ -16,6 +16,7 @@ import io.github.whywood.deepdeep.plugin.api.textResult
 import io.github.whywood.deepdeep.plugin.mail.DraftAttachment
 import io.github.whywood.deepdeep.plugin.mail.MailAccount
 import io.github.whywood.deepdeep.plugin.mail.MailDraft
+import io.github.whywood.deepdeep.plugin.mail.MailFolderRole
 import io.github.whywood.deepdeep.plugin.mail.MailMessageDetail
 import io.github.whywood.deepdeep.plugin.mail.MailMessageSummary
 import io.github.whywood.deepdeep.plugin.mail.MailRepository
@@ -23,6 +24,7 @@ import io.github.whywood.deepdeep.plugin.mail.MailSendResult
 import io.github.whywood.deepdeep.plugin.mail.mime.HtmlText
 import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeLimits
 import io.github.whywood.deepdeep.plugin.mail.ui.displayPreview
+import io.github.whywood.deepdeep.plugin.mail.ui.formatFileSize
 import io.github.whywood.deepdeep.plugin.mail.ui.readableError
 import java.io.File
 import java.time.Instant
@@ -31,15 +33,18 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 
-private const val CardResultLimit = 5
 private const val CARD_DETAILS_KEY = "deepdeep.card"
+private const val SEARCH_DEFAULT_LIMIT = 20
+private const val SEARCH_MAX_LIMIT = 50
 
 private data class MailCard(
     val customType: String,
@@ -48,7 +53,6 @@ private data class MailCard(
 )
 
 private fun PluginToolCall.withCard(text: String, card: MailCard): PluginToolResult {
-    val visibleText = if (callId.isBlank()) text else text.trimEnd() + "\n\n卡片 id：" + callId
     val details = buildJsonObject {
         put(
             CARD_DETAILS_KEY,
@@ -59,7 +63,7 @@ private fun PluginToolCall.withCard(text: String, card: MailCard): PluginToolRes
             },
         )
     }
-    return textResult(visibleText, details = details)
+    return textResult(text, details = details)
 }
 
 private fun guardedExecute(
@@ -108,13 +112,18 @@ private const val MAX_CHAT_ATTACHMENT_BYTES = 10L * 1024 * 1024
 private fun searchTool(host: PluginHost, repository: MailRepository): PluginTool = pluginTool(
     name = "mail_search",
     label = "搜索邮件",
-    description = "在已连接的邮箱中按关键词、账号和未读状态搜索邮件，返回摘要列表；需要正文时再用 mail_read 打开。",
+    description = "在已连接的邮箱中按关键词、账号、文件夹和未读状态搜索邮件，返回带文件夹、收发件人、预览、大小与会话的摘要列表；需要正文时再用 mail_read 打开。",
     parameters = parameters(
         required = emptyList(),
-        "query" to stringProperty("关键词，可留空表示最近邮件"),
+        "query" to stringProperty("关键词，匹配主题、发件人、收件人和预览；可留空表示最近邮件"),
         "account" to stringProperty("邮箱地址或账号 id，可留空表示全部账号"),
+        "folder" to enumProperty(
+            "文件夹：all（全部）、inbox（收件箱）、sent（已发送）、drafts（草稿）、archive（归档），默认 all",
+            listOf("all", "inbox", "sent", "drafts", "archive"),
+        ),
         "unread_only" to booleanProperty("只看未读"),
-        "limit" to intProperty("返回数量，1-50，默认 20", minimum = 1, maximum = 50),
+        "offset" to intProperty("从第几封开始返回，默认 0；用于继续翻页", minimum = 0),
+        "limit" to intProperty("返回数量，1-50，默认 20", minimum = 1, maximum = SEARCH_MAX_LIMIT),
     ),
     execute = guardedExecute(host) { call -> search(host, repository, call) },
 )
@@ -122,7 +131,7 @@ private fun searchTool(host: PluginHost, repository: MailRepository): PluginTool
 private fun readTool(host: PluginHost, repository: MailRepository): PluginTool = pluginTool(
     name = "mail_read",
     label = "读取邮件",
-    description = "读取一封邮件的正文、收发件人与附件清单。",
+    description = "读取一封邮件的完整纯文本正文、HTML 原文、全部头字段、收发件人与全部附件（含内嵌附件及其 Content-ID）。",
     parameters = parameters(
         required = listOf("message_id"),
         "message_id" to stringProperty("mail_search 返回的邮件 id"),
@@ -201,19 +210,41 @@ private suspend fun search(
     val query = call.args.str("query").trim()
     val unreadOnly = call.args.bool("unread_only")
     val account = accountOf(repository, call.args.str("account"))
-    val items = repository.search(query, account?.id)
+    val folder = when (val value = call.args.str("folder").trim().lowercase()) {
+        "", "all" -> null
+        "inbox" -> MailFolderRole.INBOX
+        "sent" -> MailFolderRole.SENT
+        "drafts" -> MailFolderRole.DRAFTS
+        "archive" -> MailFolderRole.ARCHIVE
+        else -> return textResult("folder 只能是 all、inbox、sent、drafts、archive，收到「$value」。", isError = true)
+    }
+    val offset = (call.args.int("offset") ?: 0).coerceAtLeast(0)
+    val limit = (call.args.int("limit") ?: SEARCH_DEFAULT_LIMIT).coerceIn(1, SEARCH_MAX_LIMIT)
+    val matches = repository.search(query, account?.id, folder)
         .filter { !unreadOnly || it.unread }
-        .take((call.args.int("limit") ?: 20).coerceIn(1, 50))
+    val total = matches.size
+    val items = matches.drop(offset).take(limit)
+    val accounts = repository.accounts().associateBy { it.id }
     val card = searchCard(
         host = host,
         query = query,
         account = account,
+        folder = folder,
         unreadOnly = unreadOnly,
         items = items,
-        accounts = repository.accounts().associateBy { it.id },
+        total = total,
+        accounts = accounts,
     )
-    if (items.isEmpty()) return call.withCard("没有找到匹配的邮件。", card)
-    return call.withCard(mailSearchResultText(items), card)
+    return call.withCard(
+        mailSearchResultText(
+            items = items,
+            total = total,
+            offset = offset,
+            folderLabel = { role -> mailFolderLabel(host, role) },
+            accounts = accounts,
+        ),
+        card,
+    )
 }
 
 internal const val MAIL_TOOL_TIME_PATTERN = "yyyy-MM-dd HH:mm"
@@ -233,35 +264,100 @@ internal fun mailSenderText(name: String, address: String): String = when {
 
 internal fun mailSubjectText(subject: String): String = subject.trim().ifEmpty { "（无主题）" }
 
-internal fun mailSearchResultText(items: List<MailMessageSummary>): String = buildString {
-    append("找到 ${items.size} 封邮件：\n")
+internal fun mailFolderLabel(host: PluginHost, role: MailFolderRole): String = when (role) {
+    MailFolderRole.INBOX -> host.cardText("收件箱", "Inbox")
+    MailFolderRole.SENT -> host.cardText("已发送", "Sent")
+    MailFolderRole.DRAFTS -> host.cardText("草稿", "Drafts")
+    MailFolderRole.ARCHIVE -> host.cardText("归档", "Archive")
+    MailFolderRole.TRASH -> host.cardText("废纸篓", "Trash")
+}
+
+internal fun mailSearchResultText(
+    items: List<MailMessageSummary>,
+    total: Int,
+    offset: Int,
+    folderLabel: (MailFolderRole) -> String,
+    accounts: Map<String, MailAccount>,
+): String = buildString {
+    append("匹配 $total 封，返回 ${items.size} 封")
+    if (offset > 0) append("（offset=$offset）")
+    val next = offset + items.size
+    if (items.isNotEmpty() && next < total) append("，可用 offset 继续（offset=$next）")
+    append("。\n")
+    if (total == 0) {
+        append("没有找到匹配的邮件。\n")
+    } else if (items.isEmpty()) {
+        append("没有更多邮件，可以减小 offset。\n")
+    }
     items.forEach { message ->
-        append("- id=${message.id}：主题「${mailSubjectText(message.subject)}」")
-        append("，发件人 ${mailSenderText(message.fromName, message.fromAddress)}")
+        append("- id=${message.id}\n")
+        append("  主题：${mailSubjectText(message.subject)}\n")
+        val account = accounts[message.accountId]?.email
+            ?.takeIf { it.isNotBlank() }
+            ?: message.accountId
+        append("  文件夹：${folderLabel(message.folderRole)} · 账户：$account\n")
+        append("  发件人：${mailSenderText(message.fromName, message.fromAddress)}\n")
+        append("  收件人：${message.to.joinToString(", ").ifBlank { "（无收件人）" }}\n")
         val date = mailToolDate(message.dateMillis)
-        if (date.isNotBlank()) append("，时间 $date")
-        append("，${if (message.unread) "未读" else "已读"}")
-        if (message.hasAttachments) append("，含附件")
+        if (date.isNotBlank()) append("  时间：$date\n")
+        append("  状态：${if (message.unread) "未读" else "已读"}")
+        append("，${if (message.starred) "已星标" else "未星标"}")
+        append("，${if (message.hasAttachments) "含附件" else "无附件"}")
+        formatFileSize(message.sizeBytes).takeIf { it.isNotBlank() }?.let { append("，大小 $it") }
         append("\n")
+        append("  会话：${message.threadId}\n")
+        if (message.preview.isNotBlank()) append("  预览：${message.preview.trim()}\n")
     }
 }
 
-internal fun mailReadResultText(detail: MailMessageDetail): String {
+internal fun mailReadResultText(
+    detail: MailMessageDetail,
+    folderLabel: String,
+    accountEmail: String,
+): String {
     val summary = detail.summary
     return buildString {
         append("id：${summary.id}\n")
         append("主题：${mailSubjectText(summary.subject)}\n")
+        append("文件夹：$folderLabel\n")
+        append("账户：${accountEmail.ifBlank { summary.accountId }}\n")
         append("发件人：${mailSenderText(summary.fromName, summary.fromAddress)}\n")
-        append("收件人：${summary.to.joinToString(", ")}\n")
+        append("收件人：${summary.to.joinToString(", ").ifBlank { "（无收件人）" }}\n")
         if (detail.cc.isNotEmpty()) append("抄送：${detail.cc.joinToString(", ")}\n")
         val date = mailToolDate(summary.dateMillis)
         if (date.isNotBlank()) append("时间：$date\n")
+        append("会话：${summary.threadId}\n")
+        formatFileSize(summary.sizeBytes).takeIf { it.isNotBlank() }?.let { append("大小：$it\n") }
+        detail.headers.forEach { header -> append("${header.name}：${header.value}\n") }
         append("附件：${detail.attachments.size} 个\n")
         detail.attachments.forEach { attachment ->
-            append("- ${attachment.name}（${attachment.mimeType}，${attachment.sizeBytes} 字节，id=${attachment.id}）\n")
+            append("- ${attachment.name}（${attachment.mimeType}")
+            formatFileSize(attachment.sizeBytes).takeIf { it.isNotBlank() }?.let { append("，$it") }
+            append("，id=${attachment.id}")
+            if (attachment.inline) append("，内嵌")
+            attachment.contentId?.takeIf { it.isNotBlank() }?.let { append("，Content-ID=$it") }
+            append("）\n")
+        }
+        if (detail.textTruncated) {
+            append("正文说明：正文超过单段 1 MiB 或总计 2 MiB 上限，已截断。\n")
+        }
+        append("\n正文：\n")
+        val html = detail.htmlBody?.trim().orEmpty()
+        when {
+            detail.textBody.isNotBlank() -> append(detail.textBody)
+            html.isNotEmpty() -> append("（无纯文本正文，见下方 HTML 原文）")
+            else -> append("（正文为空）")
         }
         append("\n")
-        append(detail.textBody.ifBlank { "（正文为空）" })
+        if (html.isNotEmpty()) {
+            val htmlText = HtmlText.toPlainText(html).trim()
+            val plain = detail.textBody.trim()
+            if (!detail.hasPlainText || htmlText.length > plain.length) {
+                append("\nHTML 原文：\n")
+                append(html)
+                append("\n")
+            }
+        }
     }
 }
 
@@ -269,38 +365,59 @@ private fun searchCard(
     host: PluginHost,
     query: String,
     account: MailAccount?,
+    folder: MailFolderRole?,
     unreadOnly: Boolean,
     items: List<MailMessageSummary>,
+    total: Int,
     accounts: Map<String, MailAccount>,
 ): MailCard {
     val payload = MailSearchCardPayload(
         query = query,
         account = account?.email.orEmpty(),
+        folder = folder?.name?.lowercase().orEmpty(),
         unreadOnly = unreadOnly,
-        total = items.size,
-        items = items.take(CardResultLimit).map { message ->
+        total = total,
+        items = items.map { message ->
             MailSearchCardItem(
                 accountId = message.accountId,
                 messageId = message.id,
                 threadId = message.threadId,
                 subject = message.subject,
                 from = message.fromName.ifBlank { message.fromAddress },
+                to = message.to,
+                preview = message.preview,
                 dateMillis = message.dateMillis,
                 unread = message.unread,
+                starred = message.starred,
                 hasAttachments = message.hasAttachments,
+                sizeBytes = message.sizeBytes,
+                folderRole = message.folderRole.name.lowercase(),
+                sent = message.folderRole == MailFolderRole.SENT,
+                account = accounts[message.accountId]?.email.orEmpty(),
                 accountColor = accounts[message.accountId]?.color ?: 0,
             )
         },
     )
     val emptySubject = host.cardText("（无主题）", "(No subject)")
-    val text = if (payload.total == 0) {
-        host.cardText("没有找到匹配的邮件。", "No matching mail.")
-    } else {
-        host.cardText(
+    val latest = payload.items.firstOrNull()
+    val text = when {
+        payload.total == 0 -> host.cardText("没有找到匹配的邮件。", "No matching mail.")
+        latest == null -> host.cardText(
+            "匹配 %d 封，这一页没有邮件。",
+            "%d messages matched, none on this page.",
+            payload.total,
+        )
+        folder == MailFolderRole.SENT -> host.cardText(
+            "已发送 %d 封，最新：%s。",
+            "Sent %d messages. Latest: %s.",
+            payload.total,
+            displaySubject(latest.subject, emptySubject),
+        )
+        else -> host.cardText(
             "找到 %d 封邮件，最新：%s。",
             "Found %d messages. Latest: %s.",
             payload.total,
-            displaySubject(payload.items.first().subject, emptySubject),
+            displaySubject(latest.subject, emptySubject),
         )
     }
     return MailCard(customType = MailChatCardTypes.SEARCH, title = text, payload = payload.encodeCardPayload())
@@ -316,9 +433,20 @@ private suspend fun read(
         ?: return textResult("找不到这封邮件，请先 mail_search 获取最新 id。", isError = true)
     val detail = repository.message(resolved.first.id, resolved.second)
         ?: return textResult("读取邮件失败，可能已被删除或移动。", isError = true)
-    val card = readCard(host, detail)
+    val accountEmail = repository.accounts()
+        .firstOrNull { it.id == detail.summary.accountId }
+        ?.email
+        .orEmpty()
+    val card = readCard(host, detail, accountEmail)
     shareAttachmentsToChat(host, repository, call, detail)
-    return call.withCard(mailReadResultText(detail), card)
+    return call.withCard(
+        mailReadResultText(
+            detail = detail,
+            folderLabel = mailFolderLabel(host, detail.summary.folderRole),
+            accountEmail = accountEmail,
+        ),
+        card,
+    )
 }
 
 private suspend fun shareAttachmentsToChat(
@@ -402,7 +530,7 @@ private suspend fun saveAttachment(
     }
 }
 
-private fun readCard(host: PluginHost, detail: MailMessageDetail): MailCard {
+private fun readCard(host: PluginHost, detail: MailMessageDetail, accountEmail: String): MailCard {
     val summary = detail.summary
     val plainBody = detail.textBody.ifBlank {
         detail.htmlBody?.let(HtmlText::toPlainText).orEmpty()
@@ -414,13 +542,31 @@ private fun readCard(host: PluginHost, detail: MailMessageDetail): MailCard {
         subject = summary.subject,
         fromName = summary.fromName,
         fromAddress = summary.fromAddress,
+        to = summary.to,
+        account = accountEmail,
+        folderRole = summary.folderRole.name.lowercase(),
         dateMillis = summary.dateMillis,
         preview = HtmlText.preview(plainBody, 240),
+        body = plainBody,
         unread = summary.unread,
-        attachments = detail.attachments.map { MailReadCardAttachment(it.name, it.sizeBytes) },
+        textTruncated = detail.textTruncated,
+        attachments = detail.attachments.map { attachment ->
+            MailReadCardAttachment(
+                id = attachment.id,
+                name = attachment.name,
+                mimeType = attachment.mimeType,
+                sizeBytes = attachment.sizeBytes,
+                inline = attachment.inline,
+                contentId = attachment.contentId,
+            )
+        },
     )
     val subject = displaySubject(summary.subject, host.cardText("（无主题）", "(No subject)"))
-    val from = summary.fromName.ifBlank { summary.fromAddress }
+    val from = if (summary.folderRole == MailFolderRole.SENT) {
+        summary.to.joinToString(", ").ifBlank { accountEmail }
+    } else {
+        summary.fromName.ifBlank { summary.fromAddress }
+    }
     val text = host.cardText(
         "已读取邮件：%s · %s。",
         "Read mail: %s · %s.",
@@ -639,7 +785,7 @@ private fun draftCard(
     return MailCard(customType = MailChatCardTypes.DRAFT, title = text, payload = payload.encodeCardPayload())
 }
 
-private fun PluginHost.cardText(zh: String, en: String, vararg args: Any): String =
+internal fun PluginHost.cardText(zh: String, en: String, vararg args: Any): String =
     text(localizedText(default = zh, zh = zh, en = en), *args)
 
 private fun displaySubject(subject: String, empty: String): String = subject.trim().ifEmpty { empty }
@@ -709,6 +855,12 @@ private fun stringProperty(description: String): JsonObject = buildJsonObject {
 private fun booleanProperty(description: String): JsonObject = buildJsonObject {
     put("type", "boolean")
     put("description", description)
+}
+
+private fun enumProperty(description: String, values: List<String>): JsonObject = buildJsonObject {
+    put("type", "string")
+    put("description", description)
+    put("enum", JsonArray(values.map { JsonPrimitive(it) }))
 }
 
 private fun intProperty(description: String, minimum: Int? = null, maximum: Int? = null): JsonObject =

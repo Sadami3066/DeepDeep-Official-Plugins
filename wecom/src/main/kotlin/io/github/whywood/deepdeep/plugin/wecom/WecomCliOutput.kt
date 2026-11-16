@@ -18,7 +18,7 @@ internal sealed interface WecomCliOutput {
 }
 
 internal object WecomCliOutputParser {
-    const val MAX_OUTPUT_LENGTH = 256 * 1024
+    const val MAX_OUTPUT_LENGTH = 4 * 1024 * 1024
 
     private val ENVELOPE = CliJsonEnvelope.LENIENT
     private val EXIT_MARKER = Regex("\\[exit:\\s*(-?\\d+)]")
@@ -55,6 +55,12 @@ internal object WecomCliOutputParser {
         val cleaned = clean(output) ?: return null
         return ENVELOPE.element(cleaned.text)
     }
+
+    fun exitCode(output: String): Int? =
+        EXIT_MARKER.findAll(CliText.stripAnsi(output)).lastOrNull()?.groupValues?.getOrNull(1)?.toIntOrNull()
+
+    fun exitMarker(output: String): String? =
+        EXIT_MARKER.findAll(CliText.stripAnsi(output)).lastOrNull()?.value
 
     private data class Cleaned(val text: String, val exitCode: Int?)
 
@@ -112,17 +118,30 @@ internal object WecomCliOutputParser {
             return envelope
         }
         val result = envelope["result"]
-        if (result is JsonObject) return result
-        if (result is JsonPrimitive && result.isString) return parseNested(result.contentOrNull)
+        if (result is JsonObject) return withEnvelopeFields(envelope, result)
+        if (result is JsonPrimitive && result.isString) {
+            return withEnvelopeFields(envelope, parseNested(result.contentOrNull))
+        }
         val resultsJson = envelope["results_json"]
         if (resultsJson is JsonPrimitive && resultsJson.isString) {
             val nested = parseNested(resultsJson.contentOrNull) ?: return null
             val inner = nested["result"]
-            if (inner is JsonObject) return inner
-            if (inner is JsonPrimitive && inner.isString) return parseNested(inner.contentOrNull)
-            return nested
+            if (inner is JsonObject) return withEnvelopeFields(envelope, inner)
+            if (inner is JsonPrimitive && inner.isString) {
+                return withEnvelopeFields(envelope, parseNested(inner.contentOrNull))
+            }
+            return withEnvelopeFields(envelope, nested)
         }
         return envelope
+    }
+
+    private fun withEnvelopeFields(envelope: JsonObject, payload: JsonObject?): JsonObject? {
+        if (payload == null) return null
+        val merged = payload.toMutableMap()
+        ENVELOPE_FIELDS.forEach { key ->
+            if (key !in merged) envelope[key]?.let { merged[key] = it }
+        }
+        return JsonObject(merged)
     }
 
     private fun parseNested(value: String?): JsonObject? {
@@ -132,6 +151,8 @@ internal object WecomCliOutputParser {
 
     private fun JsonObject.string(key: String): String? =
         (this[key] as? JsonPrimitive)?.contentOrNull
+
+    private val ENVELOPE_FIELDS = listOf("security_notice", "errcode", "errmsg")
 
     private val ENVELOPE_KEYS = setOf(
         "errcode",

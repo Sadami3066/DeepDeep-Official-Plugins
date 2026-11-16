@@ -167,7 +167,7 @@ class AmapMapTest {
 
     @Test
     fun joinsStepPolylinesForRouteMap() {
-        val joined = routePolyline(routeSample())
+        val joined = routePolyline(routeSample().paths.first())
 
         assertEquals(
             listOf(LatLng(120.1, 30.2), LatLng(120.11, 30.21), LatLng(120.3, 30.4)),

@@ -25,5 +25,7 @@
       }
     }
   ],
-  "schedule_list_count": 1
+  "schedule_list_count": 1,
+  "has_more": true,
+  "next_cursor": "CURSOR_SCHED_PAGE_2"
 }

@@ -6,13 +6,23 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 import java.net.URLEncoder
 import java.util.concurrent.atomic.AtomicInteger
 
-internal class DidiException(message: String, val code: Int? = null) : Exception(message)
+internal class DidiException(
+    message: String,
+    val code: Int? = null,
+    val raw: String? = null,
+) : Exception(message)
+
+internal data class RideResponse(
+    val payload: JsonElement,
+    val raw: String,
+)
 
 internal enum class RideEnvironment(val wire: String) {
     PRODUCTION("production"),
@@ -61,7 +71,7 @@ internal class DidiClient(private val host: PluginHost) {
         }
     }
 
-    suspend fun call(tool: String, arguments: JsonObject): JsonElement {
+    suspend fun call(tool: String, arguments: JsonObject): RideResponse {
         val key = keyStore.currentKey()
         if (key.isNullOrBlank()) throw DidiException(host.t("还没有配置滴滴 Key", "Didi key is not configured"))
         val body = post(
@@ -73,8 +83,9 @@ internal class DidiClient(private val host: PluginHost) {
             key = key,
             timeoutMs = CALL_TIMEOUT_MS,
         )
+        val raw = redactDidiError(body, key)
         val envelope = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull()
-            ?: throw DidiException(host.t("滴滴返回数据不完整", "Didi returned incomplete data"))
+            ?: throw DidiException(host.t("滴滴返回数据不完整", "Didi returned incomplete data"), raw = raw)
         val error = envelope["error"] as? JsonObject
         if (error != null) {
             val message = (error["message"] as? JsonPrimitive)?.contentOrNull
@@ -84,23 +95,27 @@ internal class DidiClient(private val host: PluginHost) {
                     host.t("滴滴调用失败", "Didi call failed")
                 },
                 code ?: parseDidiErrorCode(message),
+                raw = raw,
             )
         }
         val result = envelope["result"] as? JsonObject
-            ?: throw DidiException(host.t("滴滴返回数据不完整", "Didi returned incomplete data"))
-        if ((result["isError"] as? JsonPrimitive)?.contentOrNull == "true") {
+            ?: throw DidiException(host.t("滴滴返回数据不完整", "Didi returned incomplete data"), raw = raw)
+        if ((result["isError"] as? JsonPrimitive)?.booleanOrNull == true) {
             val text = result.textContent()
             throw DidiException(
                 summarizeDidiError(text, secret = key).ifBlank {
                     host.t("滴滴调用失败", "Didi call failed")
                 },
                 parseDidiErrorCode(text),
+                raw = raw,
             )
         }
-        result["structuredContent"]?.let { return it }
-        val text = result.textContent()
-        if (text.isBlank()) return JsonObject(emptyMap())
-        return parseDidiPayload(text) ?: JsonObject(mapOf("text" to JsonPrimitive(text)))
+        val payload = result["structuredContent"] ?: run {
+            val text = result.textContent()
+            if (text.isBlank()) JsonObject(emptyMap())
+            else parseDidiPayload(text) ?: JsonObject(mapOf("text" to JsonPrimitive(text)))
+        }
+        return RideResponse(payload = payload, raw = raw)
     }
 
     private suspend fun post(
@@ -142,6 +157,7 @@ internal class DidiClient(private val host: PluginHost) {
                         "Didi is unavailable (${response.statusCode})",
                     )
                 },
+                raw = redactDidiError(body, key).takeIf { it.isNotEmpty() },
             )
         }
         return body

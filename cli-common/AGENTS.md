@@ -12,8 +12,8 @@ DeepDeep 官方 CLI 类插件共用的内部 Android library 模块：CLI bash �
 | `.../cli/CliJson.kt` | `JsonObject` 安全取值扩展：`stringValue`/`intValue`/`longValue`/`boolValue`/`objValue`/`arrayValue`/`objectList` |
 | `.../cli/CliText.kt` | 文本清理：ANSI、HTML 标签与实体、单行/多行截断、文档正文清洗 |
 | `.../cli/CliTime.kt` | 时间展示：ISO 时间 → `MM-dd HH:mm`/`yyyy-MM-dd HH:mm`，epoch 秒格式化 |
-| `.../cli/bridge/CliToolBridge.kt` | 通用 bash 工具桥：`beforeToolCall` 记录 callId→命令（有界 64）、`afterToolExecution` 关联/去重/失败隔离/输出上限 256 KiB/成功信封或通用 payload 提取/观测构造/卡片 details 编码 + 卡片 id 提示 + `resultReplace`；`isError` 观测按错误结果替换；`runFinished`/`sessionClosed` 清理；hook 内异常 fail-open、`CancellationException` 重抛 |
-| `.../cli/card/CliCard.kt` | 通用卡片模型与编解码：header（kind/title/trailing/context/total）、rows（items 或 sections 分组标签）、summary、footer（note/open_url）、READY/EMPTY/ERROR/LOADING；`MAX_ROWS=8` 是数据行上限、分组标题不计行 |
+| `.../cli/bridge/CliToolBridge.kt` | 通用 bash 工具桥：`beforeToolCall` 记录 callId→命令（有界 64）、`afterToolExecution` 关联/去重/失败隔离/截断恢复（`details.fullOutputPath`）/输出上限 256 KiB/成功信封或通用 payload 提取/观测构造/卡片与 `deepdeep.raw` details 编码 + `resultReplace`；`redactRaw` 配置用于 raw 脱敏；`isError` 观测按错误结果替换；`runFinished`/`sessionClosed` 清理；hook 内异常 fail-open、`CancellationException` 重抛 |
+| `.../cli/card/CliCard.kt` | 通用卡片模型与编解码：header（kind/title/trailing/context/total）、rows（items 或 sections 分组标签，行可带 body/avatar）、summary、footer（note/open_url）、READY/EMPTY/ERROR/LOADING；不裁剪行数，全量交给渲染侧做预览/展开 |
 | `.../cli/update/CliVersions.kt` | `major.minor.patch` 归一化、数值比较、取最新 |
 | `.../cli/update/CliChecksums.kt` | checksums 文本解析（sha256/sha512 长度可配）与摘要匹配 |
 | `.../cli/update/CliRelease.kt` | `CliRelease`（sha256 或 sha512Base64 二选一）与插件提供的 `CliReleasePolicy`（归档名/下载 URL/校验和 URL/摘要长度/`releaseWithSha512`） |
@@ -53,8 +53,7 @@ internal class MyToolBridge {
 - `beforeToolCall` 命中后记录命令；`afterToolExecution` 只有在结果成功、输出非空且 ≤ 256 KiB、payload 可提取、观测可构造时才 `resultReplace`，其余一律 `resultKeep`。
 - 默认走严格信封（`requireSuccessEnvelope = true` 且 `envelope.successField = "ok"`）：要求 JSON 对象带 `ok: true` 并剥 `_notice`。裸对象/顶层数组等无 `ok` 的 CLI 用 `envelope = CliJsonEnvelope.LENIENT`（`successField = null`）或 `requireSuccessEnvelope = false`，由 `payloadFinder`/`CliJsonEnvelope.element` 取第一个平衡 JSON，业务失败由插件 observer 判定。
 - `CliObservationBuilder` 的 `JsonObject` 版本是 SAM 入口；需要处理顶层数组时实现 `JsonElement` 重载（默认重载会把对象转给 `JsonObject` 版本）。
-- 卡片不直接上屏：观测有 `card` 时共享层把 `cardEncoder(card)` 写进结果 details 的 `deepdeep.card`（`customType` + `title` + `payload`），并在模型可见文本末尾追加 `卡片 id：<callId>`；模型之后自行决定是否调用 `present` 展示。`CliObservation.customType` 非空时覆盖配置里的槽位类型（WeCom 一类按命令分槽位的插件用它）。观测 `card = null` 时只替换文本、不带卡片。
-- 卡片 id 提示只在卡片编码成功且观测不是错误时追加；`card = null` 或原始结果被保留时都没有提示。模型观测仍保留全部事实，提示只在末尾。
+- 卡片不直接上屏：观测有 `card` 时共享层把 `cardEncoder(card)` 写进结果 details 的 `deepdeep.card`（`customType` + `title` + `payload`）；同时把完整原始输出写进 details 的 `deepdeep.raw`（`redactRaw` 先脱敏）。宿主在所有插件 hook 之后统一把 raw 追加到模型文本、给出 `卡片 id：<callId>（标题）`，再从 details 删除 raw。`CliObservation.customType` 非空时覆盖配置里的槽位类型（WeCom 一类按命令分槽位的插件用它）。观测 `card = null` 时只替换文本、不带卡片。
 - `CliObservation.isError = true` 时用 `textResult(text, isError = true)` 替换且不追加卡片 id 提示；错误卡片仍写 details，供后续展示错误态卡片（失败文案由插件决定）。
 - 需要改写错误结果（例如未授权错误映射成可操作提示）时用 `errorMapper`：
 
@@ -94,7 +93,7 @@ val decoded: CliCardModel? = CliCardCodec.decode(payload, supportedKinds)
 ```
 
 - wire 键固定为 `kind`/`state`/`title`/`trailing`/`context`/`total`/`items`/`sections`/`summary`/`open_url`/`note`，行内为 `title`/`subtitle`/`meta`/`badge`/`url`，分组为 `{label, items}`；`title`/`trailing`/`summary`/`sections` 只有非空才写入，旧消息缺省兼容（无 sections 时按 items 平铺）。
-- `MAX_ROWS = 8` 是数据行上限（跨 sections 合计），分组标题不计入；`items` 是平铺兜底（有 sections 时取各段行合并），`flatItems` 读取平铺行，`dataRowCount` 是实际数据行数。
+- `items` 是平铺兜底（有 sections 时取各段行合并），`flatItems` 读取平铺行，`dataRowCount` 是实际数据行数；编解码不裁剪行数。行字段为 `title`/`subtitle`/`meta`/`badge`/`url`/`body`/`avatar`。
 - `CliCardModel.isEmpty` 覆盖显式 EMPTY 与无数据行；`decode` 对未知 kind、非法结构返回 null，由插件渲染兜底。
 - 渲染仍由插件用 `:design` 的 Dd 组件完成，共享层只出数据与编码，不参与 Compose。
 
@@ -182,6 +181,6 @@ cd DeepDeep-Official-Plugins
 - 模块是内部共享层：不放插件清单、不做 UI、不引入 Compose，渲染由各插件用 `:design` 组件完成。
 - 不新增第三方依赖；`plugin-api`/协程/序列化必须保持 `compileOnly`，否则 `.ddp` 会把宿主库重复打包。
 - 卡片 wire 格式是已发布插件的历史消息格式，改字段要同时考虑旧会话解码，只能加字段不能改名。
-- 卡片通过结果 details 的 `deepdeep.card` 交给宿主，模型只看到末尾的 `卡片 id：<callId>`；这句提示面向模型，不要写进卡片 payload。
+- 卡片通过结果 details 的 `deepdeep.card` 交给宿主，raw 通过 `deepdeep.raw` 交给宿主；插件不再自己拼 `卡片 id`（宿主统一追加），也不要写进卡片 payload。
 - CLI 只识别单条普通命令，接管道/重定向/多命令一律不接管；不打印参数值、JSON 正文或凭据。
 - 构建：`./scripts/gradlew-locked :cli-common:testDebugUnitTest`；依赖方（飞书）用 `:feishu:testDebugUnitTest :feishu:verifyPlugin` 验证类已进 `.ddp`。

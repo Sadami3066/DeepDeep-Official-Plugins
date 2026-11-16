@@ -31,7 +31,7 @@ class WecomChatCardsTest {
     }
 
     @Test
-    fun docContentCardKeepsHeaderTrailingAndSummary() {
+    fun docContentCardKeepsFullBodyHeaderTrailingAndSummary() {
         val parsed = parsedOf(WecomCommandKind.DOC_CONTENT, "doc-content.json")
         val card = WecomChatCards.build(
             host,
@@ -42,16 +42,20 @@ class WecomChatCardsTest {
         assertEquals("版本 12", card.trailing)
         assertEquals("DOC_MOCK_001", card.context)
         assertEquals("https://doc.weixin.qq.com/doc/MOCK001", card.openUrl)
-        assertTrue(card.summary!!.length <= 241)
+        assertTrue(card.summary!!.contains("接口权限与企业内部策略需要提前确认"))
+        assertTrue(card.summary!!.contains("五、验收"))
         assertTrue(card.items.isEmpty())
     }
 
     @Test
-    fun docsCardRowsOpenOfficialLinksAndLabelDocType() {
+    fun docsCardRowsOpenOfficialLinksAndCarryDetails() {
         val parsed = parsedOf(WecomCommandKind.DOC_SEARCH, "doc-search.json")
         val card = WecomChatCards.build(host, WecomCommand(WecomCommandKind.DOC_SEARCH), parsed)
         assertEquals("https://doc.weixin.qq.com/doc/MOCK001", card.items.first().url)
         assertEquals("文档", card.items.first().meta)
+        assertTrue(card.items.first().body!!.contains("最近打开"))
+        assertTrue(card.items.first().body!!.contains("命中 企业微信接入方案"))
+        assertTrue(card.items.first().body!!.contains("创建人 ID zhangsan"))
     }
 
     @Test
@@ -62,8 +66,10 @@ class WecomChatCardsTest {
             parsedOf(WecomCommandKind.CHAT_MESSAGES, "chat-messages.json"),
         )
         assertEquals("2026-11-15 10:24:31", messages.items.first().meta)
-        assertEquals("[文件] 接口文档-v2.pdf", messages.items.last().subtitle)
+        assertEquals("中午前把接口文档发一下", messages.items.first().body)
         assertEquals("text", messages.items.first().badge)
+        assertEquals("[文件] 接口文档-v2.pdf", messages.items.last().body)
+        assertEquals("接口文档-v2.pdf", wecomMessageParts(messages.items.last()).fileName)
 
         val schedules = WecomChatCards.build(
             host,
@@ -73,6 +79,9 @@ class WecomChatCardsTest {
         assertEquals("2026-11-16", schedules.items.first().badge)
         assertEquals("10:00 - 11:00 · 3F 会议室 A", schedules.items.first().subtitle)
         assertEquals("+2", schedules.items.first().meta)
+        assertTrue(schedules.items.first().body!!.contains("创建人 张三"))
+        assertTrue(schedules.items.first().body!!.contains("会议室 3F 会议室 A"))
+        assertTrue(schedules.items.first().body!!.contains("参与人 张三、李四"))
 
         val todos = WecomChatCards.build(
             host,
@@ -80,8 +89,23 @@ class WecomChatCardsTest {
             parsedOf(WecomCommandKind.TODO_LIST, "todo-list.json"),
         )
         assertEquals("2026-11-16 18:00:00", todos.items.first().badge)
-        assertEquals("李四", todos.items.first().subtitle)
+        assertEquals("李四（已接受）", todos.items.first().subtitle)
         assertEquals("进行中", todos.items.first().meta)
+        assertTrue(todos.items.first().body!!.contains("截止类型 日期时间"))
+        assertTrue(todos.items.first().body!!.contains("补充企业微信接口返回示例"))
+    }
+
+    @Test
+    fun contactCardCarriesEmailDepartmentsPositionAndDetails() {
+        val contacts = WecomChatCards.build(
+            host,
+            WecomCommand(WecomCommandKind.CONTACT_USERS, keywords = listOf("张三")),
+            parsedOf(WecomCommandKind.CONTACT_USERS, "contact-users.json"),
+        )
+        assertEquals("产品部 · 产品经理", contacts.items.first().subtitle)
+        assertEquals("zhangsan@example.com", contacts.items.first().meta)
+        assertTrue(contacts.items.first().body!!.contains("英文名 Zhang San"))
+        assertTrue(contacts.items.first().body!!.contains("命中关键词 张三"))
     }
 
     @Test
@@ -97,10 +121,30 @@ class WecomChatCardsTest {
     }
 
     @Test
+    fun everyRowReachesTheCard() {
+        val chats = (1..61).joinToString(",") { index ->
+            """{"chat_id":"c$index","chat_name":"群$index","msg_count":$index}"""
+        }
+        val payload = json("""{"chats":[$chats],"chats_count":61}""")
+        val parsed = WecomParsedParser.parse(WecomCommandKind.CHAT_GROUPS, payload)!!
+        val card = WecomChatCards.build(host, WecomCommand(WecomCommandKind.CHAT_GROUPS), parsed)
+        assertEquals(61, card.items.size)
+        assertEquals("群61", card.items.last().title)
+    }
+
+    @Test
     fun paginationNoteCarriesCursor() {
-        val parsed = parsedOf(WecomCommandKind.CHAT_MESSAGES, "chat-messages.json")
-        val card = WecomChatCards.build(host, WecomCommand(WecomCommandKind.CHAT_MESSAGES), parsed)
-        assertTrue(card.note!!.contains("CURSOR_MOCK_PAGE_2"))
+        val messages = parsedOf(WecomCommandKind.CHAT_MESSAGES, "chat-messages.json")
+        val messageCard = WecomChatCards.build(host, WecomCommand(WecomCommandKind.CHAT_MESSAGES), messages)
+        assertTrue(messageCard.note!!.contains("CURSOR_MOCK_PAGE_2"))
+
+        val schedules = parsedOf(WecomCommandKind.CALENDAR_SCHEDULES, "calendar-schedules.json")
+        val scheduleCard = WecomChatCards.build(host, WecomCommand(WecomCommandKind.CALENDAR_SCHEDULES), schedules)
+        assertTrue(scheduleCard.note!!.contains("CURSOR_SCHED_PAGE_2"))
+
+        val contacts = parsedOf(WecomCommandKind.CONTACT_USERS, "contact-users.json")
+        val contactCard = WecomChatCards.build(host, WecomCommand(WecomCommandKind.CONTACT_USERS), contacts)
+        assertTrue(contactCard.note!!.contains("CURSOR_CONTACT_PAGE_2"))
     }
 
     @Test

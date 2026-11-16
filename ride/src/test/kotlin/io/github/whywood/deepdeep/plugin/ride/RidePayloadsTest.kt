@@ -2,6 +2,8 @@ package io.github.whywood.deepdeep.plugin.ride
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -227,7 +229,7 @@ class RidePayloadsTest {
         )
         val zh: RideTranslate = { text, _ -> text }
 
-        val text = rideEstimateText(estimate, zh, 6)
+        val text = rideEstimateText(estimate, zh)
 
         assertTrue(text.contains("望京SOHO → 国贸"))
         assertTrue(text.contains("全程 5.2 公里"))
@@ -235,8 +237,8 @@ class RidePayloadsTest {
         assertTrue(text.contains("接驾约 3 分钟"))
         assertTrue(text.contains("traceId：trace-1"))
         assertTrue(text.contains("特惠快车"))
-        assertTrue(text.contains("参考 12"))
-        assertTrue(text.contains("券后 9"))
+        assertTrue(text.contains("参考 ¥12"))
+        assertTrue(text.contains("券后 ¥9"))
         assertTrue(text.contains("车型品类 201"))
         assertTrue(text.contains("接驾约 4 分钟"))
         assertTrue(!text.contains("卡片"))
@@ -251,7 +253,7 @@ class RidePayloadsTest {
         )
         val zh: RideTranslate = { text, _ -> text }
 
-        val text = ridePlacesText(places, zh, 5)
+        val text = ridePlacesText(places, zh)
 
         assertTrue(text.contains("北京南站"))
         assertTrue(text.contains("地址：丰台区永外大街车站路12号"))
@@ -297,9 +299,96 @@ class RidePayloadsTest {
         assertEquals("司机已接单（1）", rideStatusLabel("1", "司机已接单", zh))
         assertEquals("匹配中（0）", rideStatusLabel("0", null, zh))
         assertEquals("行程中（4）", rideStatusLabel("4", null, zh))
-        assertEquals("未知状态（9）", rideStatusLabel("9", null, zh))
+        assertEquals("订单已结束（9）", rideStatusLabel("9", null, zh))
         assertEquals("自定义状态", rideStatusLabel(null, "自定义状态", zh))
         assertNull(rideStatusLabel(null, null, zh))
+    }
+
+    @Test
+    fun statusLabelUsesUpstreamTextForTerminalCodes() {
+        val zh: RideTranslate = { text, _ -> text }
+
+        assertEquals("上游状态名（3）", rideStatusLabel("3", "上游状态名", zh))
+        assertEquals("订单已结束（8）", rideStatusLabel("8", "未知状态", zh))
+        assertEquals("订单已创建", rideStatusLabel("created", null, zh))
+        assertEquals("上游状态名", rideStatusLabel("3", "上游状态名", zh, includeCode = false))
+    }
+
+    @Test
+    fun parsesEstimateProductCurrencyCouponAndEta() {
+        val estimate = parseRideEstimate(
+            objectOf(
+                """
+                {"items":[{
+                  "productName":"快车",
+                  "productCategory":"1",
+                  "productId":"p-1",
+                  "currency":"CNY",
+                  "coupon":{"text":"减 2 元"},
+                  "eta":{"text":"3 分钟"},
+                  "priceText":"10",
+                  "priceDiscounted":"8"
+                }]}
+                """.trimIndent(),
+            ),
+            null,
+            null,
+        )
+
+        val item = estimate.items.single()
+        assertEquals("p-1", item.productId)
+        assertEquals("CNY", item.currency)
+        assertEquals("减 2 元", item.coupon)
+        assertEquals("3 分钟", item.eta)
+    }
+
+    @Test
+    fun estimateTextListsEveryVehicleAndNewFields() {
+        val zh: RideTranslate = { text, _ -> text }
+        val items = (1..9).map { index ->
+            RideEstimateItem(
+                productName = "车型$index",
+                priceText = "10",
+                priceDiscounted = null,
+                productCategory = "1",
+                productId = "p-$index",
+                currency = "CNY",
+                coupon = "减 2 元",
+            )
+        }
+        val estimate = RideEstimate("公司", "机场", items, phoneSuffix = "1234")
+
+        val text = rideEstimateText(estimate, zh)
+
+        assertTrue(text.contains("可用车型与参考价（9 种）"))
+        assertTrue(text.contains("车型9"))
+        assertTrue(text.contains("车型 ID p-9"))
+        assertTrue(text.contains("优惠 减 2 元"))
+        assertTrue(text.contains("参考 ¥10"))
+        assertTrue(text.contains("账号手机尾号：1234"))
+        assertFalse(text.contains("还有"))
+        assertFalse(text.contains("未显示"))
+    }
+
+    @Test
+    fun placeTextListsEveryPlaceAndCity() {
+        val zh: RideTranslate = { text, _ -> text }
+        val places = (1..9).map { index ->
+            RidePlace(
+                name = "地点$index",
+                address = "地址$index",
+                latitude = "23.$index",
+                longitude = "113.$index",
+                city = "广州市",
+            )
+        }
+
+        val text = ridePlacesText(places, zh)
+
+        assertTrue(text.contains("找到 9 个地点"))
+        assertTrue(text.contains("地点9"))
+        assertTrue(text.contains("城市：广州市"))
+        assertFalse(text.contains("还有"))
     }
 
     @Test
@@ -336,6 +425,7 @@ class RidePayloadsTest {
 
         val text = rideErrorText(quota, null, zh, "查询失败", "Lookup failed")
 
+        assertTrue(text.contains("命中限流"))
         assertTrue(text.contains("滴滴查询次数已达上限"))
         assertTrue(text.contains("1 分钟后重试"))
         assertTrue(text.contains("不是没有订单"))
@@ -359,5 +449,62 @@ class RidePayloadsTest {
         assertTrue(text.startsWith("查询失败："))
         assertTrue(text.contains("订单不存在"))
         assertTrue(!text.contains("限流"))
+    }
+
+    @Test
+    fun parsesOrderTimesAndDriverExtras() {
+        val order = parseRideOrder(
+            objectOf(
+                """
+                {
+                  "statusCode": 1,
+                  "statusText": "司机已接单",
+                  "createTime": "1794734858482",
+                  "startTime": "2026-11-15T09:27:38Z",
+                  "finishTime": "1794734958482",
+                  "updateTime": "1794734898482",
+                  "driver": {"name": "王师傅", "carPlate": "粤A12345", "rating": "4.9", "orderCount": "1234"}
+                }
+                """.trimIndent(),
+            ),
+        )
+        val zh: RideTranslate = { text, _ -> text }
+
+        assertEquals("1794734858482", order.createdAt)
+        assertEquals("2026-11-15T09:27:38Z", order.startedAt)
+        assertEquals("1794734958482", order.finishedAt)
+        assertEquals("1794734898482", order.updatedAt)
+        assertEquals("4.9", order.driverRating)
+        assertEquals("1234", order.driverOrderCount)
+        val text = rideOrderText(order, zh)
+        assertTrue(text.contains("下单时间"))
+        assertTrue(text.contains("行程开始"))
+        assertTrue(text.contains("评分 4.9"))
+        assertTrue(text.contains("已服务 1234 单"))
+    }
+
+    @Test
+    fun rawDetailsCarryFullPayloadAndCardTitle() {
+        val payload = objectOf("""{"items":[{"productName":"快车"}]}""")
+        val raw = """{"jsonrpc":"2.0","id":1,"result":{"structuredContent":{"items":[{"productName":"快车"}]}}}"""
+
+        val details = rideDetails(payload, raw, "打车价格")
+
+        assertEquals(raw, details[RIDE_RAW_DETAIL_KEY]?.jsonPrimitive?.contentOrNull)
+        assertEquals(
+            "打车价格",
+            (details[RIDE_CARD_DETAIL_KEY] as JsonObject)["title"]?.jsonPrimitive?.contentOrNull,
+        )
+        assertTrue(details.containsKey("items"))
+    }
+
+    @Test
+    fun errorDetailsCarryUpstreamRaw() {
+        val raw = """{"error":{"code":-32011,"message":"订单不存在"}}"""
+
+        val details = rideErrorDetails(DidiException("订单不存在", -32011, raw = raw))
+
+        assertEquals(raw, details?.get(RIDE_RAW_DETAIL_KEY)?.jsonPrimitive?.contentOrNull)
+        assertNull(rideErrorDetails(DidiException("没有上游响应")))
     }
 }

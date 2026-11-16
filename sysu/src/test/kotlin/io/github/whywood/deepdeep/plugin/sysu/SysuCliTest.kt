@@ -1,0 +1,107 @@
+package io.github.whywood.deepdeep.plugin.sysu
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class SysuCliTest {
+    private val statusOutput = """
+        @@node@@
+        v24.16.0
+        @@cli@@
+        3.4.3
+        @@session@@
+        {"cookies":[{"name":"LYSESSIONID","value":"a"}],"tgc":"t"}
+        @@lms@@
+        {"cookies":[{"name":"MoodleSession","value":"b"}]}
+        @@gym@@
+        {"access_token":"token","at":1700000000000}
+        @@netpay@@
+        {"cookies":[]}
+        @@credentials@@
+        netid=zhangsan
+        password=secret
+        @@end@@
+    """.trimIndent()
+
+    @Test
+    fun parsesFourSiteStatusSectionsWithoutBleeding() {
+        val raw = SysuCli.parseStatus(statusOutput)
+        assertEquals("v24.16.0", raw.node)
+        assertEquals("3.4.3", raw.cli)
+        assertEquals("netid=zhangsan\npassword=secret", raw.credentials)
+        assertTrue(raw.connected(SysuSite.Jwxt))
+        assertTrue(raw.connected(SysuSite.Lms))
+        assertTrue(raw.connected(SysuSite.Gym))
+        assertFalse(raw.connected(SysuSite.Netpay))
+    }
+
+    @Test
+    fun missingSiteFilesReadAsDisconnected() {
+        val raw = SysuCli.parseStatus("")
+        assertFalse(raw.connected(SysuSite.Jwxt))
+        assertFalse(raw.connected(SysuSite.Lms))
+        assertFalse(raw.connected(SysuSite.Gym))
+        assertFalse(raw.connected(SysuSite.Netpay))
+        assertFalse(SysuCli.hasCookies(""))
+        assertFalse(SysuCli.hasCookies("{}"))
+        assertFalse(SysuCli.hasGymToken("{}"))
+        assertTrue(SysuCli.hasGymToken("""{"access_token":"x"}"""))
+    }
+
+    @Test
+    fun statusCommandReadsAllSiteSessions() {
+        val command = SysuCli.statusCommand()
+        assertTrue(command.contains(SysuCli.SESSION_PATH))
+        assertTrue(command.contains(SysuCli.LMS_PATH))
+        assertTrue(command.contains(SysuCli.GYM_PATH))
+        assertTrue(command.contains(SysuCli.NETPAY_PATH))
+    }
+
+    @Test
+    fun logoutClearsAllSiteSessions() {
+        val command = SysuCli.logoutCommand()
+        assertTrue(command.contains(SysuCli.SESSION_PATH))
+        assertTrue(command.contains(SysuCli.MFA_PATH))
+        assertTrue(command.contains(SysuCli.LMS_PATH))
+        assertTrue(command.contains(SysuCli.GYM_PATH))
+        assertTrue(command.contains(SysuCli.GYM_JAR_PATH))
+        assertTrue(command.contains(SysuCli.NETPAY_PATH))
+    }
+
+    @Test
+    fun loginSequenceCoversAllFourSites() {
+        assertEquals(
+            listOf(
+                "sysu login --send-code",
+                "sysu lms login",
+                "sysu gym login",
+                "sysu netpay login",
+            ),
+            SysuCli.siteLoginSequence(),
+        )
+        assertEquals("sysu login --code 1234", SysuSite.Jwxt.loginCodeCommand("1234"))
+        assertEquals("sysu lms login --code 1234", SysuSite.Lms.loginCodeCommand("1234"))
+        assertEquals("sysu gym login --code 1234", SysuSite.Gym.loginCodeCommand("1234"))
+        assertEquals("sysu netpay login --code 1234", SysuSite.Netpay.loginCodeCommand("1234"))
+    }
+
+    @Test
+    fun detectsVerificationCodeRequests() {
+        assertTrue(SysuCli.needsCode("这个站点需要企业微信二次验证，验证码已推送。拿到后重跑，并加上 --code <4 位>"))
+        assertTrue(SysuCli.needsCode("验证码已发到企业微信，10 分钟内执行：sysu login --code <4 位>"))
+        assertFalse(SysuCli.needsCode("✓ 登录态正常"))
+        assertFalse(SysuCli.needsCode("✓ 不需要验证码"))
+        assertFalse(SysuCli.needsCode("✓ 场馆 token 已刷新（58 分钟）"))
+    }
+
+    @Test
+    fun parsesSiteFromCommandLine() {
+        assertEquals(SysuSite.Jwxt, SysuCommandParser.site("sysu login --send-code"))
+        assertEquals(SysuSite.Lms, SysuCommandParser.site("sysu lms login --code 1234"))
+        assertEquals(SysuSite.Gym, SysuCommandParser.site("sysu gym slots 健身房 --json"))
+        assertEquals(SysuSite.Netpay, SysuCommandParser.site("sysu netpay login"))
+        assertEquals(null, SysuCommandParser.site("lark-cli im +chat-list"))
+    }
+}

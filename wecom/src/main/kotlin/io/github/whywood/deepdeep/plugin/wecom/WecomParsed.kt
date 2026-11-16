@@ -13,12 +13,14 @@ internal sealed interface WecomParsed {
     val count: Int
     val hasMore: Boolean
     val nextCursor: String?
+    val securityNotice: String?
 
     data class Groups(
         val items: List<Group>,
         override val count: Int,
         override val hasMore: Boolean,
         override val nextCursor: String?,
+        override val securityNotice: String?,
     ) : WecomParsed
 
     data class Group(
@@ -33,6 +35,7 @@ internal sealed interface WecomParsed {
         override val count: Int,
         override val hasMore: Boolean,
         override val nextCursor: String?,
+        override val securityNotice: String?,
     ) : WecomParsed
 
     data class Message(
@@ -41,7 +44,7 @@ internal sealed interface WecomParsed {
         val senderId: String?,
         val type: String?,
         val summary: String?,
-        val mediaId: String?,
+        val mediaIds: List<String>,
     )
 
     data class Docs(
@@ -49,6 +52,7 @@ internal sealed interface WecomParsed {
         override val count: Int,
         override val hasMore: Boolean,
         override val nextCursor: String?,
+        override val securityNotice: String?,
     ) : WecomParsed
 
     data class Doc(
@@ -56,8 +60,11 @@ internal sealed interface WecomParsed {
         val name: String?,
         val type: String?,
         val creatorName: String?,
+        val creatorUserId: String?,
         val createTime: String?,
         val modifyTime: String?,
+        val openTime: String?,
+        val textHighlight: List<String>,
         val url: String?,
     )
 
@@ -65,7 +72,11 @@ internal sealed interface WecomParsed {
         val name: String?,
         val url: String?,
         val version: Int?,
+        val errcode: Int?,
+        val errmsg: String?,
         val content: String,
+        val filePath: String?,
+        override val securityNotice: String?,
     ) : WecomParsed {
         override val count: Int = 1
         override val hasMore: Boolean = false
@@ -75,8 +86,9 @@ internal sealed interface WecomParsed {
     data class Schedules(
         val items: List<Schedule>,
         override val count: Int,
-        override val hasMore: Boolean = false,
-        override val nextCursor: String? = null,
+        override val hasMore: Boolean,
+        override val nextCursor: String?,
+        override val securityNotice: String?,
     ) : WecomParsed
 
     data class Schedule(
@@ -85,6 +97,7 @@ internal sealed interface WecomParsed {
         val beginTime: String?,
         val endTime: String?,
         val location: String?,
+        val creatorName: String?,
         val calendarName: String?,
         val attendees: List<String>,
         val meetingRoom: String?,
@@ -96,24 +109,34 @@ internal sealed interface WecomParsed {
         override val count: Int,
         override val hasMore: Boolean,
         override val nextCursor: String?,
+        override val securityNotice: String?,
     ) : WecomParsed
 
     data class Todo(
         val todoId: String?,
         val title: String?,
         val status: String?,
+        val userStatus: String?,
         val deadline: String?,
+        val deadlineType: String?,
         val creator: String?,
-        val followers: List<String>,
+        val followers: List<Follower>,
         val updateTime: String?,
         val description: String?,
+    )
+
+    data class Follower(
+        val name: String,
+        val status: String?,
     )
 
     data class Contacts(
         val items: List<Contact>,
         override val count: Int,
-        override val hasMore: Boolean = false,
-        override val nextCursor: String? = null,
+        override val hasMore: Boolean,
+        override val nextCursor: String?,
+        val hint: String?,
+        override val securityNotice: String?,
     ) : WecomParsed
 
     data class Contact(
@@ -123,6 +146,7 @@ internal sealed interface WecomParsed {
         val departments: List<String>,
         val position: String?,
         val email: String?,
+        val matchedKeywords: List<String>,
     )
 }
 
@@ -153,6 +177,7 @@ internal object WecomParsedParser {
             count = payload.intValue("chats_count") ?: groups.size,
             hasMore = payload.boolValue("has_more") ?: false,
             nextCursor = payload.stringValue("next_cursor"),
+            securityNotice = payload.securityNotice(),
         )
     }
 
@@ -161,14 +186,14 @@ internal object WecomParsedParser {
         val messages = items.mapNotNull { element ->
             val item = element as? JsonObject ?: return@mapNotNull null
             val type = item.stringValue("msg_type")
-            val summary = messageSummary(item, type)
+            val content = messageContent(item, type)
             WecomParsed.Message(
                 sendTime = item.stringValue("send_time"),
                 senderName = item.stringValue("user_name"),
                 senderId = item.stringValue("userid"),
                 type = type,
-                summary = summary.first,
-                mediaId = summary.second,
+                summary = content.text,
+                mediaIds = content.mediaIds,
             )
         }
         return WecomParsed.Messages(
@@ -176,32 +201,44 @@ internal object WecomParsedParser {
             count = payload.intValue("messages_count") ?: messages.size,
             hasMore = payload.boolValue("has_more") ?: false,
             nextCursor = payload.stringValue("next_cursor"),
+            securityNotice = payload.securityNotice(),
         )
     }
 
-    private fun messageSummary(item: JsonObject, type: String?): Pair<String?, String?> = when (type) {
-        "text" -> item.objValue("text")?.stringValue("content") to null
-        "image" -> "[图片]" to item.objValue("image")?.stringValue("media_id")
-        "voice" -> "[语音]" to item.objValue("voice")?.stringValue("media_id")
-        "video" -> "[视频]" to item.objValue("video")?.stringValue("media_id")
+    private data class MessageContent(val text: String?, val mediaIds: List<String>)
+
+    private fun messageContent(item: JsonObject, type: String?): MessageContent = when (type) {
+        "text" -> MessageContent(item.objValue("text")?.stringValue("content"), emptyList())
+        "image" -> MessageContent("[图片]", mediaIdsOf(item.objValue("image")))
+        "voice" -> MessageContent("[语音]", mediaIdsOf(item.objValue("voice")))
+        "video" -> MessageContent("[视频]", mediaIdsOf(item.objValue("video")))
         "file" -> {
             val file = item.objValue("file")
             val name = file?.stringValue("file_name")
-            ("[文件] ${name ?: "未命名文件"}") to file?.stringValue("media_id")
+            MessageContent("[文件] ${name ?: "未命名文件"}", mediaIdsOf(file))
         }
         "mixed" -> {
-            val parts = item.objValue("mixed")?.arrayOrMissing("items").orEmpty().mapNotNull { element ->
+            val entries = item.objValue("mixed")?.arrayOrMissing("items").orEmpty().mapNotNull { element ->
                 val entry = element as? JsonObject ?: return@mapNotNull null
                 when (entry.stringValue("msg_type")) {
-                    "text" -> entry.objValue("text")?.stringValue("content")
-                    "image" -> "[图片]"
+                    "text" -> MixedPart(entry.objValue("text")?.stringValue("content"), emptyList())
+                    "image" -> MixedPart("[图片]", mediaIdsOf(entry.objValue("image")))
                     else -> null
                 }
             }
-            parts.filter { !it.isNullOrBlank() }.joinToString(" ").ifBlank { "[图文]" } to null
+            val text = entries.mapNotNull { it.text?.takeIf(String::isNotBlank) }.joinToString("\n")
+            MessageContent(
+                text = text.ifBlank { "[图文]" },
+                mediaIds = entries.flatMap { it.mediaIds },
+            )
         }
-        else -> null to null
+        else -> MessageContent(null, emptyList())
     }
+
+    private data class MixedPart(val text: String?, val mediaIds: List<String>)
+
+    private fun mediaIdsOf(content: JsonObject?): List<String> =
+        content?.stringValue("media_id")?.let(::listOf).orEmpty()
 
     private fun parseDocs(payload: JsonObject): WecomParsed.Docs? {
         val items = payload.responseArray("docs", "docs_count", DOCS_KEYS) ?: return null
@@ -212,8 +249,11 @@ internal object WecomParsedParser {
                 name = item.stringValue("doc_name") ?: item.stringValue("name"),
                 type = item.stringValue("doc_type"),
                 creatorName = item.stringValue("creator_name"),
+                creatorUserId = item.stringValue("creator_userid"),
                 createTime = item.stringValue("create_time"),
                 modifyTime = item.stringValue("modify_time"),
+                openTime = item.stringValue("open_time"),
+                textHighlight = item.stringList("text_highlight"),
                 url = item.stringValue("url"),
             )
         }
@@ -222,21 +262,25 @@ internal object WecomParsedParser {
             count = payload.intValue("docs_count") ?: docs.size,
             hasMore = payload.boolValue("has_more") ?: false,
             nextCursor = payload.stringValue("next_cursor"),
+            securityNotice = payload.securityNotice(),
         )
     }
 
     private fun parseDocContent(payload: JsonObject): WecomParsed.DocContent? {
         val name = payload.stringValue("name")
         val url = payload.stringValue("url")
-        val content = payload.stringValue("content")
-            ?: payload.stringValue("file_path")?.let { "内容较大，已写入文件：$it" }
-            ?: ""
-        if (name == null && url == null && content.isBlank()) return null
+        val content = payload.stringValue("content").orEmpty()
+        val filePath = payload.stringValue("file_path")
+        if (name == null && url == null && content.isBlank() && filePath == null) return null
         return WecomParsed.DocContent(
             name = name,
             url = url,
             version = payload.intValue("version"),
+            errcode = payload.intValue("errcode"),
+            errmsg = payload.stringValue("errmsg"),
             content = content,
+            filePath = filePath,
+            securityNotice = payload.securityNotice(),
         )
     }
 
@@ -250,6 +294,7 @@ internal object WecomParsedParser {
                 beginTime = item.stringValue("begin_time"),
                 endTime = item.stringValue("end_time"),
                 location = item.stringValue("location"),
+                creatorName = item.stringValue("creator_name"),
                 calendarName = item.stringValue("calendar_name"),
                 attendees = item.arrayOrMissing("attendees").orEmpty().mapNotNull { attendee ->
                     val entry = attendee as? JsonObject ?: return@mapNotNull null
@@ -262,6 +307,9 @@ internal object WecomParsedParser {
         return WecomParsed.Schedules(
             items = schedules,
             count = payload.intValue("schedule_list_count") ?: schedules.size,
+            hasMore = payload.boolValue("has_more") ?: false,
+            nextCursor = payload.stringValue("next_cursor"),
+            securityNotice = payload.securityNotice(),
         )
     }
 
@@ -269,17 +317,21 @@ internal object WecomParsedParser {
         val items = payload.responseArray("items", "items_count", TODOS_KEYS) ?: return null
         val todos = items.mapNotNull { element ->
             val item = element as? JsonObject ?: return@mapNotNull null
+            val deadline = item.objValue("deadline")
             WecomParsed.Todo(
                 todoId = item.stringValue("todo_id"),
                 title = item.stringValue("title"),
                 status = item.stringValue("status"),
-                deadline = item.objValue("deadline")?.stringValue("value"),
+                userStatus = item.stringValue("user_status"),
+                deadline = deadline?.stringValue("value"),
+                deadlineType = deadline?.stringValue("type"),
                 creator = item.objValue("creator")?.let { creator ->
                     creator.stringValue("user_name") ?: creator.stringValue("userid")
                 },
                 followers = item.arrayOrMissing("followers").orEmpty().mapNotNull { follower ->
                     val entry = follower as? JsonObject ?: return@mapNotNull null
-                    entry.stringValue("user_name") ?: entry.stringValue("userid")
+                    val name = entry.stringValue("user_name") ?: entry.stringValue("userid") ?: return@mapNotNull null
+                    WecomParsed.Follower(name = name, status = entry.stringValue("user_status"))
                 },
                 updateTime = item.stringValue("update_time"),
                 description = item.stringValue("description"),
@@ -290,6 +342,7 @@ internal object WecomParsedParser {
             count = payload.intValue("items_count") ?: todos.size,
             hasMore = payload.boolValue("has_more") ?: false,
             nextCursor = payload.stringValue("next_cursor"),
+            securityNotice = payload.securityNotice(),
         )
     }
 
@@ -306,11 +359,16 @@ internal object WecomParsedParser {
                 },
                 position = item.stringValue("position"),
                 email = item.stringValue("email"),
+                matchedKeywords = item.stringList("matched_keywords"),
             )
         }
         return WecomParsed.Contacts(
             items = contacts,
             count = payload.intValue("users_count") ?: contacts.size,
+            hasMore = payload.boolValue("has_more") ?: false,
+            nextCursor = payload.stringValue("next_cursor"),
+            hint = payload.stringValue("hint"),
+            securityNotice = payload.securityNotice(),
         )
     }
 
@@ -333,11 +391,25 @@ internal object WecomParsedParser {
         else -> null
     }
 
-    private val COMMON_KEYS = setOf("errcode", "errmsg", "security_notice")
-    private val GROUPS_KEYS = COMMON_KEYS + setOf("chats", "chats_count", "has_more", "next_cursor")
-    private val MESSAGES_KEYS = COMMON_KEYS + setOf("messages", "messages_count", "has_more", "next_cursor")
-    private val DOCS_KEYS = COMMON_KEYS + setOf("docs", "docs_count", "has_more", "next_cursor")
+    private fun JsonObject.stringList(key: String): List<String> =
+        arrayOrMissing(key).orEmpty().mapNotNull { element ->
+            (element as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+        }
+
+    private fun JsonObject.securityNotice(): String? = stringValue("security_notice")
+
+    private val COMMON_KEYS = setOf(
+        "errcode",
+        "errmsg",
+        "security_notice",
+        "has_more",
+        "next_cursor",
+        "hint",
+    )
+    private val GROUPS_KEYS = COMMON_KEYS + setOf("chats", "chats_count")
+    private val MESSAGES_KEYS = COMMON_KEYS + setOf("messages", "messages_count")
+    private val DOCS_KEYS = COMMON_KEYS + setOf("docs", "docs_count")
     private val SCHEDULES_KEYS = COMMON_KEYS + setOf("schedule_list", "schedule_list_count")
-    private val TODOS_KEYS = COMMON_KEYS + setOf("items", "items_count", "has_more", "next_cursor")
-    private val CONTACTS_KEYS = COMMON_KEYS + setOf("users", "users_count", "hint")
+    private val TODOS_KEYS = COMMON_KEYS + setOf("items", "items_count")
+    private val CONTACTS_KEYS = COMMON_KEYS + setOf("users", "users_count")
 }

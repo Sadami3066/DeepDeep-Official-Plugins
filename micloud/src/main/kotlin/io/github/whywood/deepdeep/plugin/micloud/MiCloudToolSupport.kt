@@ -23,23 +23,24 @@ internal const val DEFAULT_LIST_LIMIT = 20
 
 internal const val MAX_LIST_LIMIT = 200
 
-internal const val MAX_BODY_CHARS = 4_000
+internal const val DEEPDEEP_RAW_KEY = "deepdeep.raw"
 
-internal const val MAX_OBSERVATION_ITEMS = 50
-
-internal const val COMPACT_MAX_DEPTH = 3
-
-internal const val COMPACT_MAX_ARRAY = 12
+internal const val DEEPDEEP_CARD_KEY = "deepdeep.card"
 
 internal const val TOOL_AUTH_ERROR =
     "Mi Cloud login expired; open the Mi Cloud plugin page in DeepDeep and sign in again"
 
 internal const val TOOL_REQUEST_FAILED = "Mi Cloud request failed: "
 
+internal data class MiCloudResponse(
+    val body: String,
+    val json: JsonElement,
+)
+
 internal interface MiCloudReadApi {
     suspend fun userId(): String?
 
-    suspend fun getJson(pathWithQuery: String): JsonElement
+    suspend fun getJson(pathWithQuery: String): MiCloudResponse
 
     suspend fun download(pathWithQuery: String, dest: File): File
 }
@@ -152,26 +153,25 @@ internal fun responseId(response: JsonObject?): String {
     return ""
 }
 
-internal fun compactObject(element: JsonObject): JsonObject =
-    compactJson(element) as? JsonObject ?: JsonObject(emptyMap())
-
-internal fun compactJson(element: JsonElement, depth: Int = 0): JsonElement = when (element) {
-    is JsonObject -> JsonObject(
-        element.mapValues { (_, value) ->
-            if (depth >= COMPACT_MAX_DEPTH) {
-                if (value is JsonPrimitive) value else JsonPrimitive("[...]")
-            } else {
-                compactJson(value, depth + 1)
-            }
-        },
-    )
-
-    is JsonArray -> JsonArray(
-        element.take(COMPACT_MAX_ARRAY).map { item -> compactJson(item, depth + 1) },
-    )
-
-    else -> element
+internal fun rawResultDetails(raw: String): JsonObject = buildJsonObject {
+    if (raw.isNotBlank()) put(DEEPDEEP_RAW_KEY, raw)
 }
+
+internal fun cardResultDetails(card: JsonObject, raw: String, title: String): JsonObject {
+    val extras = buildMap<String, JsonElement> {
+        if (raw.isNotBlank()) put(DEEPDEEP_RAW_KEY, JsonPrimitive(raw))
+        if (title.isNotBlank()) {
+            put(
+                DEEPDEEP_CARD_KEY,
+                buildJsonObject { put("title", title) },
+            )
+        }
+    }
+    return JsonObject(card + extras)
+}
+
+internal fun cursorValue(raw: String?): String =
+    raw?.trim()?.takeUnless { it.isEmpty() || it == "0" }.orEmpty()
 
 internal fun encodeComponent(value: String): String = URLEncoder.encode(value, "UTF-8")
 

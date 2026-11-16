@@ -3,7 +3,6 @@ package io.github.whywood.deepdeep.plugin.micloud
 import io.github.whywood.deepdeep.plugin.api.PluginTool
 import io.github.whywood.deepdeep.plugin.api.pluginTool
 import io.github.whywood.deepdeep.plugin.api.textResult
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 
 internal fun smsTool(client: MiCloudReadApi, text: MiCloudText): PluginTool = pluginTool(
@@ -27,13 +26,16 @@ internal fun smsTool(client: MiCloudReadApi, text: MiCloudText): PluginTool = pl
                 syncThreadTag = args.argString("syncThreadTag") ?: "0",
             ),
         )
-        val payload = response.payloadObject()
-        val entries = response.payloadArray("entries")
+        val payload = response.json.payloadObject()
+        val entries = response.json.payloadArray("entries")
             .mapNotNull { it as? JsonObject }
-            .map(::compactObject)
-        val watermark = payload?.get("watermark")
-        val cursor = if (watermark == null || watermark is JsonNull) "" else watermark.toString().trim('"')
-        textResult(smsObservation(entries.take(MAX_OBSERVATION_ITEMS), cursor, text))
+        val watermark = cursorValue(payload.stringOrNull("watermark"))
+        val nextSyncTag = cursorValue(payload.stringOrNull("syncTag")).ifBlank { watermark }
+        val nextSyncThreadTag = cursorValue(payload.stringOrNull("syncThreadTag"))
+        textResult(
+            smsObservation(entries, nextSyncTag, nextSyncThreadTag, watermark, text),
+            details = rawResultDetails(response.body),
+        )
     }
 }
 

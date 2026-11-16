@@ -19,6 +19,9 @@ internal data class SysuStatus(
     val recordedVersion: String? = null,
     val account: String? = null,
     val loggedIn: Boolean = false,
+    val lmsConnected: Boolean = false,
+    val gymConnected: Boolean = false,
+    val netpayConnected: Boolean = false,
 ) {
     val nodeTooOld: Boolean
         get() = nodeVersion?.let { (SysuCli.parseNodeMajor(it) ?: 0) < SysuCli.MIN_NODE_MAJOR } == true
@@ -26,6 +29,13 @@ internal data class SysuStatus(
     val installed: Boolean get() = installedVersion != null
 
     val outdated: Boolean get() = installedVersion != null && installedVersion != SysuCli.VERSION
+
+    fun connected(site: SysuSite): Boolean = when (site) {
+        SysuSite.Jwxt -> loggedIn
+        SysuSite.Lms -> lmsConnected
+        SysuSite.Gym -> gymConnected
+        SysuSite.Netpay -> netpayConnected
+    }
 }
 
 internal data class SysuStoredStatus(
@@ -33,6 +43,9 @@ internal data class SysuStoredStatus(
     val nodeVersion: String? = null,
     val account: String? = null,
     val loggedIn: Boolean = false,
+    val lmsConnected: Boolean = false,
+    val gymConnected: Boolean = false,
+    val netpayConnected: Boolean = false,
     val checkedAt: Long = 0L,
 )
 
@@ -69,6 +82,9 @@ internal object SysuStatusStore {
         stored.nodeVersion?.let { put("nodeVersion", it) }
         stored.account?.let { put("account", it) }
         put("loggedIn", stored.loggedIn)
+        put("lmsConnected", stored.lmsConnected)
+        put("gymConnected", stored.gymConnected)
+        put("netpayConnected", stored.netpayConnected)
         put("checkedAt", stored.checkedAt)
     }
 
@@ -77,6 +93,9 @@ internal object SysuStatusStore {
         nodeVersion = (root["nodeVersion"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
         account = (root["account"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
         loggedIn = (root["loggedIn"] as? JsonPrimitive)?.booleanOrNull ?: false,
+        lmsConnected = (root["lmsConnected"] as? JsonPrimitive)?.booleanOrNull ?: false,
+        gymConnected = (root["gymConnected"] as? JsonPrimitive)?.booleanOrNull ?: false,
+        netpayConnected = (root["netpayConnected"] as? JsonPrimitive)?.booleanOrNull ?: false,
         checkedAt = (root["checkedAt"] as? JsonPrimitive)?.longOrNull ?: 0L,
     )
 }

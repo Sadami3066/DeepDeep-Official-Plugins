@@ -53,11 +53,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private enum class SysuStep {
-    Account,
-    Code,
-}
-
 private enum class SysuStage {
     Checking,
     Account,
@@ -72,7 +67,20 @@ private enum class SysuFailure {
     SubmitCode,
     Resend,
     SignOut,
+    SiteLogin,
 }
+
+private enum class SitePhase {
+    Running,
+    Connected,
+    NeedsCode,
+    Failed,
+}
+
+private data class SiteProgress(
+    val phase: SitePhase,
+    val message: String? = null,
+)
 
 private class SysuPageState {
     var netId by mutableStateOf("")
@@ -83,11 +91,12 @@ private class SysuPageState {
     var passwordSaved by mutableStateOf(false)
     var code by mutableStateOf("")
     var codeError by mutableStateOf<String?>(null)
-    var step by mutableStateOf(SysuStep.Account)
+    var codeSite by mutableStateOf<SysuSite?>(null)
     var busy by mutableStateOf(false)
     var checking by mutableStateOf(true)
     var progress by mutableStateOf<String?>(null)
     var status by mutableStateOf<SysuStatus?>(null)
+    var siteProgress by mutableStateOf<Map<SysuSite, SiteProgress>>(emptyMap())
     var error by mutableStateOf<String?>(null)
     var failure by mutableStateOf(SysuFailure.None)
     var codeDeadline by mutableStateOf(0L)
@@ -165,6 +174,9 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
             } catch (error: Exception) {
                 state.error = error.message ?: host.text(TEXT_ERROR_UNKNOWN)
                 state.failure = failure
+                state.siteProgress = state.siteProgress.mapValues { (_, progress) ->
+                    if (progress.phase == SitePhase.Running) progress.copy(phase = SitePhase.Failed) else progress
+                }
             } finally {
                 state.busy = false
                 state.progress = null
@@ -172,8 +184,78 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
         }
     }
 
+    fun setSite(site: SysuSite, phase: SitePhase, message: String? = null) {
+        state.siteProgress = state.siteProgress + (site to SiteProgress(phase, message))
+    }
+
+    fun openCode(site: SysuSite) {
+        state.code = ""
+        state.codeError = null
+        state.codeSite = site
+        state.codeDeadline = System.currentTimeMillis() + CODE_RESEND_MILLIS
+        state.codeRemaining = CODE_RESEND_SECONDS
+    }
+
+    fun closeCode() {
+        state.code = ""
+        state.codeError = null
+        state.codeSite = null
+        state.codeDeadline = 0L
+        state.codeRemaining = 0
+    }
+
+    fun remainingSites(site: SysuSite): List<SysuSite> =
+        SysuCli.SITE_LOGIN_ORDER.dropWhile { it != site }.drop(1)
+
+    fun unconnectedSites(): List<SysuSite> {
+        val status = state.status ?: return SysuCli.SITE_LOGIN_ORDER
+        return SysuCli.SITE_LOGIN_ORDER.filterNot { status.connected(it) }
+    }
+
+    suspend fun finishSites() {
+        val failed = state.siteProgress.filterValues { it.phase == SitePhase.Failed }
+        reloadAfterSuccess()
+        val reloadFailed = state.failure == SysuFailure.Status
+        state.siteProgress = emptyMap()
+        if (failed.isNotEmpty()) {
+            state.error = failed.values.mapNotNull { it.message }.distinct().joinToString("\n")
+                .ifBlank { host.text(TEXT_SITES_PARTIAL) }
+            state.failure = SysuFailure.SiteLogin
+            host.ui().snackbar(host.text(TEXT_SITES_PARTIAL))
+        } else if (!reloadFailed) {
+            state.error = null
+            state.failure = SysuFailure.None
+            host.ui().snackbar(host.text(TEXT_ALL_CONNECTED))
+        }
+    }
+
+    suspend fun connectSites(sites: List<SysuSite>) {
+        if (sites.isEmpty()) {
+            finishSites()
+            return
+        }
+        for (site in sites) {
+            setSite(site, SitePhase.Running)
+            when (val result = plugin.loginSite(host, site) { state.progress = it }) {
+                SysuSiteLogin.Connected -> setSite(site, SitePhase.Connected)
+                SysuSiteLogin.NeedsCode -> {
+                    setSite(site, SitePhase.NeedsCode)
+                    openCode(site)
+                    return
+                }
+
+                is SysuSiteLogin.Failed -> setSite(site, SitePhase.Failed, result.message)
+            }
+        }
+        finishSites()
+    }
+
     val refreshStatus: () -> Unit = {
         runAction(SysuFailure.Status) { reloadStatus(markChecking = true) }
+    }
+
+    val retrySites: () -> Unit = {
+        runAction(SysuFailure.SiteLogin) { connectSites(unconnectedSites()) }
     }
 
     val signIn: () -> Unit = {
@@ -191,54 +273,97 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
                 state.password = ""
                 state.passwordSaved = true
                 plugin.ensureInstalled(host) { state.progress = it }
+                state.siteProgress = emptyMap()
                 val needsCode = plugin.startLogin(host) { state.progress = it }
                 if (needsCode) {
-                    state.code = ""
-                    state.codeError = null
-                    state.codeDeadline = System.currentTimeMillis() + CODE_RESEND_MILLIS
-                    state.codeRemaining = CODE_RESEND_SECONDS
-                    state.step = SysuStep.Code
+                    state.status = state.status?.copy(account = netId)
+                    setSite(SysuSite.Jwxt, SitePhase.NeedsCode)
+                    openCode(SysuSite.Jwxt)
                 } else {
                     state.status = state.status?.copy(loggedIn = true, account = netId)
-                    state.step = SysuStep.Account
+                    setSite(SysuSite.Jwxt, SitePhase.Connected)
                     host.ui().snackbar(host.text(TEXT_SIGNED_IN))
+                    reloadAfterSuccess()
+                    connectSites(SysuCli.SITE_LOGIN_ORDER)
                 }
-                reloadAfterSuccess()
             }
         }
     }
 
     val submitCode: () -> Unit = {
         val code = state.code.trim()
+        val site = state.codeSite ?: SysuSite.Jwxt
         state.codeError = if (SysuCli.CODE_PATTERN.matches(code)) null else host.text(TEXT_ERROR_CODE)
         if (state.codeError == null) {
-            runAction(SysuFailure.SubmitCode) {
-                plugin.submitCode(host, code) { state.progress = it }
-                state.status = state.status?.copy(loggedIn = true)
-                state.code = ""
-                state.codeDeadline = 0L
-                state.step = SysuStep.Account
-                reloadAfterSuccess()
-                host.ui().snackbar(host.text(TEXT_SIGNED_IN))
+            if (site == SysuSite.Jwxt) {
+                runAction(SysuFailure.SubmitCode) {
+                    plugin.submitCode(host, code) { state.progress = it }
+                    state.status = state.status?.copy(loggedIn = true)
+                    setSite(SysuSite.Jwxt, SitePhase.Connected)
+                    closeCode()
+                    reloadAfterSuccess()
+                    connectSites(SysuCli.SITE_LOGIN_ORDER)
+                }
+            } else {
+                runAction(SysuFailure.SubmitCode) {
+                    when (val result = plugin.loginSite(host, site, code) { state.progress = it }) {
+                        SysuSiteLogin.Connected -> {
+                            setSite(site, SitePhase.Connected)
+                            closeCode()
+                            reloadAfterSuccess()
+                            connectSites(remainingSites(site))
+                        }
+
+                        SysuSiteLogin.NeedsCode -> {
+                            setSite(site, SitePhase.NeedsCode)
+                            state.codeError = host.text(TEXT_CODE_SENT)
+                        }
+
+                        is SysuSiteLogin.Failed -> {
+                            setSite(site, SitePhase.Failed, result.message)
+                            state.codeError = result.message
+                        }
+                    }
+                }
             }
         }
     }
 
     val sendCode: () -> Unit = {
-        runAction(SysuFailure.Resend) {
-            val needsCode = plugin.startLogin(host) { state.progress = it }
-            if (needsCode) {
-                state.code = ""
-                state.codeError = null
-                state.codeDeadline = System.currentTimeMillis() + CODE_RESEND_MILLIS
-                state.codeRemaining = CODE_RESEND_SECONDS
-                host.ui().snackbar(host.text(TEXT_CODE_RESENT))
-            } else {
-                state.status = state.status?.copy(loggedIn = true)
-                state.codeDeadline = 0L
-                state.step = SysuStep.Account
-                reloadAfterSuccess()
-                host.ui().snackbar(host.text(TEXT_SIGNED_IN))
+        val site = state.codeSite ?: SysuSite.Jwxt
+        if (site == SysuSite.Jwxt) {
+            runAction(SysuFailure.Resend) {
+                val needsCode = plugin.startLogin(host) { state.progress = it }
+                if (needsCode) {
+                    setSite(SysuSite.Jwxt, SitePhase.NeedsCode)
+                    openCode(SysuSite.Jwxt)
+                    host.ui().snackbar(host.text(TEXT_CODE_RESENT))
+                } else {
+                    state.status = state.status?.copy(loggedIn = true)
+                    setSite(SysuSite.Jwxt, SitePhase.Connected)
+                    closeCode()
+                    reloadAfterSuccess()
+                    connectSites(SysuCli.SITE_LOGIN_ORDER)
+                }
+            }
+        } else {
+            runAction(SysuFailure.Resend) {
+                when (val result = plugin.loginSite(host, site) { state.progress = it }) {
+                    SysuSiteLogin.Connected -> {
+                        setSite(site, SitePhase.Connected)
+                        closeCode()
+                        reloadAfterSuccess()
+                        connectSites(remainingSites(site))
+                    }
+
+                    SysuSiteLogin.NeedsCode -> {
+                        setSite(site, SitePhase.NeedsCode)
+                        openCode(site)
+                        host.ui().snackbar(host.text(TEXT_CODE_RESENT))
+                    }
+
+                    is SysuSiteLogin.Failed -> throw SysuException(result.message)
+                }
             }
         }
     }
@@ -249,10 +374,11 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
 
     val back: () -> Unit = {
         if (!state.busy) {
-            state.code = ""
-            state.codeError = null
-            state.codeDeadline = 0L
-            state.step = SysuStep.Account
+            val site = state.codeSite
+            closeCode()
+            if (site != null && state.siteProgress[site]?.phase == SitePhase.NeedsCode) {
+                state.siteProgress = state.siteProgress - site
+            }
         }
     }
 
@@ -260,9 +386,14 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
         runAction(SysuFailure.SignOut) {
             state.progress = host.text(TEXT_SIGNING_OUT)
             plugin.logout(host)
-            state.status = state.status?.copy(loggedIn = false)
-            state.codeDeadline = 0L
-            state.step = SysuStep.Account
+            state.status = state.status?.copy(
+                loggedIn = false,
+                lmsConnected = false,
+                gymConnected = false,
+                netpayConnected = false,
+            )
+            state.siteProgress = emptyMap()
+            closeCode()
             reloadAfterSuccess()
             host.ui().snackbar(host.text(TEXT_SIGNED_OUT))
         }
@@ -286,9 +417,12 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
     val status = state.status
     val stage = when {
         status == null -> SysuStage.Checking
+        state.codeSite != null -> SysuStage.Code
         status.loggedIn -> SysuStage.SignedIn
-        state.step == SysuStep.Code -> SysuStage.Code
         else -> SysuStage.Account
+    }
+    val missingSites = SysuCli.SITE_LOGIN_ORDER.filterNot { site ->
+        status?.connected(site) == true || state.siteProgress[site]?.phase == SitePhase.Connected
     }
     val retryAction: (() -> Unit)? = when (state.failure) {
         SysuFailure.Status -> refreshStatus
@@ -296,6 +430,7 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
         SysuFailure.SubmitCode -> submitCode
         SysuFailure.Resend -> sendCode
         SysuFailure.SignOut -> performSignOut
+        SysuFailure.SiteLogin -> retrySites
         SysuFailure.None -> null
     }
 
@@ -349,6 +484,7 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
                     state = state,
                     onSignIn = signIn,
                 )
+
                 SysuStage.Code -> CodeSection(
                     host = host,
                     state = state,
@@ -356,10 +492,13 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
                     onSubmit = submitCode,
                     onResend = resend,
                 )
+
                 SysuStage.SignedIn -> SignedInSection(
                     host = host,
                     state = state,
+                    missingSites = missingSites.size,
                     onRefresh = refreshStatus,
+                    onConnect = retrySites,
                     onSignOut = signOut,
                 )
             }
@@ -386,20 +525,16 @@ private fun StatusCard(host: PluginHost, state: SysuPageState) {
                 value = status?.account ?: state.netId.trim().ifEmpty { host.text(TEXT_NOT_SET) },
                 tone = DdStatusTone.NEUTRAL,
             )
-            DdHairline()
-            DdStatusRow(
-                label = host.text(TEXT_SIGN_IN_STATE),
-                value = when {
-                    status == null -> host.text(TEXT_CHECKING)
-                    status.loggedIn -> host.text(TEXT_SIGNED_IN_STATE)
-                    else -> host.text(TEXT_NOT_SIGNED_IN)
-                },
-                tone = when {
-                    status == null -> DdStatusTone.NEUTRAL
-                    status.loggedIn -> DdStatusTone.SUCCESS
-                    else -> DdStatusTone.NEUTRAL
-                },
-            )
+            SysuSite.entries.forEach { site ->
+                DdHairline()
+                val progress = state.siteProgress[site]
+                DdStatusRow(
+                    label = host.text(siteText(site)),
+                    value = siteValue(host, status, progress, site),
+                    tone = siteTone(status, progress, site),
+                    busy = progress?.phase == SitePhase.Running,
+                )
+            }
             DdHairline()
             DdStatusRow(
                 label = host.text(TEXT_ENVIRONMENT),
@@ -417,6 +552,36 @@ private fun StatusCard(host: PluginHost, state: SysuPageState) {
     }
 }
 
+private fun siteValue(
+    host: PluginHost,
+    status: SysuStatus?,
+    progress: SiteProgress?,
+    site: SysuSite,
+): String = when (progress?.phase) {
+    SitePhase.Running -> host.text(TEXT_SITE_CONNECTING)
+    SitePhase.NeedsCode -> host.text(TEXT_SITE_NEEDS_CODE)
+    SitePhase.Failed -> host.text(TEXT_SITE_FAILED)
+    SitePhase.Connected -> host.text(TEXT_SIGNED_IN_STATE)
+    null -> when {
+        status == null -> host.text(TEXT_CHECKING)
+        status.connected(site) -> host.text(TEXT_SIGNED_IN_STATE)
+        else -> host.text(TEXT_NOT_SIGNED_IN)
+    }
+}
+
+private fun siteTone(status: SysuStatus?, progress: SiteProgress?, site: SysuSite): DdStatusTone =
+    when (progress?.phase) {
+        SitePhase.Failed -> DdStatusTone.DANGER
+        SitePhase.NeedsCode -> DdStatusTone.WARNING
+        SitePhase.Connected -> DdStatusTone.SUCCESS
+        SitePhase.Running -> DdStatusTone.NEUTRAL
+        null -> when {
+            status == null -> DdStatusTone.NEUTRAL
+            status.connected(site) -> DdStatusTone.SUCCESS
+            else -> DdStatusTone.NEUTRAL
+        }
+    }
+
 @Composable
 private fun SignInSection(host: PluginHost, state: SysuPageState, onSignIn: () -> Unit) {
     val colors = deepDeepColors()
@@ -427,73 +592,73 @@ private fun SignInSection(host: PluginHost, state: SysuPageState, onSignIn: () -
                 .padding(DdSpacing.Card),
             verticalArrangement = Arrangement.spacedBy(DdSpacing.Md),
         ) {
-                Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Xs)) {
+            Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Xs)) {
+                DdTextField(
+                    value = state.netId,
+                    onValueChange = {
+                        if (!state.busy) {
+                            state.netId = it
+                            state.netIdError = null
+                        }
+                    },
+                    placeholder = host.text(TEXT_NET_ID),
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Next,
+                    ),
+                )
+                state.netIdError?.let { FieldError(it) }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Xs)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     DdTextField(
-                        value = state.netId,
+                        value = state.password,
                         onValueChange = {
                             if (!state.busy) {
-                                state.netId = it
-                                state.netIdError = null
+                                state.password = it
+                                state.passwordError = null
                             }
                         },
-                        placeholder = host.text(TEXT_NET_ID),
-                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = host.text(TEXT_PASSWORD),
+                        modifier = Modifier.weight(1f),
                         keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Text,
-                            imeAction = ImeAction.Next,
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done,
                         ),
+                        visualTransformation = if (state.passwordVisible) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
+                        onDone = onSignIn,
                     )
-                    state.netIdError?.let { FieldError(it) }
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Xs)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        DdTextField(
-                            value = state.password,
-                            onValueChange = {
-                                if (!state.busy) {
-                                    state.password = it
-                                    state.passwordError = null
-                                }
-                            },
-                            placeholder = host.text(TEXT_PASSWORD),
-                            modifier = Modifier.weight(1f),
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Password,
-                                imeAction = ImeAction.Done,
-                            ),
-                            visualTransformation = if (state.passwordVisible) {
-                                VisualTransformation.None
-                            } else {
-                                PasswordVisualTransformation()
-                            },
-                            onDone = onSignIn,
-                        )
-                        DdIconButton(
-                            icon = DdIcons.Eye,
-                            onClick = { state.passwordVisible = !state.passwordVisible },
-                            contentDescription = host.text(
-                                if (state.passwordVisible) TEXT_HIDE_PASSWORD else TEXT_SHOW_PASSWORD,
-                            ),
-                            tint = if (state.passwordVisible) colors.accent else colors.inkTertiary,
-                            enabled = !state.busy,
-                        )
-                    }
-                    state.passwordError?.let { FieldError(it) }
-                }
-                if (state.passwordSaved) {
-                    DdText(
-                        text = host.text(TEXT_PASSWORD_SAVED),
-                        style = DdType.bodySmall,
-                        color = colors.inkTertiary,
+                    DdIconButton(
+                        icon = DdIcons.Eye,
+                        onClick = { state.passwordVisible = !state.passwordVisible },
+                        contentDescription = host.text(
+                            if (state.passwordVisible) TEXT_HIDE_PASSWORD else TEXT_SHOW_PASSWORD,
+                        ),
+                        tint = if (state.passwordVisible) colors.accent else colors.inkTertiary,
+                        enabled = !state.busy,
                     )
                 }
-                DdPrimaryButton(
-                    text = host.text(TEXT_SIGN_IN),
-                    onClick = onSignIn,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !state.busy,
+                state.passwordError?.let { FieldError(it) }
+            }
+            if (state.passwordSaved) {
+                DdText(
+                    text = host.text(TEXT_PASSWORD_SAVED),
+                    style = DdType.bodySmall,
+                    color = colors.inkTertiary,
                 )
-                if (state.busy && state.progress != null) ProgressRow(state.progress.orEmpty())
+            }
+            DdPrimaryButton(
+                text = host.text(TEXT_SIGN_IN),
+                onClick = onSignIn,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.busy,
+            )
+            if (state.busy && state.progress != null) ProgressRow(state.progress.orEmpty())
         }
     }
 }
@@ -507,6 +672,12 @@ private fun CodeSection(
     onResend: () -> Unit,
 ) {
     val colors = deepDeepColors()
+    val site = state.codeSite ?: SysuSite.Jwxt
+    val hint = if (site == SysuSite.Jwxt) {
+        host.text(TEXT_CODE_HINT)
+    } else {
+        host.text(TEXT_CODE_HINT_SITE, host.text(siteText(site)))
+    }
     DdGroupCard {
         Column(
             modifier = Modifier
@@ -515,36 +686,36 @@ private fun CodeSection(
             verticalArrangement = Arrangement.spacedBy(DdSpacing.Md),
         ) {
             DdText(
-                text = host.text(TEXT_CODE_HINT),
+                text = hint,
                 style = DdType.bodySmall,
                 color = colors.inkSecondary,
             )
-                Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Xs)) {
-                    DdTextField(
-                        value = state.code,
-                        onValueChange = { value ->
-                            if (!state.busy) {
-                                state.code = value.filter { it.isDigit() }.take(4)
-                                state.codeError = null
-                            }
-                        },
-                        placeholder = host.text(TEXT_CODE_LABEL),
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.NumberPassword,
-                            imeAction = ImeAction.Done,
-                        ),
-                        visualTransformation = PasswordVisualTransformation(),
-                        onDone = onSubmit,
-                    )
-                    state.codeError?.let { FieldError(it) }
-                }
-                DdPrimaryButton(
-                    text = host.text(TEXT_COMPLETE_LOGIN),
-                    onClick = onSubmit,
+            Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Xs)) {
+                DdTextField(
+                    value = state.code,
+                    onValueChange = { value ->
+                        if (!state.busy) {
+                            state.code = value.filter { it.isDigit() }.take(4)
+                            state.codeError = null
+                        }
+                    },
+                    placeholder = host.text(TEXT_CODE_LABEL),
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !state.busy,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.NumberPassword,
+                        imeAction = ImeAction.Done,
+                    ),
+                    visualTransformation = PasswordVisualTransformation(),
+                    onDone = onSubmit,
                 )
+                state.codeError?.let { FieldError(it) }
+            }
+            DdPrimaryButton(
+                text = host.text(TEXT_COMPLETE_LOGIN),
+                onClick = onSubmit,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.busy,
+            )
             if (state.busy && state.progress != null) ProgressRow(state.progress.orEmpty())
             Row(
                 modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
@@ -579,7 +750,9 @@ private fun CodeSection(
 private fun SignedInSection(
     host: PluginHost,
     state: SysuPageState,
+    missingSites: Int,
     onRefresh: () -> Unit,
+    onConnect: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     val colors = deepDeepColors()
@@ -606,6 +779,19 @@ private fun SignedInSection(
                     color = colors.danger,
                     enabled = !state.busy,
                 )
+            }
+            if (missingSites > 0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DdTextAction(
+                        text = host.text(TEXT_CONNECT_SITES, missingSites),
+                        onClick = onConnect,
+                        color = colors.accent,
+                        enabled = !state.busy,
+                    )
+                }
             }
             if (state.busy && state.progress != null) ProgressRow(state.progress.orEmpty())
         }
@@ -685,13 +871,15 @@ private val TEXT_FOOTER = literal(
     "Campus services are used in chat, and your sign-in stays on this device.",
 )
 private val TEXT_ACCOUNT = literal("账号", "Account")
-private val TEXT_SIGN_IN_STATE = literal("登录状态", "Sign-in")
 private val TEXT_SERVICE_VERSION = literal("服务版本", "Service version")
 private val TEXT_ENVIRONMENT = literal("环境", "Environment")
 private val TEXT_CHECKING = literal("检查中…", "Checking…")
 private val TEXT_NOT_SET = literal("未设置", "Not set")
 private val TEXT_SIGNED_IN_STATE = literal("已登录", "Signed in")
-private val TEXT_NOT_SIGNED_IN = literal("未登录", "Not signed in")
+private val TEXT_NOT_SIGNED_IN = literal("未连接", "Not connected")
+private val TEXT_SITE_CONNECTING = literal("连接中…", "Connecting…")
+private val TEXT_SITE_NEEDS_CODE = literal("待输入验证码", "Code needed")
+private val TEXT_SITE_FAILED = literal("未连接", "Not connected")
 private val TEXT_ENV_READY = literal("已就绪", "Ready")
 private val TEXT_NOT_INSTALLED = literal("未安装", "Not installed")
 private val TEXT_UPDATE_AVAILABLE = literal("可更新", "Update available")
@@ -710,6 +898,11 @@ private val TEXT_CODE_HINT = literal(
     "验证码已发送到企业微信，10 分钟内有效。",
     "A 4-digit code was sent to WeCom and is valid for 10 minutes.",
 )
+private val TEXT_CODE_HINT_SITE = literal(
+    "「%1\$s」需要企业微信验证码，验证码已发送，10 分钟内有效。",
+    "The %1\$s service needs a WeCom verification code. A code was sent and is valid for 10 minutes.",
+)
+private val TEXT_CODE_SENT = literal("验证码已发送，请输入新的验证码", "A new code was sent; enter it")
 private val TEXT_COMPLETE_LOGIN = literal("完成登录", "Finish signing in")
 private val TEXT_RESEND = literal("重新发送验证码", "Resend code")
 private val TEXT_RESEND_IN = literal("%1\$d 秒后可重发", "Resend in %1\$d s")
@@ -718,6 +911,7 @@ private val TEXT_CANCEL = literal("取消", "Cancel")
 private val TEXT_SIGN_OUT = literal("退出登录", "Sign out")
 private val TEXT_RETRY = literal("重试", "Retry")
 private val TEXT_REFRESH = literal("刷新状态", "Refresh")
+private val TEXT_CONNECT_SITES = literal("连接其余 %1\$d 个服务", "Connect %1\$d more")
 private val TEXT_RECHECK = literal("重新检查", "Check again")
 private val TEXT_ERROR_NET_ID = literal("请输入校园账号", "Enter your campus account")
 private val TEXT_ERROR_PASSWORD = literal("请输入密码", "Enter your password")
@@ -725,6 +919,8 @@ private val TEXT_ERROR_CODE = literal("请输入 4 位数字验证码", "Enter t
 private val TEXT_SIGNED_IN = literal("登录成功", "Signed in successfully")
 private val TEXT_SIGNED_OUT = literal("已退出登录", "Signed out")
 private val TEXT_SIGNING_OUT = literal("正在退出登录…", "Signing out…")
+private val TEXT_SITES_PARTIAL = literal("部分服务未连接，可以重试连接", "Some services are not connected. Tap Connect to retry.")
+private val TEXT_ALL_CONNECTED = literal("四个站点已连接", "All four services are connected")
 private val TEXT_CONFIRM_SIGN_OUT_TITLE = literal("退出中山大学登录？", "Sign out of SYSU?")
 private val TEXT_CONFIRM_SIGN_OUT_BODY = literal(
     "退出后需要重新登录才能继续使用校园服务。",

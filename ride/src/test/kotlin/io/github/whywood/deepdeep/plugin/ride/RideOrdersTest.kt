@@ -65,8 +65,11 @@ class RideOrdersTest {
         },
         callTool = { tool, callArgs ->
             cliCalls += tool to callArgs
-            json.parseToJsonElement(
-                """{"orderId":"order-1","statusCode":0,"from":{"name":"公司"},"to":{"name":"机场"},"phoneNumberSuffix":"1234"}""",
+            RideResponse(
+                payload = json.parseToJsonElement(
+                    """{"orderId":"order-1","statusCode":0,"from":{"name":"公司"},"to":{"name":"机场"},"phoneNumberSuffix":"1234"}""",
+                ),
+                raw = """{"result":{"structuredContent":{"orderId":"order-1","statusCode":0}}}""",
             )
         },
         currentKey = { null },
@@ -87,7 +90,10 @@ class RideOrdersTest {
         },
         callTool = { tool, callArgs ->
             cliCalls += tool to callArgs
-            json.parseToJsonElement("""{"success":true}""")
+            RideResponse(
+                payload = json.parseToJsonElement("""{"success":true}"""),
+                raw = """{"result":{"structuredContent":{"success":true}}}""",
+            )
         },
         currentKey = { null },
         warn = { _, _ -> },
@@ -134,6 +140,11 @@ class RideOrdersTest {
         assertEquals("trace-1", cliCalls.single().second["estimate_trace_id"]?.jsonPrimitive?.contentOrNull)
         assertTrue(result.text.orEmpty().contains("订单已创建"))
         assertTrue(result.text.orEmpty().contains("order-1"))
+        assertEquals(
+            """{"result":{"structuredContent":{"orderId":"order-1","statusCode":0}}}""",
+            result.details?.get(RIDE_RAW_DETAIL_KEY)?.jsonPrimitive?.contentOrNull,
+        )
+        assertTrue(result.details?.get(RIDE_CARD_DETAIL_KEY) is JsonObject)
     }
 
     @Test
@@ -180,6 +191,31 @@ class RideOrdersTest {
         assertEquals(1, cliCalls.size)
         assertEquals("taxi_cancel_order", cliCalls.single().first)
         assertEquals("order-1", cliCalls.single().second["order_id"]?.jsonPrimitive?.contentOrNull)
+        assertEquals(
+            """{"result":{"structuredContent":{"success":true}}}""",
+            result.details?.get(RIDE_RAW_DETAIL_KEY)?.jsonPrimitive?.contentOrNull,
+        )
+    }
+
+    @Test
+    fun failedCreateOrderAttachesUpstreamRaw() = runTest {
+        confirmCalls.clear()
+        cliCalls.clear()
+        val raw = """{"error":{"code":-32040,"message":"订单已经取消过了"}}"""
+
+        val result = createRideOrder(
+            translate = zh,
+            confirm = { true },
+            callTool = { _, _ -> throw DidiException("订单已经取消过了", -32040, raw = raw) },
+            currentKey = { null },
+            warn = { _, _ -> },
+            toolState = stateWithEstimate(),
+            call = toolCall("""{"product_name":"快车","confirm":true}"""),
+        )
+
+        assertTrue(result.isError)
+        assertEquals(raw, result.details?.get(RIDE_RAW_DETAIL_KEY)?.jsonPrimitive?.contentOrNull)
+        assertTrue(result.text.orEmpty().contains("订单已经取消过了"))
     }
 
     @Test

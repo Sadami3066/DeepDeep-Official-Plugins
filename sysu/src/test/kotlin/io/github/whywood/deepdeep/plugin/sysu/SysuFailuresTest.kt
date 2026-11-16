@@ -11,17 +11,45 @@ class SysuFailuresTest {
     fun tgcFailureBecomesActionableLoginMessage() {
         val message = SysuFailures.actionable(
             "会话失效，自动续期失败（TGC 已失效）。重新登录：sysu login",
+            SysuSite.Jwxt,
             ChineseStrings,
         )
         assertNotNullMessage(message)
-        assertTrue(message!!.contains("插件页重新登录"))
+        assertTrue(message!!.contains("会话失效"))
+        assertTrue(message.contains("sysu login"))
+        assertTrue(message.contains("插件页重新登录"))
         assertFalse(message.contains("TGC"))
         assertFalse(message.contains("tgc"))
     }
 
     @Test
+    fun perSiteFailureSuggestsSiteLoginBeforePage() {
+        val lms = SysuFailures.actionable("LMS 会话已失效", SysuSite.Lms, ChineseStrings)
+        assertNotNullMessage(lms)
+        assertTrue(lms!!.contains("LMS 会话已失效"))
+        assertTrue(lms.contains("sysu lms login"))
+        assertTrue(lms.contains("插件页"))
+
+        val gym = SysuFailures.actionable("gym token 失效", SysuSite.Gym, ChineseStrings)
+        assertNotNullMessage(gym)
+        assertTrue(gym!!.contains("sysu gym login"))
+
+        val netpay = SysuFailures.actionable("返回登录页", SysuSite.Netpay, ChineseStrings)
+        assertNotNullMessage(netpay)
+        assertTrue(netpay!!.contains("sysu netpay login"))
+    }
+
+    @Test
+    fun verificationCodeAdviceUsesSiteLoginCommand() {
+        val message = SysuFailures.actionable("需要企业微信二次验证，验证码已推送", SysuSite.Gym, ChineseStrings)
+        assertNotNullMessage(message)
+        assertTrue(message!!.contains("插件页"))
+        assertTrue(message.contains("sysu gym login --code"))
+    }
+
+    @Test
     fun verificationCodeFailureMentionsCodePage() {
-        val message = SysuFailures.actionable("二次验证没过：企微验证码没发出去", ChineseStrings)
+        val message = SysuFailures.actionable("二次验证没过：企微验证码没发出去", null, ChineseStrings)
         assertNotNullMessage(message)
         assertTrue(message!!.contains("验证码"))
         assertTrue(message.contains("插件页"))
@@ -30,9 +58,9 @@ class SysuFailuresTest {
 
     @Test
     fun unrelatedFailureHasNoActionMapping() {
-        assertNull(SysuFailures.actionable("HTTP 500 · /timetable", ChineseStrings))
-        assertNull(SysuFailures.actionable("", ChineseStrings))
-        assertNull(SysuFailures.actionable(null, ChineseStrings))
+        assertNull(SysuFailures.actionable("HTTP 500 · /timetable", SysuSite.Jwxt, ChineseStrings))
+        assertNull(SysuFailures.actionable("", SysuSite.Jwxt, ChineseStrings))
+        assertNull(SysuFailures.actionable(null, SysuSite.Jwxt, ChineseStrings))
     }
 
     @Test
@@ -67,6 +95,7 @@ class SysuFailuresTest {
         assertFalse(safe.contains("tgc"))
         assertFalse(safe.contains("abc123def"))
         assertFalse(safe.contains("TICKET-123"))
+        assertTrue(safe.contains("已隐去"))
         assertTrue(safe.contains("其它无关输出"))
     }
 

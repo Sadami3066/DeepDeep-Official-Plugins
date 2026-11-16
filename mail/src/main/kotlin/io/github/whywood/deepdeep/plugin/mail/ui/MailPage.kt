@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -37,7 +38,7 @@ import io.github.whywood.deepdeep.design.DdIcons
 import io.github.whywood.deepdeep.design.DdLoadingBlock
 import io.github.whywood.deepdeep.design.DdPrimaryButton
 import io.github.whywood.deepdeep.design.DdSearchField
-import io.github.whywood.deepdeep.design.DdSegmented
+import io.github.whywood.deepdeep.design.DdSegmentedControl
 import io.github.whywood.deepdeep.design.DdTextAction
 import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.LocalPluginPageContext
@@ -92,6 +93,7 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
     var displayedThread by remember(initialThread) { mutableStateOf(initialThread) }
     var query by rememberSaveable { mutableStateOf("") }
     var selectedAccountId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showSent by rememberSaveable { mutableStateOf(false) }
     var onlyUnread by rememberSaveable { mutableStateOf(false) }
     var searchState by remember { mutableStateOf<MailSearchState>(MailSearchState.Idle) }
     var searchAttempt by remember { mutableIntStateOf(0) }
@@ -105,6 +107,7 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
     val accounts = state.accounts
     val activeAccountId = selectedAccountId?.takeIf { id -> accounts.any { it.id == id } }
     val hasSearch = query.isNotBlank()
+    val folderRole = if (showSent) MailFolderRole.SENT else MailFolderRole.INBOX
     val initialLoading = state.loading ||
         (state.syncing && state.messages.isEmpty() && state.lastSyncAt == null)
 
@@ -268,7 +271,7 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
         if (remaining.size != hiddenIds.size) hiddenIds = remaining
     }
 
-    LaunchedEffect(query, activeAccountId, searchAttempt) {
+    LaunchedEffect(query, activeAccountId, folderRole, searchAttempt) {
         val text = query.trim()
         if (text.isEmpty()) {
             searchState = MailSearchState.Idle
@@ -276,7 +279,7 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
         }
         delay(SearchDebounceMillis)
         searchState = MailSearchState.Loading
-        searchState = runCatching { repository.search(text, activeAccountId) }
+        searchState = runCatching { repository.search(text, activeAccountId, folderRole) }
             .fold(
                 onSuccess = { MailSearchState.Loaded(mailThreadRows(it, onlyUnread = false)) },
                 onFailure = { error ->
@@ -291,10 +294,10 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
             )
     }
 
-    val visibleMessages = remember(state.messages, activeAccountId, hiddenIds) {
+    val visibleMessages = remember(state.messages, activeAccountId, folderRole, hiddenIds) {
         val hidden = hiddenIds
         state.messages.filter { message ->
-            message.folderRole == MailFolderRole.INBOX &&
+            message.folderRole == folderRole &&
                 (activeAccountId == null || message.accountId == activeAccountId) &&
                 message.id !in hidden
         }
@@ -332,12 +335,35 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
             }
             if (accounts.isNotEmpty()) {
                 Spacer(Modifier.height(6.dp))
-                DdSegmented(
-                    options = listOf(host.t("全部", "All"), host.t("未读", "Unread")),
-                    selectedIndex = if (onlyUnread) 1 else 0,
-                    onSelect = { onlyUnread = it == 1 },
+                Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                )
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DdSegmentedControl(
+                        options = listOf(false, true),
+                        selected = showSent,
+                        onSelect = { sent ->
+                            showSent = sent
+                            if (sent) onlyUnread = false
+                        },
+                        modifier = Modifier.weight(1f),
+                        label = { sent ->
+                            if (sent) host.t("已发送", "Sent") else host.t("收件箱", "Inbox")
+                        },
+                    )
+                    if (!showSent) {
+                        DdSegmentedControl(
+                            options = listOf(false, true),
+                            selected = onlyUnread,
+                            onSelect = { unread -> onlyUnread = unread },
+                            modifier = Modifier.width(104.dp),
+                            label = { unread ->
+                                if (unread) host.t("未读", "Unread") else host.t("全部", "All")
+                            },
+                        )
+                    }
+                }
             }
             Spacer(Modifier.height(6.dp))
             val syncError = refreshError ?: state.syncError
@@ -395,6 +421,7 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
                         now = now,
                         chinese = chinese,
                         onlyUnread = onlyUnread,
+                        sent = showSent,
                         onOpen = { row ->
                             thread = MailThreadRequest(row.accountId, row.threadId, row.latest.id)
                         },
@@ -406,6 +433,7 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
                         host = host,
                         onlyUnread = onlyUnread,
                         failed = syncError != null,
+                        sent = showSent,
                     )
 
                     else -> MailThreadList(
@@ -415,6 +443,7 @@ internal fun MailPage(host: PluginHost, repository: MailRepository) {
                         archiveAccountIds = state.archiveAccountIds,
                         refreshing = pullRefreshing,
                         swipeEnabled = true,
+                        sent = showSent,
                         onOpen = { row ->
                             thread = MailThreadRequest(row.accountId, row.threadId, row.latest.id)
                         },
@@ -621,7 +650,7 @@ private fun MailNoAccounts(host: PluginHost, onAdd: () -> Unit) {
 }
 
 @Composable
-private fun MailEmptyInbox(host: PluginHost, onlyUnread: Boolean, failed: Boolean) {
+private fun MailEmptyInbox(host: PluginHost, onlyUnread: Boolean, failed: Boolean, sent: Boolean) {
     Box(Modifier.fillMaxSize().padding(horizontal = 40.dp), contentAlignment = Alignment.Center) {
         DdEmptyState(
             text = when {
@@ -630,11 +659,13 @@ private fun MailEmptyInbox(host: PluginHost, onlyUnread: Boolean, failed: Boolea
                     "Couldn't load mail. Check your network and try again.",
                 )
 
+                sent -> host.t("已发送里还没有邮件。", "Nothing sent yet.")
                 onlyUnread -> host.t("没有未读邮件。", "No unread mail.")
                 else -> host.t("收件箱是空的，新邮件会显示在这里。", "Your inbox is empty.")
             },
             icon = when {
                 failed && !onlyUnread -> DdIcons.Info
+                sent -> DdIcons.ArrowUp
                 onlyUnread -> DdIcons.Check
                 else -> DdIcons.Message
             },
@@ -650,6 +681,7 @@ private fun MailSearchContent(
     now: Long,
     chinese: Boolean,
     onlyUnread: Boolean,
+    sent: Boolean,
     onOpen: (MailThreadRow) -> Unit,
     onRetry: () -> Unit,
     onClear: () -> Unit,
@@ -704,6 +736,7 @@ private fun MailSearchContent(
                 archiveAccountIds = emptySet(),
                 refreshing = false,
                 swipeEnabled = false,
+                sent = sent,
                 onOpen = onOpen,
                 onArchive = {},
                 onDelete = {},

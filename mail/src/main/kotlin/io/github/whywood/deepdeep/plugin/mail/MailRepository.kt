@@ -45,7 +45,7 @@ interface MailRepository {
 
     suspend fun sendDraft(draftId: String): MailSendResult
 
-    suspend fun search(query: String, accountId: String?): List<MailMessageSummary>
+    suspend fun search(query: String, accountId: String?, folder: MailFolderRole? = null): List<MailMessageSummary>
 
     suspend fun loadAttachment(accountId: String, messageId: String, attachmentId: String): String?
 

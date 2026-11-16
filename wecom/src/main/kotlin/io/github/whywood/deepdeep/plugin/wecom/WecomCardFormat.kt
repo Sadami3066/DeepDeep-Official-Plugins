@@ -109,14 +109,14 @@ internal data class WecomMessageParts(
 internal fun wecomMessageParts(item: CliCardItem): WecomMessageParts {
     val meta = item.meta?.trim().orEmpty()
     val subtitle = item.subtitle?.trim().orEmpty()
-    if (meta.isNotEmpty()) {
-        return wecomMessageBody(wecomShortDateTime(meta), subtitle)
-    }
     val segments = subtitle.split(" · ", limit = 2)
-    if (segments.size == 2 && wecomLooksLikeTime(segments[0])) {
-        return wecomMessageBody(wecomShortDateTime(segments[0]), segments[1].trim())
+    val legacyTime = segments.takeIf { it.size == 2 && wecomLooksLikeTime(it[0]) }
+    val time = wecomShortDateTime(meta)
+        ?: legacyTime?.let { wecomShortDateTime(it[0]) }
+    val body = item.body?.trim().orEmpty().ifEmpty {
+        legacyTime?.getOrNull(1)?.trim() ?: subtitle
     }
-    return wecomMessageBody(null, subtitle)
+    return wecomMessageBody(time, body)
 }
 
 private fun wecomMessageBody(time: String?, body: String?): WecomMessageParts {

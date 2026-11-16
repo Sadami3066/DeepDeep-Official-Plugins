@@ -15,6 +15,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.whywood.deepdeep.design.DdExpandToggle
 import io.github.whywood.deepdeep.design.DdIcon
 import io.github.whywood.deepdeep.design.DdIcons
 import io.github.whywood.deepdeep.design.DdRowDivider
@@ -47,7 +52,8 @@ internal fun WecomGroupsCard(host: PluginHost, kind: WecomCommandKind, model: Cl
         return
     }
     val colors = deepDeepColors()
-    val rows = model.items.take(WECOM_GROUP_ROWS)
+    var expanded by remember(model) { mutableStateOf(false) }
+    val rows = if (expanded) model.items else model.items.take(WECOM_GROUP_ROWS)
     val total = maxOf(model.total, model.items.size)
     WecomCardSurface {
         Column(
@@ -65,10 +71,16 @@ internal fun WecomGroupsCard(host: PluginHost, kind: WecomCommandKind, model: Cl
                 if (index > 0) DdRowDivider()
                 GroupChatRow(item = item, index = index)
             }
+            WecomExpandToggle(
+                host = host,
+                kind = kind,
+                expanded = expanded,
+                hidden = model.items.size - WECOM_GROUP_ROWS,
+                onToggle = { expanded = !expanded },
+            )
             WecomMoreLine(
                 host = host,
                 kind = kind,
-                hidden = total - rows.size,
                 hasMore = !model.note.isNullOrBlank(),
             )
         }
@@ -160,7 +172,8 @@ internal fun WecomMessagesCard(host: PluginHost, kind: WecomCommandKind, model: 
         return
     }
     val colors = deepDeepColors()
-    val rows = model.items.take(WECOM_MESSAGE_ROWS)
+    var expanded by remember(model) { mutableStateOf(false) }
+    val rows = if (expanded) model.items else model.items.take(WECOM_MESSAGE_ROWS)
     val total = maxOf(model.total, model.items.size)
     val trailing = listOfNotNull(
         wecomCountLabel(host, kind, total),
@@ -209,13 +222,19 @@ internal fun WecomMessagesCard(host: PluginHost, kind: WecomCommandKind, model: 
                     }
                 }
                 Column(Modifier.fillMaxWidth()) {
-                    rows.forEach { item -> MessageRow(item = item) }
+                    rows.forEach { item -> MessageRow(host = host, item = item) }
                 }
             }
+            WecomExpandToggle(
+                host = host,
+                kind = kind,
+                expanded = expanded,
+                hidden = model.items.size - WECOM_MESSAGE_ROWS,
+                onToggle = { expanded = !expanded },
+            )
             WecomMoreLine(
                 host = host,
                 kind = kind,
-                hidden = total - rows.size,
                 hasMore = !model.note.isNullOrBlank(),
             )
         }
@@ -223,9 +242,12 @@ internal fun WecomMessagesCard(host: PluginHost, kind: WecomCommandKind, model: 
 }
 
 @Composable
-private fun MessageRow(item: CliCardItem) {
+private fun MessageRow(host: PluginHost, item: CliCardItem) {
     val colors = deepDeepColors()
     val parts = wecomMessageParts(item)
+    var bodyExpanded by remember(item.body, item.subtitle) { mutableStateOf(false) }
+    val body = parts.body?.takeIf { it.isNotBlank() }
+    val collapsible = body != null && (body.length > 120 || body.count { it == '\n' } > 2)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -264,14 +286,22 @@ private fun MessageRow(item: CliCardItem) {
             Spacer(Modifier.height(2.dp))
             parts.fileName?.let { name ->
                 MessageFileChip(name = name)
-            } ?: parts.body?.let { body ->
+            } ?: body?.let { text ->
                 DdText(
-                    text = body,
+                    text = text,
                     style = WecomCardType.body,
                     color = colors.ink,
-                    maxLines = 2,
+                    maxLines = if (bodyExpanded) Int.MAX_VALUE else 3,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (collapsible) {
+                    DdExpandToggle(
+                        expanded = bodyExpanded,
+                        collapsedLabel = host.t("展开全文", "Show full text"),
+                        expandedLabel = host.t("收起全文", "Show less"),
+                        onToggle = { bodyExpanded = !bodyExpanded },
+                    )
+                }
             }
         }
     }

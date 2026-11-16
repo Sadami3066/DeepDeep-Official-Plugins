@@ -50,10 +50,11 @@ internal class FakeReadApi(
 
     override suspend fun userId(): String? = userId
 
-    override suspend fun getJson(pathWithQuery: String): JsonElement {
+    override suspend fun getJson(pathWithQuery: String): MiCloudResponse {
         requested += pathWithQuery
-        return responses.firstOrNull { (prefix, _) -> pathWithQuery.startsWith(prefix) }?.second
+        val json = responses.firstOrNull { (prefix, _) -> pathWithQuery.startsWith(prefix) }?.second
             ?: throw IllegalStateException("unexpected request: $pathWithQuery")
+        return MiCloudResponse(body = json.toString(), json = json)
     }
 
     override suspend fun download(pathWithQuery: String, dest: File): File = dest

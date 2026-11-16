@@ -28,6 +28,8 @@ data class CliCardItem(
     val meta: String? = null,
     val badge: String? = null,
     val url: String? = null,
+    val body: String? = null,
+    val avatar: String? = null,
 )
 
 data class CliCardSection(
@@ -58,8 +60,6 @@ data class CliCardModel(
 }
 
 object CliCardCodec {
-    const val MAX_ROWS: Int = 8
-
     private const val WIRE_STATE = "state"
     private const val WIRE_KIND = "kind"
     private const val WIRE_TITLE = "title"
@@ -76,6 +76,8 @@ object CliCardCodec {
     private const val WIRE_META = "meta"
     private const val WIRE_BADGE = "badge"
     private const val WIRE_URL = "url"
+    private const val WIRE_BODY = "body"
+    private const val WIRE_AVATAR = "avatar"
 
     fun encode(model: CliCardModel): JsonObject = buildJsonObject {
         put(WIRE_KIND, model.kind)
@@ -111,8 +113,7 @@ object CliCardCodec {
         if (kind !in supportedKinds) return null
         val flatItems = decodeItemsElement(payload[WIRE_ITEMS]) ?: return null
         val sections = decodeSections(payload[WIRE_SECTIONS]) ?: return null
-        val cappedSections = capSections(sections)
-        val items = if (cappedSections.isEmpty()) flatItems.take(MAX_ROWS) else cappedSections.flatMap { it.items }
+        val items = if (sections.isEmpty()) flatItems else sections.flatMap { it.items }
         CliCardModel(
             kind = kind,
             state = payload.stringValue(WIRE_STATE)?.let(CliCardState::fromWire) ?: CliCardState.READY,
@@ -121,7 +122,7 @@ object CliCardCodec {
             context = payload.stringValue(WIRE_CONTEXT),
             total = payload.intValue(WIRE_TOTAL) ?: items.size,
             items = items,
-            sections = cappedSections,
+            sections = sections,
             summary = payload.stringValue(WIRE_SUMMARY),
             openUrl = payload.stringValue(WIRE_OPEN_URL),
             note = payload.stringValue(WIRE_NOTE),
@@ -137,6 +138,8 @@ object CliCardCodec {
                     item.meta?.takeIf { it.isNotBlank() }?.let { put(WIRE_META, it) }
                     item.badge?.takeIf { it.isNotBlank() }?.let { put(WIRE_BADGE, it) }
                     item.url?.takeIf { it.isNotBlank() }?.let { put(WIRE_URL, it) }
+                    item.body?.takeIf { it.isNotBlank() }?.let { put(WIRE_BODY, it) }
+                    item.avatar?.takeIf { it.isNotBlank() }?.let { put(WIRE_AVATAR, it) }
                 },
             )
         }
@@ -157,6 +160,8 @@ object CliCardCodec {
             meta = row.stringValue(WIRE_META),
             badge = row.stringValue(WIRE_BADGE),
             url = row.stringValue(WIRE_URL),
+            body = row.stringValue(WIRE_BODY),
+            avatar = row.stringValue(WIRE_AVATAR),
         )
     }
 
@@ -175,15 +180,4 @@ object CliCardCodec {
         }
     }
 
-    private fun capSections(sections: List<CliCardSection>): List<CliCardSection> {
-        var remaining = MAX_ROWS
-        val capped = mutableListOf<CliCardSection>()
-        for (section in sections) {
-            if (remaining <= 0) break
-            val take = minOf(remaining, section.items.size)
-            remaining -= take
-            if (take > 0) capped += section.copy(items = section.items.take(take))
-        }
-        return capped
-    }
 }

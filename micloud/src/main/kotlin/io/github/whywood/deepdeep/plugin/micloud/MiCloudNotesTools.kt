@@ -33,39 +33,51 @@ internal fun notesTool(
             "list" -> {
                 val limit = limitArg(args)
                 val response = client.getJson(notesPagePath(now(), limit, args.argString("syncTag")))
-                val payload = response.payloadObject()
+                val payload = response.json.payloadObject()
                 val entries = payload.arrayOrNull("entries").orEmpty()
                     .mapNotNull { it as? JsonObject }
                     .map(::noteItem)
-                val cursor = payload.stringOrNull("syncTag").orEmpty()
+                val cursor = cursorValue(payload.stringOrNull("syncTag"))
                 val lastPage = payload.boolOrNull("lastPage") ?: false
                 val card = MiCloudNotesCardData(
                     action = NOTES_ACTION_LIST,
                     total = entries.size,
                     cursor = cursor,
                     lastPage = lastPage,
-                    rows = entries.take(MAX_CARD_ROWS),
+                    rows = entries,
                 )
                 textResult(
-                    notesListObservation(entries.take(MAX_OBSERVATION_ITEMS), entries.size, cursor, lastPage, text),
-                    details = card.toJson(),
+                    notesListObservation(entries, cursor, lastPage, text),
+                    details = cardResultDetails(
+                        card = card.toJson(),
+                        raw = response.body,
+                        title = text.fmt("我的便签（%d 条）", "My notes (%d)", entries.size),
+                    ),
                 )
             }
 
             "read" -> {
                 val id = args.requiredArgString("id")
-                val entry = noteDetail(client, id)
+                val response = noteDetail(client, id)
+                val entry = response.json as JsonObject
                 val item = noteItem(entry)
-                val plain = notePlainText(entry.stringOrNull("content")).take(MAX_BODY_CHARS)
+                val plain = notePlainText(entry.stringOrNull("content"))
                 val card = MiCloudNotesCardData(
                     action = NOTES_ACTION_READ,
                     total = 1,
                     noteId = id,
                     subject = item.subject,
-                    preview = previewText(plain, 240),
+                    preview = plain,
                     modifyTime = item.modifyTime,
                 )
-                textResult(noteReadObservation(id, item, plain, text), details = card.toJson())
+                textResult(
+                    noteReadObservation(id, item, plain, text),
+                    details = cardResultDetails(
+                        card = card.toJson(),
+                        raw = response.body,
+                        title = text.fmt("便签 · %s", "Note · %s", item.subject.ifBlank { text("（无主题）", "(No subject)") }),
+                    ),
+                )
             }
 
             "create" -> {
@@ -80,19 +92,24 @@ internal fun notesTool(
                     colorId = args.argInt("colorId") ?: 0,
                     now = timestamp,
                 )
-                val response = parseResponseObject(writer.post(noteCreatePath(), noteCreateForm(entry)))
+                val responseBody = writer.post(noteCreatePath(), noteCreateForm(entry))
+                val response = parseResponseObject(responseBody)
                 val noteId = responseId(response)
                 val card = MiCloudNotesCardData(
                     action = NOTES_ACTION_CREATE,
                     total = 1,
                     noteId = noteId,
                     subject = subject,
-                    preview = previewText(content, 240),
+                    preview = content,
                     modifyTime = timestamp,
                 )
                 textResult(
                     noteWriteObservation(NOTES_ACTION_CREATE, noteId, subject, content, timestamp, text),
-                    details = card.toJson(),
+                    details = cardResultDetails(
+                        card = card.toJson(),
+                        raw = responseBody,
+                        title = text("已新建便签", "Note created"),
+                    ),
                 )
             }
 
@@ -106,8 +123,9 @@ internal fun notesTool(
                 }
                 val existing = noteDetail(client, id)
                 val timestamp = now()
-                val updated = updatedNoteEntry(existing, subject, content, timestamp)
-                parseResponseObject(writer.post(noteUpdatePath(id), noteUpdateForm(updated)))
+                val updated = updatedNoteEntry(existing.json as JsonObject, subject, content, timestamp)
+                val responseBody = writer.post(noteUpdatePath(id), noteUpdateForm(updated))
+                parseResponseObject(responseBody)
                 val updatedSubject = updated.stringOrNull("subject").orEmpty()
                 val updatedContent = notePlainText(updated.stringOrNull("content"))
                 val card = MiCloudNotesCardData(
@@ -115,24 +133,29 @@ internal fun notesTool(
                     total = 1,
                     noteId = id,
                     subject = updatedSubject,
-                    preview = previewText(updatedContent, 240),
+                    preview = updatedContent,
                     modifyTime = timestamp,
                 )
                 textResult(
                     noteWriteObservation(NOTES_ACTION_UPDATE, id, updatedSubject, updatedContent, timestamp, text),
-                    details = card.toJson(),
+                    details = cardResultDetails(
+                        card = card.toJson(),
+                        raw = responseBody,
+                        title = text("已修改便签", "Note updated"),
+                    ),
                 )
             }
 
             "delete" -> {
                 requireWrite(settings, MiCloudFeature.NOTES, TOOL_NOTE_WRITE_OFF)
                 val id = args.requiredArgString("id")
-                val entry = noteDetail(client, id)
+                val entry = noteDetail(client, id).json as JsonObject
                 val subject = entry.stringOrNull("subject").orEmpty()
                 val tag = entry.stringOrNull("tag")
                     ?: throw IllegalArgumentException("Note has no tag; cannot delete")
                 val purge = args.argBool("purge") ?: true
-                parseResponseObject(writer.post(noteDeletePath(id), noteDeleteForm(tag, purge)))
+                val responseBody = writer.post(noteDeletePath(id), noteDeleteForm(tag, purge))
+                parseResponseObject(responseBody)
                 val card = MiCloudNotesCardData(
                     action = NOTES_ACTION_DELETE,
                     total = 1,
@@ -141,7 +164,11 @@ internal fun notesTool(
                 )
                 textResult(
                     noteWriteObservation(NOTES_ACTION_DELETE, id, subject, "", 0L, text),
-                    details = card.toJson(),
+                    details = cardResultDetails(
+                        card = card.toJson(),
+                        raw = responseBody,
+                        title = text("已删除便签", "Note deleted"),
+                    ),
                 )
             }
 
@@ -150,9 +177,11 @@ internal fun notesTool(
     }
 }
 
-private suspend fun noteDetail(client: MiCloudReadApi, id: String): JsonObject {
-    val payload = client.getJson(noteDetailPath(id, now())).payloadObject()
-    return payload.objectOrNull("entry") ?: payload ?: throw IOException("Note data format is invalid")
+private suspend fun noteDetail(client: MiCloudReadApi, id: String): MiCloudResponse {
+    val response = client.getJson(noteDetailPath(id, now()))
+    val payload = response.json.payloadObject()
+    val entry = payload.objectOrNull("entry") ?: payload ?: throw IOException("Note data format is invalid")
+    return MiCloudResponse(body = response.body, json = entry)
 }
 
 internal fun notesPagePath(ts: Long, limit: Int, syncTag: String?): String {

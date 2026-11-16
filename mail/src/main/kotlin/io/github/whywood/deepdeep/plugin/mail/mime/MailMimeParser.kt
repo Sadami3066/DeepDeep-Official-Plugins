@@ -32,6 +32,8 @@ internal data class ParsedMail(
     val textBody: String,
     val htmlBody: String?,
     val attachments: List<MimeAttachment>,
+    val hasPlainText: Boolean = false,
+    val textTruncated: Boolean = false,
 ) {
     val preview: String get() = HtmlText.preview(textBody)
 }
@@ -137,7 +139,13 @@ internal object MailMimeParser {
                 transferEncoding.contains("quoted-printable") -> QuotedPrintableInputStream(it, DecodeMonitor.SILENT)
                 else -> it
             }
-            val bodyBytes = readLimited(decoded, MailLimits.MAX_TEXT_PART_BYTES)
+            val readBytes = readLimited(decoded, MailLimits.MAX_TEXT_PART_BYTES + 1)
+            val truncated = readBytes.size > MailLimits.MAX_TEXT_PART_BYTES
+            val bodyBytes = if (truncated) {
+                readBytes.copyOf(MailLimits.MAX_TEXT_PART_BYTES)
+            } else {
+                readBytes
+            }
             val bodyText = String(bodyBytes, charsetOf(contentTypeParameter(contentType, "charset")) ?: Charsets.UTF_8)
             val isHtml = contentType.contains("text/html")
             return ParsedMail(
@@ -145,6 +153,8 @@ internal object MailMimeParser {
                 textBody = if (isHtml) HtmlText.toPlainText(bodyText) else bodyText,
                 htmlBody = if (isHtml) bodyText else null,
                 attachments = emptyList(),
+                hasPlainText = !isHtml && bodyText.isNotBlank(),
+                textTruncated = truncated,
             )
         }
     }
@@ -207,9 +217,10 @@ internal object MailMimeParser {
         private val messageHeaders = LinkedHashMap<String, MutableList<String>>()
         private val headerStack = ArrayDeque<MutableMap<String, MutableList<String>>>()
         private val attachments = mutableListOf<MimeAttachment>()
-        private var plainText: String? = null
-        private var htmlText: String? = null
+        private val plainParts = mutableListOf<String>()
+        private val htmlParts = mutableListOf<String>()
         private var textBytesUsed = 0L
+        private var textTruncated = false
         private var attachmentIndex = 0
         private var retainedAttachmentBytes = 0L
         var streamedTargetBytes: Long? = null
@@ -255,17 +266,16 @@ internal object MailMimeParser {
 
         private fun collectText(mimeType: String, charset: String?, stream: InputStream) {
             val isPlain = mimeType == "text/plain"
-            val wanted = (isPlain && plainText == null) || (!isPlain && htmlText == null)
             val remaining = MailLimits.MAX_TEXT_TOTAL_BYTES - textBytesUsed
-            val keep = wanted && remaining > 0
-            val limit = minOf(MailLimits.MAX_TEXT_PART_BYTES.toLong(), remaining).toInt()
+            val keep = remaining > 0
+            val limit = minOf(MailLimits.MAX_TEXT_PART_BYTES.toLong(), remaining.coerceAtLeast(0L)).toInt()
             val body = readBody(stream, keep, limit)
+            if (body.size > limit || (!keep && body.size > 0)) textTruncated = true
             val data = body.data ?: return
             textBytesUsed += data.size
             val text = String(data, charsetOf(charset) ?: Charsets.UTF_8)
             if (text.isBlank()) return
-            if (isPlain && plainText == null) plainText = text
-            if (!isPlain && htmlText == null) htmlText = text
+            if (isPlain) plainParts += text else htmlParts += text
         }
 
         private fun collectAttachment(
@@ -346,13 +356,16 @@ internal object MailMimeParser {
         }
 
         fun finish(): ParsedMail {
-            val htmlBody = htmlText
-            val textBody = plainText ?: htmlBody?.let { HtmlText.toPlainText(it) }.orEmpty()
+            val plainText = plainParts.joinToString("\n\n")
+            val htmlBody = htmlParts.joinToString("\n").takeIf { it.isNotBlank() }
+            val textBody = plainText.ifBlank { htmlBody?.let { HtmlText.toPlainText(it) }.orEmpty() }
             return ParsedMail(
                 headers = MailHeaders.fromFields(messageHeaders),
                 textBody = textBody,
                 htmlBody = htmlBody,
                 attachments = attachments.toList(),
+                hasPlainText = plainText.isNotBlank(),
+                textTruncated = textTruncated,
             )
         }
 

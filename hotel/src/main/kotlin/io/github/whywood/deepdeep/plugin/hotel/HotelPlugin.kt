@@ -84,6 +84,10 @@ class HotelPlugin : DeepDeepPlugin {
                 content = composeSlot { state -> HotelOrdersCard(host, state as ToolCardSlotState) },
             ),
             slotBinding(
+                slotId = SlotIds.toolCard("hotel_order_detail"),
+                content = composeSlot { state -> HotelOrderDetailCard(host, state as ToolCardSlotState) },
+            ),
+            slotBinding(
                 slotId = SlotIds.toolCard("hotel_book"),
                 content = composeSlot { state -> HotelBookCard(host, state as ToolCardSlotState) },
             ),
@@ -109,7 +113,7 @@ class HotelPlugin : DeepDeepPlugin {
         val account = snapshot.account?.takeIf { it.isNotBlank() }?.let { "，账号 $it" }.orEmpty()
         return buildString {
             append("酒店插件已登录$account。")
-            append("查询酒店用 hotel_search，房型用 hotel_detail，预订用 hotel_book，订单用 hotel_orders；工具返回的文字已经包含完整事实，直接引用即可，不要复述原始 JSON。")
+            append("查询酒店用 hotel_search，房型用 hotel_detail，预订用 hotel_book，订单列表用 hotel_orders，单笔订单完整信息用 hotel_order_detail；工具返回的文字已经包含完整事实，直接引用即可，不要复述原始 JSON。")
             append("同一房型可能有多个价格方案：把用户选定方案的价格方案 ID 作为 rate_plan_id 传给 hotel_book；未指定且存在多个方案时插件会弹出原生选择，不要替用户选第一个。")
             append("只有用户明确确认酒店、房型、价格方案、日期和总价，并提供联系人名、姓和邮箱后，才能调用 hotel_book；插件只创建待支付订单并返回官方支付链接，不代替用户支付。")
         }

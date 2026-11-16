@@ -20,10 +20,12 @@ internal fun contactsTool(client: MiCloudReadApi, text: MiCloudText): PluginTool
         val args = call.args
         val userId = requiredUserId(client)
         val limit = limitArg(args)
-        val response = client.getJson(contactsPath(userId, now(), limit))
+        val syncTag = args.argString("syncTag") ?: "0"
+        val syncIgnoreTag = args.argString("syncIgnoreTag") ?: "0"
+        val response = client.getJson(contactsPath(userId, now(), limit, syncTag, syncIgnoreTag))
+        val payload = response.json.payloadObject()
         val query = args.argString("query")
-        val contacts = contactObjects(response)
-            .map(::compactObject)
+        val contacts = contactObjects(response.json)
             .filter { contact ->
                 if (query == null) {
                     true
@@ -32,7 +34,17 @@ internal fun contactsTool(client: MiCloudReadApi, text: MiCloudText): PluginTool
                     contact.toString().lowercase(Locale.ROOT).contains(needle)
                 }
             }
-        textResult(contactsObservation(contacts.take(MAX_OBSERVATION_ITEMS), text))
+        val hasMore = payload.boolOrNull("hasMore") ?: false
+        textResult(
+            contactsObservation(
+                contacts = contacts,
+                nextSyncTag = cursorValue(payload.stringOrNull("syncTag")),
+                nextSyncIgnoreTag = cursorValue(payload.stringOrNull("syncIgnoreTag")),
+                hasMore = hasMore,
+                t = text,
+            ),
+            details = rawResultDetails(response.body),
+        )
     }
 }
 
@@ -50,8 +62,14 @@ private fun contactObjects(element: JsonElement): List<JsonObject> {
     }
 }
 
-internal fun contactsPath(userId: String, ts: Long, limit: Int): String =
-    "/contacts/${encodeComponent(userId)}/initdata?limit=$limit&syncTag=0&syncIgnoreTag=0&ts=$ts"
+internal fun contactsPath(
+    userId: String,
+    ts: Long,
+    limit: Int,
+    syncTag: String,
+    syncIgnoreTag: String,
+): String = "/contacts/${encodeComponent(userId)}/initdata?limit=$limit" +
+    "&syncTag=${encodeComponent(syncTag)}&syncIgnoreTag=${encodeComponent(syncIgnoreTag)}&ts=$ts"
 
 private val contactsParameters: JsonObject = toolParams {
     put(
@@ -60,4 +78,6 @@ private val contactsParameters: JsonObject = toolParams {
     )
     put("query", propString("Text to match against contact fields, used with action=search"))
     put("limit", propInt("Number of contacts to fetch", minimum = 1, maximum = MAX_LIST_LIMIT, default = 100))
+    put("syncTag", propString("Sync tag returned by a previous contacts call (default 0)"))
+    put("syncIgnoreTag", propString("Ignore tag returned by a previous contacts call (default 0)"))
 }

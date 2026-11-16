@@ -67,6 +67,7 @@ internal fun MailThreadList(
     archiveAccountIds: Set<String>,
     refreshing: Boolean,
     swipeEnabled: Boolean,
+    sent: Boolean,
     onOpen: (MailThreadRow) -> Unit,
     onArchive: (MailThreadRow) -> Unit,
     onDelete: (MailThreadRow) -> Unit,
@@ -140,6 +141,7 @@ internal fun MailThreadList(
                                     row = row,
                                     now = now,
                                     chinese = chinese,
+                                    sent = sent,
                                     onClick = {
                                         val rowWasOpen = openSwipeKey == rowKey
                                         openSwipeKey = null
@@ -173,11 +175,19 @@ private fun MailThreadItem(
     row: MailThreadRow,
     now: Long,
     chinese: Boolean,
+    sent: Boolean,
     onClick: () -> Unit,
 ) {
     val colors = deepDeepColors()
     val latest = row.latest
-    val sender = latest.fromName.ifBlank { latest.fromAddress }
+    val recipients = latest.to.joinToString(", ").trim()
+    val sender = if (sent) {
+        recipients.ifEmpty { host.t("（无收件人）", "(No recipient)") }
+    } else {
+        latest.fromName.ifBlank { latest.fromAddress }.ifEmpty { host.t("未知发件人", "Unknown sender") }
+    }
+    val avatarName = if (sent) recipients else latest.fromName
+    val avatarAddress = if (sent) "" else latest.fromAddress
     val subject = displaySubject(latest.subject, host.t("（无主题）", "(No subject)"))
     val preview = displayPreview(latest.preview, limit = 120)
     DdPressable(
@@ -191,7 +201,7 @@ private fun MailThreadItem(
             verticalAlignment = Alignment.Top,
         ) {
             DdAvatar(
-                initials = mailInitial(latest.fromName, latest.fromAddress),
+                initials = mailInitial(avatarName, avatarAddress),
                 size = 40.dp,
             )
             Spacer(Modifier.width(12.dp))

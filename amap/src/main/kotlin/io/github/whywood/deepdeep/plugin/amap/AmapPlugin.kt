@@ -101,11 +101,12 @@ private val SKILL_MARKDOWN = """
 
     DeepDeep 高德地图插件提供八个只读工具，导航和打车在高德地图 App 内由用户完成。
 
-    - 找地点：`amap_place_search`（keywords + city），返回名称、地址、类型、坐标和距离。
-    - 找附近：`amap_around_search`（中心点经纬度 + keywords + radius），返回附近地点的名称、地址、类型、坐标和距离。
-    - 坐标转地址：`amap_regeo`（经纬度），返回完整地址和行政区划。
-    - 路线：`amap_route_driving` / `amap_route_transit` / `amap_route_walking` / `amap_route_bicycling`；结果包含起终点名称和坐标、全程距离、预计耗时，驾车、步行和骑行还包含分步指引，公交包含换乘线路和步行距离。公交路线需要 city 和 cityd。
-    - 天气：`amap_weather`（城市名称或城市编码），返回每天白天与夜间的天气、温度、风向和风力。
+    - 找地点：`amap_place_search`（keywords + city），返回名称、地址、类型、电话、评分、商圈、照片、城市、坐标、距离和总条数；服务支持分页时可用 page_size/page_num 继续。
+    - 找附近：`amap_around_search`（中心点经纬度 + keywords + radius），返回附近地点的名称、地址、类型、电话、评分、商圈、照片、城市、坐标、距离和总条数。
+    - 坐标转地址：`amap_regeo`（经纬度），返回完整地址、省市区县、街道门牌和坐标。
+    - 路线：`amap_route_driving` / `amap_route_transit` / `amap_route_walking` / `amap_route_bicycling`；返回最优路线和全部备选，含起终点名称和坐标、每条路线的距离与耗时；驾车、步行和骑行包含全部步骤与每步耗时，公交包含全部换乘分段、步行距离、出入口、停靠站和首末班时间。公交路线需要 city 和 cityd。
+    - 天气：`amap_weather`（城市名称或城市编码），返回全部预报天，含白天与夜间的天气、温度、风向和风力。
     - 不要编造坐标、路线、距离、时间或天气；所有数据以工具返回为准。
+    - 工具结果带卡片 id 时，用 present 交付卡片，正文只写结论和下一步。
     - Key 由用户在插件页配置；工具提示 Key 无效或未配置时，引导用户到插件页填写并验证。
 """.trimIndent()

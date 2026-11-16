@@ -14,7 +14,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,7 +36,7 @@ import java.time.format.DateTimeFormatter
 
 private val TODO_DUE_TIME = DateTimeFormatter.ofPattern("MM-dd HH:mm")
 private val TODO_DUE_DATE = DateTimeFormatter.ofPattern("MM-dd")
-private const val MAX_TODO_ROWS = 4
+private const val TODO_PREVIEW = 4
 
 @Composable
 internal fun SysuTodoCard(host: PluginHost, model: CliCardModel) {
@@ -42,10 +45,11 @@ internal fun SysuTodoCard(host: PluginHost, model: CliCardModel) {
         SysuFallbackListCard(host, model)
         return
     }
-    val rows = remember(plan) {
-        plan.sortedWith(compareBy<SysuTodoEntry>({ it.due == null }, { it.due })).take(MAX_TODO_ROWS)
+    var expanded by remember { mutableStateOf(false) }
+    val sorted = remember(plan) {
+        plan.sortedWith(compareBy<SysuTodoEntry>({ it.due == null }, { it.due }))
     }
-    val hidden = plan.size - rows.size
+    val rows = if (expanded) sorted else sorted.take(TODO_PREVIEW)
     SysuCardSurface {
         SysuTopLine(
             kicker = host.t("作业与待办", "Assignments"),
@@ -57,9 +61,15 @@ internal fun SysuTodoCard(host: PluginHost, model: CliCardModel) {
             if (index > 0) Spacer(Modifier.height(DdSpacing.Sm))
             SysuTodoRow(host = host, entry = entry)
         }
+        SysuExpandToggle(
+            host = host,
+            hidden = (sorted.size - TODO_PREVIEW).coerceAtLeast(0),
+            expanded = expanded,
+            onToggle = { expanded = !expanded },
+        )
         SysuFootLine(
-            left = if (rows.size > 1) host.t("按截止时间排序", "Sorted by due date") else null,
-            right = if (hidden > 0) host.t("还有 $hidden 项", "$hidden more") else null,
+            left = if (sorted.size > 1) host.t("按截止时间排序", "Sorted by due date") else null,
+            right = null,
         )
     }
 }
@@ -102,6 +112,10 @@ private fun SysuTodoRow(host: PluginHost, entry: SysuTodoEntry) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+            if (entry.details.isNotEmpty() || entry.url != null) {
+                Spacer(Modifier.height(2.dp))
+                SysuDetailLines(lines = entry.details + listOfNotNull(entry.url))
             }
         }
         if (dueLabel != null) {

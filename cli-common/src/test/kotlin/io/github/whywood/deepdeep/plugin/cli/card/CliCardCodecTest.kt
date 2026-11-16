@@ -43,11 +43,12 @@ class CliCardCodecTest {
     }
 
     @Test
-    fun capsRowsAtEight() {
+    fun keepsEveryRowWithoutCapping() {
         val items = (1..12).joinToString(",") { """{"title":"行$it"}""" }
         val model = decode("""{"kind":"chat_list","total":12,"items":[$items]}""")!!
-        assertEquals(8, model.items.size)
+        assertEquals(12, model.items.size)
         assertEquals(12, model.total)
+        assertEquals("行12", model.items.last().title)
     }
 
     @Test
@@ -159,14 +160,26 @@ class CliCardCodecTest {
     }
 
     @Test
-    fun capsDataRowsAcrossSectionsWithoutCountingLabels() {
+    fun keepsEveryRowAcrossSections() {
         val rows = (1..5).joinToString(",") { """{"title":"行$it"}""" }
         val raw = """{"kind":"schedule","sections":[{"label":"第一天","items":[$rows]},{"label":"第二天","items":[$rows]}]}"""
         val model = CliCardCodec.decode(Json.parseToJsonElement(raw).jsonObject, setOf("schedule"))!!
         assertEquals(2, model.sections.size)
-        assertEquals(CliCardCodec.MAX_ROWS, model.dataRowCount)
+        assertEquals(10, model.dataRowCount)
         assertEquals("第一天", model.sections[0].label)
         assertEquals(5, model.sections[0].items.size)
-        assertEquals(3, model.sections[1].items.size)
+        assertEquals(5, model.sections[1].items.size)
+    }
+
+    @Test
+    fun roundTripsBodyAndAvatar() {
+        val model = CliCardModel(
+            kind = "messages",
+            items = listOf(CliCardItem(title = "摘要", body = "完整正文\n第二段", avatar = "https://example.com/a.png")),
+        )
+        val encoded = CliCardCodec.encode(model)
+        val decoded = CliCardCodec.decode(encoded, setOf("messages"))!!
+        assertEquals("完整正文\n第二段", decoded.items.single().body)
+        assertEquals("https://example.com/a.png", decoded.items.single().avatar)
     }
 }

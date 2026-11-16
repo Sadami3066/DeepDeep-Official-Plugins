@@ -11,6 +11,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.whywood.deepdeep.design.DdExpandToggle
 import io.github.whywood.deepdeep.design.DdIcon
 import io.github.whywood.deepdeep.design.DdIcons
 import io.github.whywood.deepdeep.design.DdPressable
@@ -43,7 +48,8 @@ internal fun WecomDocsSearchCard(host: PluginHost, kind: WecomCommandKind, model
         WecomStateCard(host, kind, model)
         return
     }
-    val rows = model.items.take(WECOM_DOC_ROWS)
+    var expanded by remember(model) { mutableStateOf(false) }
+    val rows = if (expanded) model.items else model.items.take(WECOM_DOC_ROWS)
     val total = maxOf(model.total, model.items.size)
     WecomCardSurface {
         Column(
@@ -60,12 +66,18 @@ internal fun WecomDocsSearchCard(host: PluginHost, kind: WecomCommandKind, model
             Spacer(Modifier.height(DdSpacing.Xs))
             rows.forEachIndexed { index, item ->
                 if (index > 0) DdRowDivider()
-                DocSearchRow(host = host, item = item)
+                DocSearchRow(host = host, item = item, expanded = expanded)
             }
+            WecomExpandToggle(
+                host = host,
+                kind = kind,
+                expanded = expanded,
+                hidden = model.items.size - WECOM_DOC_ROWS,
+                onToggle = { expanded = !expanded },
+            )
             WecomMoreLine(
                 host = host,
                 kind = kind,
-                hidden = total - rows.size,
                 hasMore = !model.note.isNullOrBlank(),
             )
         }
@@ -73,7 +85,7 @@ internal fun WecomDocsSearchCard(host: PluginHost, kind: WecomCommandKind, model
 }
 
 @Composable
-private fun DocSearchRow(host: PluginHost, item: CliCardItem) {
+private fun DocSearchRow(host: PluginHost, item: CliCardItem, expanded: Boolean) {
     val colors = deepDeepColors()
     val url = item.url?.takeIf { it.startsWith("http") }
     val content: @Composable () -> Unit = {
@@ -105,9 +117,20 @@ private fun DocSearchRow(host: PluginHost, item: CliCardItem) {
                         text = wecomShortText(subtitle) ?: subtitle,
                         style = WecomCardType.secondary,
                         color = colors.inkSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        maxLines = if (expanded) 3 else 1,
+                        overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis,
                     )
+                }
+                if (expanded) {
+                    item.body?.takeIf { it.isNotBlank() }?.let { body ->
+                        Spacer(Modifier.height(3.dp))
+                        DdText(
+                            text = body,
+                            style = WecomCardType.micro,
+                            color = colors.inkTertiary,
+                            maxLines = Int.MAX_VALUE,
+                        )
+                    }
                 }
             }
             if (url != null) {
@@ -137,8 +160,10 @@ internal fun WecomDocContentCard(host: PluginHost, kind: WecomCommandKind, model
         return
     }
     val colors = deepDeepColors()
+    var expanded by remember(model) { mutableStateOf(false) }
     val title = model.title?.takeIf { it.isNotBlank() } ?: host.t("文档内容", "Doc content")
     val summary = model.summary?.takeIf { it.isNotBlank() }
+    val collapsible = summary != null && (summary.length > 320 || summary.count { it == '\n' } > 7)
     val openUrl = model.openUrl?.takeIf { it.startsWith("http") }
     val docId = model.context?.takeIf { it.isNotBlank() }
     WecomCardSurface {
@@ -165,7 +190,16 @@ internal fun WecomDocContentCard(host: PluginHost, kind: WecomCommandKind, model
             DocPaper(
                 text = summary ?: host.t("文档内容为空", "This doc is empty"),
                 muted = summary == null,
+                expanded = expanded,
             )
+            if (collapsible) {
+                DdExpandToggle(
+                    expanded = expanded,
+                    collapsedLabel = host.t("展开全文", "Read full text"),
+                    expandedLabel = host.t("收起", "Show less"),
+                    onToggle = { expanded = !expanded },
+                )
+            }
             if (docId != null || openUrl != null) {
                 Spacer(Modifier.height(DdSpacing.Xs))
                 Row(
@@ -201,7 +235,7 @@ internal fun WecomDocContentCard(host: PluginHost, kind: WecomCommandKind, model
 }
 
 @Composable
-private fun DocPaper(text: String, muted: Boolean) {
+private fun DocPaper(text: String, muted: Boolean, expanded: Boolean) {
     val colors = deepDeepColors()
     Box(
         modifier = Modifier
@@ -235,7 +269,7 @@ private fun DocPaper(text: String, muted: Boolean) {
                 text = text,
                 style = WecomCardType.paper,
                 color = if (muted) colors.inkTertiary else colors.inkSecondary,
-                maxLines = 8,
+                maxLines = if (expanded) Int.MAX_VALUE else 8,
                 overflow = TextOverflow.Ellipsis,
             )
         }

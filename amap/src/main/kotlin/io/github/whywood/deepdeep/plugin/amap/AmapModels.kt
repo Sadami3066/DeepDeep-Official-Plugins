@@ -153,6 +153,30 @@ internal fun JsonObject.arrayValue(vararg keys: String): JsonArray? {
     return null
 }
 
+internal fun JsonObject.textOrJoined(vararg keys: String): String? {
+    for (key in keys) {
+        when (val value = this[key]) {
+            is JsonPrimitive -> {
+                if (value is JsonNull) continue
+                val content = value.contentOrNull?.trim()
+                if (!content.isNullOrEmpty()) return content
+            }
+            is JsonArray -> {
+                val parts = value.mapNotNull { element ->
+                    when (element) {
+                        is JsonPrimitive -> if (element is JsonNull) null else element.contentOrNull?.trim()
+                        is JsonObject -> element.textValue("name", "value", "title")
+                        else -> null
+                    }?.takeIf { it.isNotEmpty() }
+                }
+                if (parts.isNotEmpty()) return parts.joinToString(", ")
+            }
+            else -> continue
+        }
+    }
+    return null
+}
+
 internal data class AmapPlace(
     val name: String,
     val address: String?,
@@ -161,6 +185,9 @@ internal data class AmapPlace(
     val location: LatLng?,
     val cityName: String?,
     val tel: String?,
+    val rating: Double? = null,
+    val businessArea: String? = null,
+    val photos: List<String> = emptyList(),
 )
 
 internal data class AmapRegeo(
@@ -170,29 +197,80 @@ internal data class AmapRegeo(
     val district: String?,
     val township: String?,
     val location: LatLng?,
+    val street: String? = null,
+    val streetNumber: String? = null,
 )
 
 internal data class AmapRouteStep(
     val instruction: String,
     val road: String?,
     val distanceMeters: Int?,
+    val durationSeconds: Int? = null,
     val polyline: List<LatLng> = emptyList(),
+)
+
+internal data class AmapTransitOption(
+    val name: String,
+    val departureStop: String? = null,
+    val arrivalStop: String? = null,
+    val viaStops: List<String> = emptyList(),
+    val viaCount: Int? = null,
+    val distanceMeters: Int? = null,
+    val durationSeconds: Int? = null,
+    val startTime: String? = null,
+    val endTime: String? = null,
 )
 
 internal data class AmapTransitLine(
     val lineName: String?,
     val walkingMeters: Int?,
+    val walkingSeconds: Int? = null,
+    val departureStop: String? = null,
+    val arrivalStop: String? = null,
+    val entrance: String? = null,
+    val exit: String? = null,
+    val viaStops: List<String> = emptyList(),
+    val viaCount: Int? = null,
+    val buslineNames: List<String> = emptyList(),
+    val lineDistanceMeters: Int? = null,
+    val lineDurationSeconds: Int? = null,
+    val startTime: String? = null,
+    val endTime: String? = null,
+    val options: List<AmapTransitOption> = emptyList(),
 )
+
+internal data class AmapRoutePath(
+    val distanceMeters: Int?,
+    val durationSeconds: Int?,
+    val steps: List<AmapRouteStep> = emptyList(),
+    val transitLines: List<AmapTransitLine> = emptyList(),
+    val walkingDistanceMeters: Int? = null,
+) {
+    val segmentCount: Int
+        get() = if (transitLines.isNotEmpty()) transitLines.size else steps.size
+}
 
 internal data class AmapRoute(
     val mode: AmapRouteMode,
     val origin: LatLng?,
     val destination: LatLng?,
-    val distanceMeters: Int?,
-    val durationSeconds: Int?,
-    val steps: List<AmapRouteStep>,
-    val transitLines: List<AmapTransitLine>,
-)
+    val paths: List<AmapRoutePath>,
+) {
+    val best: AmapRoutePath?
+        get() = paths.firstOrNull()
+
+    val distanceMeters: Int?
+        get() = best?.distanceMeters
+
+    val durationSeconds: Int?
+        get() = best?.durationSeconds
+
+    val steps: List<AmapRouteStep>
+        get() = best?.steps.orEmpty()
+
+    val transitLines: List<AmapTransitLine>
+        get() = best?.transitLines.orEmpty()
+}
 
 internal data class AmapWeatherDay(
     val date: String?,
@@ -227,21 +305,46 @@ internal fun parsePlaces(payload: JsonElement?): List<AmapPlace> {
     return array.mapNotNull { it.asObjectOrNull()?.toPlace() }
 }
 
+internal fun parsePlaceCount(payload: JsonElement?): Int? {
+    val root = payload.asObjectOrNull() ?: return null
+    return listOfNotNull(
+        root,
+        root.objectValue("data"),
+        root.objectValue("result"),
+        root.objectValue("data")?.objectValue("result"),
+    ).firstNotNullOfOrNull { it.intValue("count", "total") }
+}
+
 private fun JsonObject.toPlace(): AmapPlace? {
     val name = textValue("name", "title", "formatted_address", "formattedAddress")
         ?: listOfNotNull(textValue("province"), textValue("city"), textValue("district"))
             .joinToString("")
             .takeIf { it.isNotBlank() }
         ?: return null
+    val business = objectValue("biz_ext")
     return AmapPlace(
         name = name,
         address = textValue("address", "formatted_address", "formattedAddress"),
         typeName = readablePlaceType(textValue("type", "typecode", "level")),
         distanceMeters = intValue("distance", "distanceMeters", "distance_meters"),
         location = LatLng.parse(textValue("location")),
-        cityName = textValue("cityname", "city"),
-        tel = textValue("tel", "phone"),
+        cityName = textOrJoined("cityname", "city"),
+        tel = textOrJoined("tel", "phone"),
+        rating = numberValue("rating", "biz_rating") ?: business?.numberValue("rating", "biz_rating"),
+        businessArea = textOrJoined("business_area", "businessArea"),
+        photos = photoUrls(),
     )
+}
+
+private fun JsonObject.photoUrls(): List<String> {
+    val photos = arrayValue("photos") ?: return emptyList()
+    return photos.mapNotNull { element ->
+        when (element) {
+            is JsonPrimitive -> if (element is JsonNull) null else element.contentOrNull
+            is JsonObject -> element.textValue("url", "URL", "photo_url")
+            else -> null
+        }?.trim()?.takeIf { it.isNotEmpty() }
+    }
 }
 
 internal fun parseRegeo(payload: JsonElement?): AmapRegeo? {
@@ -251,14 +354,16 @@ internal fun parseRegeo(payload: JsonElement?): AmapRegeo? {
         ?: root.objectValue("result")?.objectValue("regeocode")
     if (regeo != null) {
         val component = regeo.objectValue("addressComponent", "address_component")
+        val street = component?.textOrJoined("street", "streetName")
+        val number = component?.textOrJoined("number", "streetNumber", "street_number")
         val formatted = regeo.textValue("formatted_address", "formattedAddress")
             ?: listOfNotNull(
                 component?.textValue("province"),
                 component?.textValue("city"),
                 component?.textValue("district"),
                 component?.textValue("township"),
-                component?.textValue("street"),
-                component?.textValue("number", "streetNumber"),
+                street,
+                number,
             ).joinToString("").takeIf { it.isNotBlank() }
             ?: ""
         if (formatted.isBlank() && component == null) return null
@@ -269,11 +374,15 @@ internal fun parseRegeo(payload: JsonElement?): AmapRegeo? {
             district = component?.textValue("district"),
             township = component?.textValue("township"),
             location = LatLng.parse(component?.textValue("location")),
+            street = street,
+            streetNumber = number,
         )
     }
     val province = root.textValue("provice", "province")
     val city = root.textValue("city")
     val district = root.textValue("district")
+    val street = root.textOrJoined("street", "streetName")
+    val number = root.textOrJoined("number", "streetNumber")
     val formatted = listOfNotNull(province, city, district).joinToString("")
     if (formatted.isBlank()) return null
     return AmapRegeo(
@@ -283,57 +392,223 @@ internal fun parseRegeo(payload: JsonElement?): AmapRegeo? {
         district = district,
         township = root.textValue("township"),
         location = LatLng.parse(root.textValue("location")),
+        street = street,
+        streetNumber = number,
     )
 }
 
 internal fun parseRoute(payload: JsonElement?, mode: AmapRouteMode): AmapRoute? {
     val root = payload.asObjectOrNull() ?: return null
     val route = root.objectValue("route")
+        ?: root.objectValue("data")?.objectValue("route")
         ?: root.objectValue("data")
         ?: root.objectValue("result")?.objectValue("route")
         ?: root
     val origin = LatLng.parse(route.textValue("origin") ?: root.textValue("origin"))
     val destination = LatLng.parse(route.textValue("destination") ?: root.textValue("destination"))
-    if (mode == AmapRouteMode.TRANSIT) {
-        val transits = route.arrayValue("transits") ?: root.arrayValue("transits")
-        val first = transits?.firstOrNull()?.asObjectOrNull()
-        val distance = route.intValue("distance", "distanceMeters") ?: first?.intValue("distance", "distanceMeters")
-        val duration = first?.intValue("duration", "durationSeconds")
-        val lines = first?.arrayValue("segments")?.mapNotNull { segment ->
-            val obj = segment.asObjectOrNull() ?: return@mapNotNull null
-            val bus = obj.objectValue("bus")?.arrayValue("buslines")?.firstOrNull()?.asObjectOrNull()
-            val railway = obj.objectValue("railway")
-            val lineName = bus?.textValue("name")?.takeIf { it.isNotBlank() }
-                ?: railway?.let {
-                    listOfNotNull(it.textValue("name"), it.textValue("trip"))
-                        .joinToString(" ")
-                        .takeIf { value -> value.isNotBlank() }
-                }
-            val walkingMeters = obj.objectValue("walking")?.intValue("distance", "distanceMeters")
-            if (lineName == null && walkingMeters == null) return@mapNotNull null
-            AmapTransitLine(lineName, walkingMeters)
-        }.orEmpty()
-        if (distance == null && duration == null && lines.isEmpty()) return null
-        return AmapRoute(mode, origin, destination, distance, duration, emptyList(), lines)
-    }
-    val paths = route.arrayValue("paths")
-        ?: root.arrayValue("paths")
-        ?: root.objectValue("data")?.arrayValue("paths")
-    val firstPath = paths?.firstOrNull()?.asObjectOrNull()
-    val distance = route.intValue("distance", "distanceMeters") ?: firstPath?.intValue("distance", "distanceMeters")
-    val duration = firstPath?.intValue("duration", "durationSeconds") ?: route.intValue("duration", "durationSeconds")
-    val steps = firstPath?.arrayValue("steps")?.mapNotNull { step ->
-        val obj = step.asObjectOrNull() ?: return@mapNotNull null
-        val instruction = obj.textValue("instruction", "road") ?: return@mapNotNull null
+    val paths = if (mode == AmapRouteMode.TRANSIT) {
+        val transits = route.arrayValue("transits")
+            ?: root.arrayValue("transits")
+            ?: root.objectValue("data")?.arrayValue("transits")
+        parseTransitPaths(transits.orEmpty(), route)
+    } else {
+        val rawPaths = route.arrayValue("paths")
+            ?: root.arrayValue("paths")
+            ?: root.objectValue("data")?.arrayValue("paths")
+            ?: root.objectValue("result")?.arrayValue("paths")
+        parseRoadPaths(rawPaths.orEmpty())
+    }.ifEmpty { listOfNotNull(normalizedPath(route, mode)) }
+    if (paths.isEmpty()) return null
+    return AmapRoute(mode, origin, destination, paths)
+}
+
+private fun parseRoadPaths(paths: List<JsonElement>): List<AmapRoutePath> = paths.mapNotNull { element ->
+    val path = element.asObjectOrNull() ?: return@mapNotNull null
+    val steps = path.arrayValue("steps")?.mapNotNull { stepElement ->
+        val step = stepElement.asObjectOrNull() ?: return@mapNotNull null
+        val road = step.textValue("road", "road_name")
+        val instruction = step.textValue("instruction", "assistant_action", "action")
+            ?: road
+            ?: return@mapNotNull null
         AmapRouteStep(
             instruction = instruction,
-            road = obj.textValue("road"),
-            distanceMeters = obj.intValue("distance", "distanceMeters"),
-            polyline = parsePolyline(obj.textValue("polyline")),
+            road = road,
+            distanceMeters = step.intValue("distance", "distanceMeters"),
+            durationSeconds = step.intValue("duration", "durationSeconds"),
+            polyline = parsePolyline(step.textValue("polyline")),
         )
     }.orEmpty()
+    val distance = path.intValue("distance", "distanceMeters")
+    val duration = path.intValue("duration", "durationSeconds")
+    if (distance == null && duration == null && steps.isEmpty()) return@mapNotNull null
+    AmapRoutePath(distance, duration, steps)
+}
+
+private fun parseTransitPaths(transits: List<JsonElement>, route: JsonObject): List<AmapRoutePath> =
+    transits.mapNotNull { element ->
+        val transit = element.asObjectOrNull() ?: return@mapNotNull null
+        val lines = transit.arrayValue("segments")?.mapNotNull { segment ->
+            parseTransitSegment(segment.asObjectOrNull() ?: return@mapNotNull null)
+        }.orEmpty()
+        val distance = transit.intValue("distance", "distanceMeters")
+            ?: route.intValue("distance", "distanceMeters")
+        val duration = transit.intValue("duration", "durationSeconds")
+        val walkingDistance = transit.intValue("walking_distance", "walkingDistance")
+        if (distance == null && duration == null && lines.isEmpty()) return@mapNotNull null
+        AmapRoutePath(distance, duration, emptyList(), lines, walkingDistance)
+    }
+
+private data class TransitOption(
+    val name: String,
+    val departureStop: String?,
+    val arrivalStop: String?,
+    val viaStops: List<String>,
+    val viaCount: Int?,
+    val distanceMeters: Int?,
+    val durationSeconds: Int?,
+    val startTime: String?,
+    val endTime: String?,
+)
+
+private fun parseTransitSegment(segment: JsonObject): AmapTransitLine? {
+    val walking = segment.objectValue("walking")
+    val walkingMeters = walking?.intValue("distance", "distanceMeters")
+    val walkingSeconds = walking?.intValue("duration", "durationSeconds")
+    val entrance = stopName(segment, "entrance")
+    val exit = stopName(segment, "exit")
+    val buslines = segment.objectValue("bus")?.arrayValue("buslines").orEmpty()
+    val railway = segment.objectValue("railway")
+    val options = buildList {
+        buslines.forEach { element ->
+            val busline = element.asObjectOrNull() ?: return@forEach
+            val name = busline.textValue("name") ?: return@forEach
+            add(
+                TransitOption(
+                    name = name,
+                    departureStop = stopName(busline, "departure_stop"),
+                    arrivalStop = stopName(busline, "arrival_stop"),
+                    viaStops = stopNames(busline.arrayValue("via_stops")),
+                    viaCount = busline.intValue("via_num", "via_stops_num"),
+                    distanceMeters = busline.intValue("distance", "distanceMeters"),
+                    durationSeconds = busline.intValue("duration", "durationSeconds"),
+                    startTime = busline.textValue("start_time", "startTime"),
+                    endTime = busline.textValue("end_time", "endTime"),
+                ),
+            )
+        }
+        if (railway != null) {
+            val name = railway.textOrJoined("name", "trip")
+            if (!name.isNullOrBlank()) {
+                add(
+                    TransitOption(
+                        name = name,
+                        departureStop = stopName(railway, "departure_stop"),
+                        arrivalStop = stopName(railway, "arrival_stop"),
+                        viaStops = stopNames(railway.arrayValue("via_stops")),
+                        viaCount = railway.intValue("via_num"),
+                        distanceMeters = railway.intValue("distance"),
+                        durationSeconds = railway.intValue("duration"),
+                        startTime = railway.textValue("start_time"),
+                        endTime = railway.textValue("end_time"),
+                    ),
+                )
+            }
+        }
+    }
+    val lineNames = options.map { it.name }
+    val lineName = lineNames.takeIf { it.isNotEmpty() }?.joinToString(" / ")
+    val viaStops = options.flatMap { it.viaStops }.distinct()
+    val viaCount = options.firstNotNullOfOrNull { it.viaCount }
+    val lineDistance = options.firstNotNullOfOrNull { it.distanceMeters }
+    val lineDuration = options.firstNotNullOfOrNull { it.durationSeconds }
+    val startTime = options.firstNotNullOfOrNull { it.startTime }
+    val endTime = options.firstNotNullOfOrNull { it.endTime }
+    val departure = options.firstNotNullOfOrNull { it.departureStop }
+    val arrival = options.firstNotNullOfOrNull { it.arrivalStop }
+    val hasFacts = lineName != null || walkingMeters != null || entrance != null || exit != null ||
+        departure != null || arrival != null
+    if (!hasFacts) return null
+    return AmapTransitLine(
+        lineName = lineName,
+        walkingMeters = walkingMeters,
+        walkingSeconds = walkingSeconds,
+        departureStop = departure,
+        arrivalStop = arrival,
+        entrance = entrance,
+        exit = exit,
+        viaStops = viaStops,
+        viaCount = viaCount,
+        buslineNames = lineNames,
+        lineDistanceMeters = lineDistance,
+        lineDurationSeconds = lineDuration,
+        startTime = startTime,
+        endTime = endTime,
+        options = options.map { option ->
+            AmapTransitOption(
+                name = option.name,
+                departureStop = option.departureStop,
+                arrivalStop = option.arrivalStop,
+                viaStops = option.viaStops,
+                viaCount = option.viaCount,
+                distanceMeters = option.distanceMeters,
+                durationSeconds = option.durationSeconds,
+                startTime = option.startTime,
+                endTime = option.endTime,
+            )
+        },
+    )
+}
+
+private fun stopName(owner: JsonObject, key: String): String? {
+    val direct = owner.objectValue(key)
+    if (direct != null) return direct.textOrJoined("name", "stop_name")
+    val array = owner.arrayValue(key)
+    if (array != null) {
+        return array.firstOrNull()?.let { element ->
+            when (element) {
+                is JsonObject -> element.textOrJoined("name", "stop_name")
+                is JsonPrimitive -> element.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+                else -> null
+            }
+        }
+    }
+    return owner.textOrJoined(key)
+}
+
+private fun stopNames(array: JsonArray?): List<String> = array?.mapNotNull { element ->
+    when (element) {
+        is JsonObject -> element.textOrJoined("name", "stop_name")
+        is JsonPrimitive -> if (element is JsonNull) null else element.contentOrNull?.trim()
+        else -> null
+    }?.takeIf { it.isNotEmpty() }
+}.orEmpty()
+
+private fun normalizedPath(route: JsonObject, mode: AmapRouteMode): AmapRoutePath? {
+    if (mode == AmapRouteMode.TRANSIT) {
+        val lines = route.arrayValue("segments")?.mapNotNull { segment ->
+            parseTransitSegment(segment.asObjectOrNull() ?: return@mapNotNull null)
+        }.orEmpty()
+        val distance = route.intValue("distance", "distanceMeters")
+        val duration = route.intValue("duration", "durationSeconds")
+        val walkingDistance = route.intValue("walking_distance", "walkingDistance")
+        if (distance == null && duration == null && lines.isEmpty()) return null
+        return AmapRoutePath(distance, duration, emptyList(), lines, walkingDistance)
+    }
+    val steps = route.arrayValue("steps")?.mapNotNull { element ->
+        val step = element.asObjectOrNull() ?: return@mapNotNull null
+        val instruction = step.textValue("instruction", "road") ?: return@mapNotNull null
+        AmapRouteStep(
+            instruction = instruction,
+            road = step.textValue("road"),
+            distanceMeters = step.intValue("distance", "distanceMeters"),
+            durationSeconds = step.intValue("duration", "durationSeconds"),
+            polyline = parsePolyline(step.textValue("polyline")),
+        )
+    }.orEmpty()
+    val distance = route.intValue("distance", "distanceMeters")
+    val duration = route.intValue("duration", "durationSeconds")
     if (distance == null && duration == null && steps.isEmpty()) return null
-    return AmapRoute(mode, origin, destination, distance, duration, steps, emptyList())
+    return AmapRoutePath(distance, duration, steps)
 }
 
 internal fun parseWeather(payload: JsonElement?): AmapWeather? {
@@ -342,34 +617,41 @@ internal fun parseWeather(payload: JsonElement?): AmapWeather? {
         ?: root.objectValue("data")?.arrayValue("forecasts")
         ?: root.objectValue("result")?.arrayValue("forecasts")
     if (forecasts != null && forecasts.isNotEmpty()) {
-        val first = forecasts.first().asObjectOrNull()
-        val casts = first?.arrayValue("casts")?.mapNotNull { it.asObjectOrNull() }
-            ?: forecasts.mapNotNull { it.asObjectOrNull() }
-        val city = first?.textValue("city") ?: root.textValue("city")
-        val days = casts.mapNotNull { it.toWeatherDay() }
-        if (days.isNotEmpty()) return AmapWeather(city, days)
+        val days = mutableListOf<AmapWeatherDay>()
+        var city: String? = null
+        forecasts.forEach { element ->
+            val forecast = element.asObjectOrNull() ?: return@forEach
+            if (city == null) city = forecast.textValue("city")
+            val casts = forecast.arrayValue("casts")
+            if (casts != null) {
+                casts.forEach { cast ->
+                    cast.asObjectOrNull()?.toWeatherDay()?.let(days::add)
+                }
+            } else {
+                forecast.toWeatherDay()?.let(days::add)
+            }
+        }
+        if (days.isNotEmpty()) return AmapWeather(city ?: root.textValue("city"), days)
     }
     val lives = root.arrayValue("lives") ?: root.objectValue("data")?.arrayValue("lives")
-    val live = lives?.firstOrNull()?.asObjectOrNull()
-    if (live != null) {
-        val weather = live.textValue("weather")
-        val temperature = live.intValue("temperature")
-        return AmapWeather(
-            city = live.textValue("city"),
-            days = listOf(
-                AmapWeatherDay(
-                    date = live.textValue("reporttime"),
-                    dayWeather = weather,
-                    nightWeather = weather,
-                    dayTemp = temperature,
-                    nightTemp = temperature,
-                    dayWind = live.textValue("winddirection"),
-                    nightWind = live.textValue("winddirection"),
-                    dayPower = live.textValue("windpower"),
-                    nightPower = live.textValue("windpower"),
-                ),
-            ),
-        )
+    if (lives != null && lives.isNotEmpty()) {
+        val days = lives.mapNotNull { element ->
+            val live = element.asObjectOrNull() ?: return@mapNotNull null
+            val weather = live.textValue("weather")
+            val temperature = live.intValue("temperature")
+            AmapWeatherDay(
+                date = live.textValue("reporttime"),
+                dayWeather = weather,
+                nightWeather = weather,
+                dayTemp = temperature,
+                nightTemp = temperature,
+                dayWind = live.textValue("winddirection"),
+                nightWind = live.textValue("winddirection"),
+                dayPower = live.textValue("windpower"),
+                nightPower = live.textValue("windpower"),
+            )
+        }
+        if (days.isNotEmpty()) return AmapWeather(lives.first().asObjectOrNull()?.textValue("city"), days)
     }
     return null
 }
@@ -459,12 +741,18 @@ internal data class AmapPlaceItem(
     val typeName: String?,
     val distanceMeters: Int?,
     val location: LatLng?,
+    val cityName: String? = null,
+    val tel: String? = null,
+    val rating: Double? = null,
+    val businessArea: String? = null,
+    val photos: List<String> = emptyList(),
 )
 
 internal data class AmapPlacesDetails(
     val query: String?,
     val city: String?,
     val items: List<AmapPlaceItem>,
+    val totalCount: Int? = null,
 )
 
 internal data class AmapRegeoDetails(
@@ -474,6 +762,8 @@ internal data class AmapRegeoDetails(
     val district: String?,
     val township: String?,
     val location: LatLng?,
+    val street: String? = null,
+    val streetNumber: String? = null,
 )
 
 internal data class AmapRouteDetails(
@@ -487,7 +777,14 @@ internal data class AmapRouteDetails(
     val steps: List<AmapRouteStep>,
     val transitLines: List<AmapTransitLine>,
     val navigationUrl: String?,
-)
+    val paths: List<AmapRoutePath> = emptyList(),
+    val walkingDistanceMeters: Int? = null,
+) {
+    val allPaths: List<AmapRoutePath>
+        get() = paths.ifEmpty {
+            listOf(AmapRoutePath(distanceMeters, durationSeconds, steps, transitLines, walkingDistanceMeters))
+        }
+}
 
 internal data class AmapWeatherDetails(
     val city: String?,
@@ -505,9 +802,16 @@ internal fun decodePlacesDetails(details: JsonObject?): AmapPlacesDetails {
             typeName = readablePlaceType(item.textValue("typeName")),
             distanceMeters = item.intValue("distanceMeters"),
             location = latLngFrom(item),
+            cityName = item.textValue("cityName"),
+            tel = item.textValue("tel"),
+            rating = item.numberValue("rating"),
+            businessArea = item.textValue("businessArea"),
+            photos = item.arrayValue("photos")?.mapNotNull { photo ->
+                (photo as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+            }.orEmpty(),
         )
     }.orEmpty()
-    return AmapPlacesDetails(root.textValue("query"), root.textValue("city"), items)
+    return AmapPlacesDetails(root.textValue("query"), root.textValue("city"), items, root.intValue("count"))
 }
 
 internal fun decodeRegeoDetails(details: JsonObject?): AmapRegeoDetails? {
@@ -520,19 +824,17 @@ internal fun decodeRegeoDetails(details: JsonObject?): AmapRegeoDetails? {
         district = root.textValue("district"),
         township = root.textValue("township"),
         location = latLngFrom(root),
+        street = root.textValue("street"),
+        streetNumber = root.textValue("streetNumber"),
     )
 }
 
 internal fun decodeRouteDetails(details: JsonObject?): AmapRouteDetails? {
     val root = details ?: return null
-    val steps = root.arrayValue("steps")?.mapNotNull { element ->
-        val step = element.asObjectOrNull() ?: return@mapNotNull null
-        val instruction = step.textValue("instruction") ?: return@mapNotNull null
-        AmapRouteStep(instruction, step.textValue("road"), step.intValue("distanceMeters"))
-    }.orEmpty()
-    val lines = root.arrayValue("transitLines")?.mapNotNull { element ->
-        val line = element.asObjectOrNull() ?: return@mapNotNull null
-        AmapTransitLine(line.textValue("lineName"), line.intValue("walkingMeters"))
+    val steps = decodeRouteSteps(root.arrayValue("steps"))
+    val lines = decodeTransitLines(root.arrayValue("transitLines"))
+    val paths = root.arrayValue("paths")?.mapNotNull { element ->
+        element.asObjectOrNull()?.let(::decodeRoutePath)
     }.orEmpty()
     return AmapRouteDetails(
         mode = AmapRouteMode.fromWire(root.textValue("mode")),
@@ -545,8 +847,70 @@ internal fun decodeRouteDetails(details: JsonObject?): AmapRouteDetails? {
         steps = steps,
         transitLines = lines,
         navigationUrl = root.textValue("navigationUrl"),
+        paths = paths,
+        walkingDistanceMeters = root.intValue("walkingDistanceMeters"),
     )
 }
+
+private fun decodeRoutePath(root: JsonObject): AmapRoutePath = AmapRoutePath(
+    distanceMeters = root.intValue("distanceMeters"),
+    durationSeconds = root.intValue("durationSeconds"),
+    steps = decodeRouteSteps(root.arrayValue("steps")),
+    transitLines = decodeTransitLines(root.arrayValue("transitLines")),
+    walkingDistanceMeters = root.intValue("walkingDistanceMeters"),
+)
+
+private fun decodeRouteSteps(array: JsonArray?): List<AmapRouteStep> = array?.mapNotNull { element ->
+    val step = element.asObjectOrNull() ?: return@mapNotNull null
+    val instruction = step.textValue("instruction") ?: return@mapNotNull null
+    AmapRouteStep(
+        instruction = instruction,
+        road = step.textValue("road"),
+        distanceMeters = step.intValue("distanceMeters"),
+        durationSeconds = step.intValue("durationSeconds"),
+    )
+}.orEmpty()
+
+private fun decodeTransitLines(array: JsonArray?): List<AmapTransitLine> = array?.mapNotNull { element ->
+    val line = element.asObjectOrNull() ?: return@mapNotNull null
+    AmapTransitLine(
+        lineName = line.textValue("lineName"),
+        walkingMeters = line.intValue("walkingMeters"),
+        walkingSeconds = line.intValue("walkingSeconds"),
+        departureStop = line.textValue("departureStop"),
+        arrivalStop = line.textValue("arrivalStop"),
+        entrance = line.textValue("entrance"),
+        exit = line.textValue("exit"),
+        viaStops = line.arrayValue("viaStops")?.mapNotNull { stop ->
+            (stop as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+        }.orEmpty(),
+        viaCount = line.intValue("viaCount"),
+        buslineNames = line.arrayValue("buslineNames")?.mapNotNull { name ->
+            (name as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+        }.orEmpty(),
+        lineDistanceMeters = line.intValue("lineDistanceMeters"),
+        lineDurationSeconds = line.intValue("lineDurationSeconds"),
+        startTime = line.textValue("startTime"),
+        endTime = line.textValue("endTime"),
+        options = line.arrayValue("options")?.mapNotNull { element ->
+            element.asObjectOrNull()?.let { option ->
+                AmapTransitOption(
+                    name = option.textValue("name") ?: return@mapNotNull null,
+                    departureStop = option.textValue("departureStop"),
+                    arrivalStop = option.textValue("arrivalStop"),
+                    viaStops = option.arrayValue("viaStops")?.mapNotNull { stop ->
+                        (stop as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+                    }.orEmpty(),
+                    viaCount = option.intValue("viaCount"),
+                    distanceMeters = option.intValue("distanceMeters"),
+                    durationSeconds = option.intValue("durationSeconds"),
+                    startTime = option.textValue("startTime"),
+                    endTime = option.textValue("endTime"),
+                )
+            }
+        }.orEmpty(),
+    )
+}.orEmpty()
 
 internal fun decodeWeatherDetails(details: JsonObject?): AmapWeatherDetails? {
     val root = details ?: return null

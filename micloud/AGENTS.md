@@ -1,6 +1,6 @@
 # micloud · 小米云服务外部插件
 
-DeepDeep 官方小米云插件，打成外部 `.ddp`：WebView 登录 i.mi.com 拿 cookie 后加密保存，用 `mi_cloud_*` 工具读取账号、短信、联系人、相册与录音，读写笔记与待办；所有开关与登录操作都在插件自绘页面完成。只 `compileOnly` 依赖公开 Maven 仓库 `https://sadami3066.github.io/deepdeep-maven` 的 `plugin-api 1.3.0` 与 `design 0.9.0`，不引用宿主内部类型（`R.string`、DataStore、`Activity`、`AppGraph` 等一律不用）。
+DeepDeep 官方小米云插件，打成外部 `.ddp`：WebView 登录 i.mi.com 拿 cookie 后加密保存，用 `mi_cloud_*` 工具读取账号、短信、联系人、相册与录音，读写笔记与待办；所有开关与登录操作都在插件自绘页面完成。只 `compileOnly` 依赖公开 Maven 仓库 `https://sadami3066.github.io/deepdeep-maven` 的 `plugin-api 1.3.0` 与 `design 0.10.0`，不引用宿主内部类型（`R.string`、DataStore、`Activity`、`AppGraph` 等一律不用）。
 
 ## 文件
 
@@ -15,23 +15,24 @@ DeepDeep 官方小米云插件，打成外部 `.ddp`：WebView 登录 i.mi.com �
 | `.../MiCloudPreferences.kt` | 能力开关与 `MiCloudCapabilities`，持久化到 `host.settings()`（旧 `capabilities.json` 首次读入后迁移删除） |
 | `.../MiCloudCookieStore.kt` | cookie 加密存取（`host.secrets()`，按插件隔离） |
 | `.../MiCloudSession.kt` | 登录态缓存（SIGNED_OUT/VERIFIED/EXPIRED/UNVERIFIED）与 TTL、cookie 指纹失效 |
-| `.../MiCloudClient.kt` | 只读 HTTP 客户端：带 cookie 请求 i.mi.com、401/403 判定失效、JSON 与文件下载 |
+| `.../MiCloudClient.kt` | 只读 HTTP 客户端：带 cookie 请求 i.mi.com、401/403 判定失效、返回完整响应 body 与 JSON、文件下载 |
 | `.../MiCloudWebWriter.kt` | 写操作走隐藏 WebView 的 JS fetch（复刻浏览器环境），表单 POST 与失败判定；登录 cookie 清理 |
 | `.../MiCloudParsers.kt` | profile、cookie 与鉴权失败判定 |
-| `.../MiCloudToolSupport.kt` | 工具公共设施：参数校验、结果截断、错误包装、JSON 压缩、路径拼接、写响应解析（`parseResponseObject`/`responseId`） |
-| `.../MiCloudTexts.kt` | 模型可见观察文本（纯函数，`MiCloudText` 中英成对）：账号/空间、笔记、待办、短信、联系人、相册、录音；`notePlainText` 把笔记 XML `<text indent=...>` 转纯文本、`formatBytes`/`formatTime`、能力未开启提示（如相册） |
-| `.../MiCloudCardModels.kt` | 卡片 DTO 与纯解析：账号/空间、笔记、待办三张卡的 payload 编解码，待办 `contentJson` 字符串/对象解析，配额键（Gift/FirstLevel）递归解析，行数上限 8 |
-| `.../MiCloudCards.kt` | 工具结果卡片渲染（`ToolResultRenderer`）：统一 `DdGroupCard` 头部计数/行/底部说明骨架，只使用 :design 组件与 token，经 `host.t` 出文案；加载、空、错误三态；账号/配额、笔记、待办 |
-| `.../MiCloudTools.kt` | 按能力开关组装 `mi_cloud_*` 工具列表（含 account）；账号/空间观察文本与卡片 details |
-| `.../MiCloudNotesTools.kt` | `mi_cloud_notes`：列表、正文、新建、修改、删除；观察文本含 id/主题/修改时间/正文/游标，卡片 details 附 DTO |
-| `.../MiCloudTodoTools.kt` | `mi_cloud_todo`：列表、新建、修改（含完成态）、删除；观察文本含 id/内容/完成态/提醒与修改时间/游标，卡片 details 附 DTO |
-| `.../MiCloudMessagesTools.kt` | `mi_cloud_sms`：短信会话与通话记录列表（只读），观察文本为可读字段 + watermark 游标 |
-| `.../MiCloudContactsTools.kt` | `mi_cloud_contacts`：联系人列表与搜索（只读），观察文本为姓名/电话/邮箱等可读字段 |
-| `.../MiCloudMediaTools.kt` | `mi_cloud_gallery` 相册/媒体列表与 `mi_cloud_recordings` 录音列表、下载；观察文本为可读条目 |
+| `.../MiCloudToolSupport.kt` | 工具公共设施：参数校验、错误包装、完整响应（`MiCloudResponse`）、details 保留键（`deepdeep.raw`/`deepdeep.card`）、路径拼接、写响应解析（`parseResponseObject`/`responseId`） |
+| `.../MiCloudTexts.kt` | 模型可见观察文本（纯函数，`MiCloudText` 中英成对）：账号/空间、笔记、待办、短信、联系人、相册、录音的完整字段与分页提示；`notePlainText` 把笔记 XML `<text indent=...>` 转纯文本、`formatBytes`/`formatTime`、能力未开启提示（如相册） |
+| `.../MiCloudCardModels.kt` | 卡片 DTO 与纯解析：账号/空间、笔记、待办、文件卡的 payload 编解码，待办 `contentJson` 字符串/对象解析，配额键（Gift/FirstLevel）递归解析；payload 携带当前返回的全部行，预览行数由渲染器决定 |
+| `.../MiCloudCards.kt` | 工具结果卡片渲染（`ToolResultRenderer`）：统一 `DdGroupCard` 头部计数/行/底部说明骨架，只使用 :design 组件与 token，经 `host.t` 出文案；加载、空、错误三态；账号/配额、笔记、待办、录音；列表预览 3–5 行，`DdExpandToggle` 展开全部，正文用折叠读全文 |
+| `.../MiCloudTools.kt` | 按能力开关组装 `mi_cloud_*` 工具列表（含 account）；账号/空间观察文本、卡片 details 与 raw |
+| `.../MiCloudNotesTools.kt` | `mi_cloud_notes`：列表、正文、新建、修改、删除；观察文本含 id/主题/修改时间/完整正文/分页参数，卡片 details 附 DTO 与 raw |
+| `.../MiCloudTodoTools.kt` | `mi_cloud_todo`：列表、新建、修改（含完成态）、删除；观察文本含 id/内容/完成态/提醒与修改时间/分页参数，卡片 details 附 DTO 与 raw |
+| `.../MiCloudMessagesTools.kt` | `mi_cloud_sms`：短信会话与通话记录列表（只读），观察文本为完整可读字段 + syncTag/syncThreadTag/watermark 游标与 raw |
+| `.../MiCloudContactsTools.kt` | `mi_cloud_contacts`：联系人列表与搜索（只读），观察文本为姓名/电话/邮箱等完整字段 + syncTag/syncIgnoreTag 游标与 raw |
+| `.../MiCloudMediaTools.kt` | `mi_cloud_gallery` 相册/媒体列表与 `mi_cloud_recordings` 录音列表、下载；观察文本为可读条目、recordings offset 游标与 raw |
 
 ## 要点
 
-- 版本 2.3.0（`plugin-api 1.3.0`，`minHostVersion 1.1.0`）：`mi_cloud_account`、`mi_cloud_notes`、`mi_cloud_todo` 通过 `ToolResultRenderer`（source=PLUGIN，按工具名匹配）在回答区内联卡片；工具文本仍是模型可读的完整事实，不出现“卡片”措辞。
+- 版本 2.5.0（`plugin-api 1.3.0`，`minHostVersion 1.3.0`）：读类工具把完整响应 body 挂到 `details["deepdeep.raw"]`，宿主统一追加到模型文本后移除；工具文本是全量可读投影，列表头写“本页 N 条”，末尾给可执行的下一页参数（notes `syncTag`、todo `cursor`（上游 `syncToken`）、sms `syncTag`/`syncThreadTag`/`watermark`、recordings `offset`、contacts `syncTag`/`syncIgnoreTag`，相册说明无分页）。
+- `mi_cloud_account`、`mi_cloud_notes`、`mi_cloud_todo`、`mi_cloud_recordings` 通过 `ToolResultRenderer`（source=PLUGIN，按工具名匹配）出卡片；details 同时写 `deepdeep.card.title`，宿主在结果末尾给卡片 id，模型需要展示时用 `present` 交付。卡片列表预览 3–5 行，`DdExpandToggle` 展开全部；笔记正文/备注全文折叠；配额仪表、便签纸、勾选清单、文件行版式保留。
 - 构建：在仓库根执行 `./scripts/gradlew-locked :micloud:verifyPlugin`，产物 `micloud/build/plugin/micloud.ddp`。
 - 登录 = 插件页面内的独立子页：`DdWebView` 加载 `https://i.mi.com`，登录后点「完成登录」读取 `CookieManager` 的 cookie，经 `MiCloudClient.profile()` 校验后存入 `host.secrets()`；只有这一条完成路径。系统返回与左上角返回先在网页内回退（`canGoBack`），到根页才关闭子页；校验期间显示阶段文字与 `DdProgressBar`。
 - 登录态由 `MiCloudSession` 缓存（验证 60s TTL、失效 10 分钟内不重复打接口）；页面打开与宿主刷新时异步探测，工具收到 401/403 立即标记失效。

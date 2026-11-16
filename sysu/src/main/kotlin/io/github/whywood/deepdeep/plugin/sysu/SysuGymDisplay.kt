@@ -2,8 +2,8 @@ package io.github.whywood.deepdeep.plugin.sysu
 
 internal data class SysuGymSlotDisplay(
     val observationLines: List<String>,
-    val cardSummary: String?,
-    val cardCount: String?,
+    val cardText: String?,
+    val countLabel: String?,
 )
 
 internal data class SysuGymSlotEntry(
@@ -65,10 +65,6 @@ private fun minutesOf(label: String): Int? {
 }
 
 internal object SysuGymDisplay {
-    private const val MAX_OBSERVED_SLICES = 8
-    private const val MAX_CARD_DATES = 2
-    private const val MAX_CARD_SLICES = 2
-
     fun slots(venue: SysuGymVenue, strings: SysuStrings): SysuGymSlotDisplay {
         val byDate = linkedMapOf<String, MutableList<SysuGymSlot>>()
         for (slot in venue.slots) {
@@ -78,23 +74,23 @@ internal object SysuGymDisplay {
         if (byDate.isEmpty()) {
             return SysuGymSlotDisplay(
                 observationLines = listOf(strings.text("没有可约时段", "No available slots")),
-                cardSummary = null,
-                cardCount = null,
+                cardText = null,
+                countLabel = null,
             )
         }
         val observation = mutableListOf<String>()
-        val cardDates = mutableListOf<String>()
+        val card = mutableListOf<String>()
         var total = 0
         for ((date, slots) in byDate) {
             val grouped = groupGymSlots(slots)
             total += grouped.slices.size + grouped.aggregates.size
             observation += observationLine(date, grouped, strings)
-            if (cardDates.size < MAX_CARD_DATES) cardDates += cardLine(date, grouped, strings)
+            card += cardLine(date, grouped, strings)
         }
         return SysuGymSlotDisplay(
             observationLines = observation,
-            cardSummary = cardDates.joinToString("；").ifEmpty { null },
-            cardCount = strings.text("共 $total 个", "$total"),
+            cardText = card.joinToString("；").ifEmpty { null },
+            countLabel = strings.text("共 $total 个", "$total"),
         )
     }
 
@@ -104,12 +100,8 @@ internal object SysuGymDisplay {
         strings: SysuStrings,
     ): String {
         val parts = mutableListOf<String>()
-        grouped.slices.take(MAX_OBSERVED_SLICES).forEach { entry ->
+        grouped.slices.forEach { entry ->
             parts += "${entry.startLabel}-${entry.endLabel} ${strings.text("余", "")}${entry.available ?: "—"}"
-        }
-        if (grouped.slices.size > MAX_OBSERVED_SLICES) {
-            val hidden = grouped.slices.size - MAX_OBSERVED_SLICES
-            parts += strings.text("…还有 $hidden 个时段", "…$hidden more slots")
         }
         grouped.aggregates.forEach { entry ->
             parts += strings.text(
@@ -126,11 +118,10 @@ internal object SysuGymDisplay {
         strings: SysuStrings,
     ): String {
         val parts = mutableListOf<String>()
-        grouped.slices.take(MAX_CARD_SLICES).forEach { entry ->
+        grouped.slices.forEach { entry ->
             parts += "${entry.startLabel}-${entry.endLabel} ${strings.text("余", "")}${entry.available ?: "—"}"
         }
-        if (grouped.slices.size > MAX_CARD_SLICES) parts += "…"
-        grouped.aggregates.firstOrNull()?.let { entry ->
+        grouped.aggregates.forEach { entry ->
             parts += strings.text(
                 "长时段 ${entry.startLabel}-${entry.endLabel} 余${entry.available ?: "—"}",
                 "long window ${entry.startLabel}-${entry.endLabel} ${entry.available ?: "—"} left",

@@ -116,7 +116,7 @@ internal val SKILL_MARKDOWN = """
 
     ## 读取命令
 
-    消息、日程、云文档与任务这几类读取会在对话里生成可读摘要；为了让插件读到完整结果，每条命令必须是**一条普通 CLI 调用**：
+    消息、日程、云文档与任务这几类读取会返回完整可读内容，并带一张可交付卡片；需要用户看到时用 `present` 交付。为了让插件读到完整结果，每条命令必须是**一条普通 CLI 调用**：
 
     - 不要接管道或重定向：不要用 `| head`、`| jq`、`> 文件`、`2>&1`。
     - 不要加 `--jq`、`--concise`，也不要改成 table/csv 等输出格式。
@@ -130,6 +130,8 @@ internal val SKILL_MARKDOWN = """
     - 云文档搜索：`lark-cli drive +search --query "<关键词>"`（关键词不超过 30 个字符）
     - 文档读取：`lark-cli docs +fetch --doc <文档链接或 token> --doc-format markdown`
     - 我的任务：`lark-cli task +get-my-tasks --complete=false`
+
+    分页：读取命令默认只返回一页。结果末尾给出 `--page-token <token>` 时，用户要更多就带上该参数继续，不要一次拉全量。
 
     空结果是正常结果：当天没有日程、没有待办任务、没有搜到文档时直接告诉用户，不要重试或换命令。
 

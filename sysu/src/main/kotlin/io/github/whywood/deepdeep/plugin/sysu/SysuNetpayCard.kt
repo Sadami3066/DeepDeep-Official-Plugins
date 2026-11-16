@@ -28,8 +28,6 @@ import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.cli.card.CliCardModel
 
-private const val MAX_NETPAY_ROWS = 3
-
 @Composable
 internal fun SysuNetpayCard(host: PluginHost, model: CliCardModel) {
     val plan = remember(model.sections, model.items) { SysuCardFormat.netpayPlan(model) }
@@ -38,8 +36,7 @@ internal fun SysuNetpayCard(host: PluginHost, model: CliCardModel) {
         return
     }
     val colors = deepDeepColors()
-    val services = plan.services.take(MAX_NETPAY_ROWS)
-    val hidden = plan.services.size - services.size
+    val services = plan.services
     SysuCardSurface {
         SysuTopLine(
             kicker = host.t("校园网服务", "Campus network"),
@@ -76,15 +73,6 @@ internal fun SysuNetpayCard(host: PluginHost, model: CliCardModel) {
                 host = host,
                 service = service,
                 showExpiry = plan.services.size > 1,
-            )
-        }
-        if (hidden > 0) {
-            Spacer(Modifier.height(DdSpacing.Sm))
-            DdText(
-                text = host.t("还有 $hidden 个服务", "$hidden more services"),
-                style = SysuCardType.caption,
-                color = colors.inkTertiary,
-                maxLines = 1,
             )
         }
         Spacer(Modifier.height(DdSpacing.Md))
@@ -131,9 +119,13 @@ private fun SysuNetpayServiceRow(host: PluginHost, service: SysuNetpayServicePla
                     text = detail,
                     style = SysuCardType.caption,
                     color = colors.inkSecondary,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+            if (service.details.isNotEmpty()) {
+                Spacer(Modifier.height(2.dp))
+                SysuDetailLines(lines = service.details)
             }
         }
         if (showExpiry) {

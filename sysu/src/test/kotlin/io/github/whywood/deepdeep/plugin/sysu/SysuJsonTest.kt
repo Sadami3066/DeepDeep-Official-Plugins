@@ -48,6 +48,9 @@ class SysuJsonTest {
         assertEquals(2, data!!.exams.size)
         assertEquals("2026-11-26", data.exams.first().date)
         assertEquals("19:00~21:00", data.exams.first().time)
+        assertEquals("12", data.exams.first().week.scalarText())
+        assertEquals("exam", data.exams.first().type)
+        assertEquals("教师甲", data.exams.first().teacher)
     }
 
     @Test
@@ -56,6 +59,9 @@ class SysuJsonTest {
         assertNotNull(plans)
         assertEquals(2, plans!!.size)
         assertEquals("n020109T00", plans[0].professionNumber)
+        assertEquals("24n020109T00", plans[0].gradeProfessionCode)
+        assertEquals("1916673867646238720", plans[0].teachPlanNumber)
+        assertEquals(0.0, plans[1].publicMinCredit.doubleOrNull()!!, 0.0001)
         assertEquals("01", plans[0].trainCateCode)
         assertEquals(83.5, plans[0].finishCredit.doubleOrNull()!!, 0.0001)
         assertNull(plans[1].finishCredit)
@@ -83,6 +89,10 @@ class SysuJsonTest {
         val fee = data.types.first().fee
         assertNotNull(fee)
         assertEquals("5/10-学生", fee!!.name)
+        assertEquals("fee-1", fee.identity)
+        assertEquals("学生", fee.userRole)
+        assertEquals("08:00", fee.timeslot?.startTime)
+        assertEquals("22:30", fee.timeslot?.endTime)
         assertEquals(5.0, fee.creditFee.doubleOrNull()!!, 0.0001)
         assertEquals(10.0, fee.cashFee.doubleOrNull()!!, 0.0001)
         assertEquals("机器1", data.types.first().venues.first().shortName)
@@ -97,9 +107,15 @@ class SysuJsonTest {
         assertTrue(expired.services.isEmpty())
         val services = SysuJson.netpay(payload("netpay_services.json"))
         assertNotNull(services)
-        assertEquals("校园网-学生宿舍", services!!.services.single().service)
-        assertEquals("2027-06-30", services.services.single().expire)
-        assertEquals(227, services.services.single().daysLeft.intOrNull())
+        val service = services!!.services.single()
+        assertEquals("校园网-学生宿舍", service.service)
+        assertEquals("1", service.no)
+        assertEquals("AA:BB:CC:DD:EE:FF", service.mac)
+        assertEquals("计算机学院", service.dept)
+        assertEquals("张三", service.user)
+        assertEquals("svc-1", service.id)
+        assertEquals("2027-06-30", service.expire)
+        assertEquals(227, service.daysLeft.intOrNull())
     }
 
     @Test

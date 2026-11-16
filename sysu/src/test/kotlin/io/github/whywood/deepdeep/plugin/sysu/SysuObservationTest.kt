@@ -82,6 +82,9 @@ class SysuObservationTest {
         assertTrue(text.contains("19:00~21:00"))
         assertTrue(text.contains("第 9-11 节"))
         assertTrue(text.contains("周四"))
+        assertTrue(text.contains("教师甲"))
+        assertTrue(text.contains("第 12 周"))
+        assertTrue(text.contains("考试"))
         val card = rendered.card!!
         assertEquals("2 场", card.trailing)
         assertEquals(listOf("2026-11-26 周四", "2026-12-08 周二"), card.sections.map { it.label })
@@ -99,6 +102,9 @@ class SysuObservationTest {
         assertTrue(text.contains("培养类别 05"))
         assertTrue(text.contains("毕业学分 83.5 / 151（55.3%）"))
         assertTrue(text.contains("毕业学分 0.0 / 12（0%）"))
+        assertTrue(text.contains("年级专业代码 24n020109T00"))
+        assertTrue(text.contains("教学计划 1916673867646238720"))
+        assertTrue(text.contains("公共课下限 0"))
         assertFalse(text.contains("主修"))
         assertFalse(text.contains("辅修"))
         assertNull(rendered.card)
@@ -113,6 +119,8 @@ class SysuObservationTest {
         assertTrue(text.contains("80%"))
         assertTrue(text.contains("2027-01-31"))
         assertTrue(text.contains("进度 —"))
+        assertTrue(text.contains("开课 2026-07-31"))
+        assertTrue(text.contains("课程代码 课程甲-2026-2027-1"))
         val card = rendered.card!!
         assertEquals("3 门", card.trailing)
         assertEquals(3, card.items.size)
@@ -140,7 +148,10 @@ class SysuObservationTest {
         assertTrue(text.contains("2026-11-15"))
         assertTrue(text.contains("08:00-09:00 余59"))
         assertTrue(text.contains("长时段 08:00-22:00 余60"))
-        assertTrue(text.contains("5 积分/时（5/10-学生）"))
+        assertTrue(text.contains("5 积分/时"))
+        assertTrue(text.contains("5/10-学生"))
+        assertTrue(text.contains("身份 学生"))
+        assertTrue(text.contains("全周 08:00-22:30"))
         assertEquals(2, Regex("08:00-22:00 余60").findAll(text).count())
         assertFalse(text.contains("卡片"))
         val card = rendered.card!!
@@ -172,6 +183,22 @@ class SysuObservationTest {
     }
 
     @Test
+    fun gymPartialFailuresKeepTypesAndErrors() {
+        val payload = CliJsonEnvelope.LENIENT.element(
+            """{"ok":false,"types":[{"id":"t1","name":"乒乓球","venues":[{"id":"v1","name":"1 号台","slots":[{"date":"2026-11-15","start":"08:00","end":"09:00","available":2}]}]}],"errors":[{"id":"t2","name":"羽毛球","error":"接口回应超时"}]}""",
+        )!!
+        val rendered = SysuObservation.render(SysuCommandKind.GymSlots, payload, ChineseStrings)
+        assertNotNull(rendered)
+        assertFalse(rendered!!.isError)
+        assertTrue(rendered.text.contains("接口回应超时"))
+        assertTrue(rendered.text.contains("羽毛球"))
+        assertTrue(rendered.text.contains("1 号台"))
+        val card = rendered.card
+        assertEquals(CliCardState.READY, card?.state)
+        assertEquals(1, card?.sections?.size)
+    }
+
+    @Test
     fun netpayExpiredSessionIsActionableAndNeverPrintsUndefined() {
         val rendered = render(SysuCommandKind.Netpay, "netpay_expired.json")
         val text = rendered.text
@@ -193,7 +220,11 @@ class SysuObservationTest {
         assertTrue(text.contains("正常"))
         assertTrue(text.contains("到期 2027-06-30"))
         assertTrue(text.contains("剩余 227 天"))
-        assertFalse(text.contains("AA:BB"))
+        assertTrue(text.contains("编号 1"))
+        assertTrue(text.contains("MAC AA:BB:CC:DD:EE:FF"))
+        assertTrue(text.contains("部门 计算机学院"))
+        assertTrue(text.contains("用户 张三"))
+        assertTrue(text.contains("服务 ID svc-1"))
         assertFalse(rendered.isError)
         val card = rendered.card!!
         assertEquals("1 个服务", card.trailing)

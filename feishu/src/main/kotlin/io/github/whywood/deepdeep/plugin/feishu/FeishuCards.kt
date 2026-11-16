@@ -78,15 +78,12 @@ internal val SUPPORTED_CARD_KINDS = setOf(
     FeishuCardTypes.KIND_TASKS,
 )
 
-internal const val MAX_CARD_ROWS = CliCardCodec.MAX_ROWS
+internal const val FEISHU_CHAT_PREVIEW_ROWS = 5
+internal const val FEISHU_AGENDA_PREVIEW_ROWS = 5
+internal const val FEISHU_DOC_PREVIEW_ROWS = 4
+internal const val FEISHU_TASK_PREVIEW_ROWS = 5
+internal const val FEISHU_MESSAGE_PREVIEW_LINES = 3
 
-internal const val FEISHU_CARD_CHAT_ROWS = 5
-internal const val FEISHU_CARD_MESSAGE_ROWS = 3
-internal const val FEISHU_CARD_AGENDA_ROWS = 4
-internal const val FEISHU_CARD_DOC_ROWS = 4
-internal const val FEISHU_CARD_TASK_ROWS = 5
-
-private val COMPLETED_BADGES = setOf("已完成", "完成", "Done", "Completed")
 private val QUERY_PREFIXES = listOf("搜索：", "搜索:", "search: ", "search:")
 private val RANGE_PREFIXES = listOf(
     "时间范围：", "时间范围:", "起始：", "起始:", "截止：", "截止:",
@@ -94,7 +91,8 @@ private val RANGE_PREFIXES = listOf(
 )
 private val TIME_PATTERN = Regex("""\d{1,2}:\d{2}""")
 
-internal fun CliCardItem.isCompleted(): Boolean = badge?.trim() in COMPLETED_BADGES
+internal fun CliCardItem.badgeTokens(): List<String> =
+    badge?.split(" · ")?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
 
 internal fun CliCardItem.timePart(): String? {
     val value = meta?.trim().orEmpty()
@@ -104,7 +102,8 @@ internal fun CliCardItem.timePart(): String? {
 
 internal fun CliCardItem.datePart(): String? {
     val value = meta?.trim().orEmpty()
-    if (!value.contains(' ')) return null
+    if (value.isEmpty()) return null
+    if (!value.contains(' ')) return value.takeIf { it.contains('-') }
     return value.substringBeforeLast(' ')
 }
 
@@ -163,8 +162,9 @@ internal fun cardRangeText(context: String?): String? {
 internal fun todayLabel(datePrefix: String?, host: PluginHost): String? {
     val value = datePrefix?.trim().orEmpty()
     if (value.isEmpty()) return null
+    val day = value.takeLast(5)
     val today = LocalDate.now().format(DateTimeFormatter.ofPattern("MM-dd"))
-    return if (value == today) host.t("今天", "Today") else null
+    return if (day == today) host.t("今天", "Today") else null
 }
 
 internal fun initialOf(text: String): String =
@@ -173,9 +173,6 @@ internal fun initialOf(text: String): String =
 @Composable
 internal fun feishuItemTitleStyle(): TextStyle =
     DdType.label.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp)
-
-@Composable
-internal fun feishuBigNumberStyle(): TextStyle = DdType.heading
 
 @Composable
 internal fun FeishuCardShell(content: @Composable () -> Unit) {
@@ -219,22 +216,6 @@ internal fun FeishuChip(
             .padding(horizontal = DdSpacing.Sm, vertical = 3.dp),
     ) {
         DdText(text = text, style = DdType.chip, color = tint, maxLines = 1)
-    }
-}
-
-@Composable
-internal fun FeishuSectionKicker(host: PluginHost, label: String) {
-    val colors = deepDeepColors()
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .width(3.dp)
-                .heightIn(min = 13.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(colors.accent),
-        )
-        Spacer(Modifier.width(DdSpacing.Sm))
-        DdText(text = label, style = feishuItemTitleStyle(), color = colors.ink, maxLines = 1)
     }
 }
 

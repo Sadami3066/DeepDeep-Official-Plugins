@@ -8,14 +8,16 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -24,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.whywood.deepdeep.design.DdAlpha
+import io.github.whywood.deepdeep.design.DdExpandToggle
 import io.github.whywood.deepdeep.design.DdSpacing
 import io.github.whywood.deepdeep.design.DdText
 import io.github.whywood.deepdeep.design.DdType
@@ -42,11 +45,18 @@ internal fun FeishuAgendaCard(host: PluginHost, model: FeishuCardModel) {
     }
 }
 
+private data class AgendaDay(
+    val label: String?,
+    val items: List<FeishuCardItem>,
+)
+
 @Composable
 private fun AgendaContent(host: PluginHost, model: FeishuCardModel) {
     val colors = deepDeepColors()
-    val count = model.total.coerceAtLeast(model.items.size)
-    val rows = model.items.take(FEISHU_CARD_AGENDA_ROWS)
+    val all = model.items
+    val count = model.total.coerceAtLeast(all.size)
+    var expanded by remember(model) { mutableStateOf(false) }
+    val rows = if (expanded) all else all.take(FEISHU_AGENDA_PREVIEW_ROWS)
     Column(
         Modifier
             .fillMaxWidth()
@@ -60,17 +70,33 @@ private fun AgendaContent(host: PluginHost, model: FeishuCardModel) {
                 ?: if (count > 0) host.tf("%d 个", "%d events", count) else null,
         )
         Spacer(Modifier.height(DdSpacing.Xs))
-        rows.forEachIndexed { index, item ->
-            AgendaRow(
-                host = host,
-                item = item,
-                first = index == 0,
-                last = index == rows.lastIndex,
+        agendaDays(rows).forEachIndexed { dayIndex, day ->
+            day.label?.let { label ->
+                AgendaDayHeader(host = host, label = label, first = dayIndex == 0)
+            }
+            day.items.forEachIndexed { index, item ->
+                AgendaRow(
+                    host = host,
+                    item = item,
+                    first = index == 0,
+                    last = index == day.items.lastIndex,
+                )
+            }
+        }
+        if (all.size > FEISHU_AGENDA_PREVIEW_ROWS) {
+            DdExpandToggle(
+                expanded = expanded,
+                collapsedLabel = host.tf(
+                    "展开其余 %d 个日程",
+                    "Show %d more events",
+                    all.size - FEISHU_AGENDA_PREVIEW_ROWS,
+                ),
+                expandedLabel = host.t("收起日程", "Show fewer events"),
+                onToggle = { expanded = !expanded },
+                modifier = Modifier.fillMaxWidth(),
             )
         }
-        val hidden = (count - rows.size).coerceAtLeast(0)
         val note = model.note?.takeIf { it.isNotBlank() }
-            ?: if (hidden > 0) host.tf("还有 %d 个未显示", "%d more not shown", hidden) else null
         note?.let { line ->
             Spacer(Modifier.height(DdSpacing.Sm))
             DdText(
@@ -84,12 +110,50 @@ private fun AgendaContent(host: PluginHost, model: FeishuCardModel) {
     }
 }
 
+private fun agendaDays(items: List<FeishuCardItem>): List<AgendaDay> {
+    val days = mutableListOf<AgendaDay>()
+    var currentLabel: String? = null
+    var current = mutableListOf<FeishuCardItem>()
+    items.forEach { item ->
+        val label = item.agendaTimeParts().date
+        if (current.isNotEmpty() && label != currentLabel) {
+            days += AgendaDay(currentLabel, current)
+            current = mutableListOf()
+        }
+        currentLabel = label
+        current += item
+    }
+    if (current.isNotEmpty()) days += AgendaDay(currentLabel, current)
+    return days
+}
+
+@Composable
+private fun AgendaDayHeader(host: PluginHost, label: String, first: Boolean) {
+    val colors = deepDeepColors()
+    val today = todayLabel(label, host)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = if (first) 0.dp else DdSpacing.Md, bottom = DdSpacing.Xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        DdText(text = label, style = DdType.chip, color = colors.inkTertiary, maxLines = 1)
+        today?.let { text ->
+            Spacer(Modifier.width(DdSpacing.Xs))
+            FeishuChip(text = text, tint = colors.accent, background = colors.accentSoft)
+        }
+    }
+}
+
 @Composable
 private fun AgendaRow(host: PluginHost, item: FeishuCardItem, first: Boolean, last: Boolean) {
     val colors = deepDeepColors()
     val parts = item.agendaTimeParts()
     val location = item.agendaLocation()
-    val today = todayLabel(parts.date, host)
+    val description = item.body?.takeIf { it.isNotBlank() }
+    val long = description != null &&
+        (description.lineSequence().count() > 2 || description.length > 100)
+    var expanded by remember(item) { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -115,16 +179,6 @@ private fun AgendaRow(host: PluginHost, item: FeishuCardItem, first: Boolean, la
                     text = end,
                     style = DdType.numeric,
                     color = colors.inkTertiary,
-                    maxLines = 1,
-                    textAlign = TextAlign.End,
-                )
-            }
-            today?.let { label ->
-                Spacer(Modifier.height(2.dp))
-                DdText(
-                    text = label,
-                    style = DdType.numeric,
-                    color = colors.accent,
                     maxLines = 1,
                     textAlign = TextAlign.End,
                 )
@@ -173,7 +227,7 @@ private fun AgendaRow(host: PluginHost, item: FeishuCardItem, first: Boolean, la
                 text = item.title,
                 style = feishuItemTitleStyle(),
                 color = colors.ink,
-                maxLines = 2,
+                maxLines = if (expanded) Int.MAX_VALUE else 2,
                 overflow = TextOverflow.Ellipsis,
             )
             location?.let { place ->
@@ -185,6 +239,24 @@ private fun AgendaRow(host: PluginHost, item: FeishuCardItem, first: Boolean, la
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+            description?.let { text ->
+                Spacer(Modifier.height(2.dp))
+                DdText(
+                    text = text,
+                    style = DdType.chip,
+                    color = colors.inkSecondary,
+                    maxLines = if (expanded) Int.MAX_VALUE else 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (long) {
+                    DdExpandToggle(
+                        expanded = expanded,
+                        collapsedLabel = host.t("展开详情", "Show details"),
+                        expandedLabel = host.t("收起详情", "Show less"),
+                        onToggle = { expanded = !expanded },
+                    )
+                }
             }
         }
     }

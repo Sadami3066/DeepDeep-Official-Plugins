@@ -63,6 +63,7 @@ import io.github.whywood.deepdeep.design.deepDeepColors
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.shareRequest
 import io.github.whywood.deepdeep.plugin.mail.MailAttachment
+import io.github.whywood.deepdeep.plugin.mail.MailFolderRole
 import io.github.whywood.deepdeep.plugin.mail.MailMessageDetail
 import io.github.whywood.deepdeep.plugin.mail.MailMessageSummary
 import io.github.whywood.deepdeep.plugin.mail.MailRepository
@@ -607,6 +608,14 @@ private fun MailThreadMessageCard(
     onViewer: (MailThreadViewer) -> Unit,
 ) {
     val colors = deepDeepColors()
+    val outgoing = message.folderRole == MailFolderRole.SENT
+    val recipients = message.to.joinToString(", ").trim()
+    val partyName = if (outgoing) {
+        recipients.ifEmpty { host.t("（无收件人）", "(No recipient)") }
+    } else {
+        message.fromName.ifBlank { message.fromAddress }
+    }
+    val partyAddress = if (outgoing) "" else message.fromAddress
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -624,8 +633,8 @@ private fun MailThreadMessageCard(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     SenderAvatar(
                         host = host,
-                        address = message.fromAddress,
-                        name = message.fromName,
+                        address = partyAddress.ifEmpty { recipients },
+                        name = partyName,
                         size = 34.dp,
                     )
                     Spacer(Modifier.width(DdSpacing.Md))
@@ -636,7 +645,7 @@ private fun MailThreadMessageCard(
                                 Spacer(Modifier.width(6.dp))
                             }
                             Text(
-                                text = message.fromName.ifBlank { message.fromAddress },
+                                text = partyName,
                                 modifier = Modifier.weight(1f),
                                 style = DdType.label.copy(
                                     fontWeight = if (message.unread) FontWeight.SemiBold else FontWeight.Medium,
@@ -645,8 +654,17 @@ private fun MailThreadMessageCard(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                            if (outgoing) {
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = host.t("已发送", "Sent"),
+                                    style = DdType.chip,
+                                    color = colors.inkTertiary,
+                                    maxLines = 1,
+                                )
+                            }
                         }
-                        if (message.fromName.isNotBlank()) {
+                        if (!outgoing && message.fromName.isNotBlank()) {
                             Text(
                                 text = message.fromAddress,
                                 style = DdType.chip,

@@ -33,8 +33,6 @@ internal const val TODO_ACTION_UPDATE = "update"
 
 internal const val TODO_ACTION_DELETE = "delete"
 
-internal const val MAX_CARD_ROWS = 8
-
 internal const val FILES_MODE_LIST = "list"
 
 internal const val FILES_MODE_DOWNLOAD = "download"

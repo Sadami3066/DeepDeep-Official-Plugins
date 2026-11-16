@@ -1,8 +1,8 @@
 {
   "id": "io.github.whywood.deepdeep.plugin.hotel",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "apiLevel": 6,
-  "minHostVersion": "1.1.0",
+  "minHostVersion": "1.3.0",
   "capabilities": [
     "clipboard",
     "files",
@@ -38,7 +38,8 @@
       "hotel_search",
       "hotel_detail",
       "hotel_book",
-      "hotel_orders"
+      "hotel_orders",
+      "hotel_order_detail"
     ],
     "skills": [
       "deepdeep-hotel"
@@ -47,6 +48,7 @@
       "tool.card.content:hotel_search",
       "tool.card.content:hotel_detail",
       "tool.card.content:hotel_orders",
+      "tool.card.content:hotel_order_detail",
       "tool.card.content:hotel_book"
     ],
     "pages": [

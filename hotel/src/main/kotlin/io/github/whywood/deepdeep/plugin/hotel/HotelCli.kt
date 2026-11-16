@@ -144,6 +144,14 @@ internal object HotelCli {
         add("2>&1")
     }.joinToString(" ")
 
+    fun orderDetailCommand(orderNo: String): String = buildList {
+        add(ENV)
+        add(BINARY)
+        add("order-detail")
+        add(quote(orderNo))
+        add("2>&1")
+    }.joinToString(" ")
+
     fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
     fun parseVersion(output: String): String? =

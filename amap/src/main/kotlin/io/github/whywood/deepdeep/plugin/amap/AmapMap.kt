@@ -131,7 +131,7 @@ internal class AmapMapLoader(
             )
         }
         if (!isImage(temporary)) {
-            val errorText = runCatching { temporary.readText().take(500) }.getOrDefault("")
+            val errorText = runCatching { temporary.readText() }.getOrDefault("")
             temporary.delete()
             val failure = classifyAmapFailure(0, errorText)
             return when (failure) {
@@ -275,8 +275,8 @@ internal fun routeMapSpec(
     )
 }
 
-internal fun routePolyline(route: AmapRoute): List<LatLng> = buildList {
-    route.steps.forEach { step ->
+internal fun routePolyline(path: AmapRoutePath): List<LatLng> = buildList {
+    path.steps.forEach { step ->
         step.polyline.forEach { point ->
             if (lastOrNull() != point) add(point)
         }

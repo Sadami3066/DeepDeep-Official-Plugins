@@ -73,12 +73,21 @@ data class MailAttachment(
 )
 
 @Serializable
+data class MailHeaderField(
+    val name: String,
+    val value: String,
+)
+
+@Serializable
 data class MailMessageDetail(
     val summary: MailMessageSummary,
     val cc: List<String>,
     val textBody: String,
     val htmlBody: String?,
     val attachments: List<MailAttachment>,
+    val headers: List<MailHeaderField> = emptyList(),
+    val hasPlainText: Boolean = true,
+    val textTruncated: Boolean = false,
 )
 
 @Serializable

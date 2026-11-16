@@ -175,4 +175,104 @@ class AmapObservationsTest {
         assertNoCardWording(text)
     }
 
+
+    @Test
+    fun placeObservationRendersPhoneRatingBusinessAreaCityAndPhotos() {
+        val text = placeSearchObservation(
+            localizer = localizer,
+            keywords = "西湖",
+            city = "杭州",
+            places = listOf(
+                placeSample(
+                    cityName = "杭州市",
+                    tel = "0571-87179617",
+                    rating = 4.7,
+                    businessArea = "西湖风景区",
+                    photos = listOf("https://a/1.jpg", "https://a/2.jpg"),
+                ),
+            ),
+        )
+
+        assertTrue(text.contains("电话 0571-87179617"))
+        assertTrue(text.contains("评分 4.7"))
+        assertTrue(text.contains("商圈 西湖风景区"))
+        assertTrue(text.contains("城市 杭州市"))
+        assertTrue(text.contains("照片 2 张：https://a/1.jpg https://a/2.jpg"))
+        assertNoCardWording(text)
+    }
+
+    @Test
+    fun placeSearchReportsCountAndPagingLimit() {
+        val text = placeSearchObservation(
+            localizer = localizer,
+            keywords = "西湖",
+            city = "杭州",
+            places = listOf(placeSample(), placeSample(name = "断桥残雪")),
+            paging = AmapSearchPaging(totalCount = 126),
+        )
+
+        assertTrue(text.contains("共 126 条"))
+        assertTrue(text.contains("本页 2 条"))
+        assertTrue(text.contains("接口不支持翻页"))
+        assertFalse(text.contains("page_size/page_num"))
+    }
+
+    @Test
+    fun placeSearchReportsPageNumHintWhenServiceSupportsIt() {
+        val text = placeSearchObservation(
+            localizer = localizer,
+            keywords = "西湖",
+            city = "杭州",
+            places = listOf(placeSample(), placeSample(name = "断桥残雪")),
+            paging = AmapSearchPaging(totalCount = 126, pageNumSupported = true, pageNum = 2),
+        )
+
+        assertTrue(text.contains("用 page_num=3 继续"))
+    }
+
+    @Test
+    fun routeObservationListsBestAndEveryAlternative() {
+        val route = routeSample().let { sample ->
+            sample.copy(
+                paths = sample.paths + AmapRoutePath(
+                    distanceMeters = 15_600,
+                    durationSeconds = 2_100,
+                    steps = listOf(
+                        AmapRouteStep(
+                            instruction = "沿文一西路向西",
+                            road = "文一西路",
+                            distanceMeters = 900,
+                            durationSeconds = 120,
+                        ),
+                    ),
+                ),
+            )
+        }
+
+        val text = routeObservation(localizer, route, route.origin!!, route.destination!!, "公司", "机场")
+
+        assertTrue(text.contains("最优：全程 12.3 公里，约 25 分钟，2 段"))
+        assertTrue(text.contains("另有 1 条备选"))
+        assertTrue(text.contains("备选 1：全程 15.6 公里，约 35 分钟，1 段"))
+        assertTrue(text.contains("最优路线分段"))
+        assertTrue(text.contains("文一西路，500 米，1 分钟"))
+        assertNoCardWording(text)
+    }
+
+    @Test
+    fun transitObservationAddsEntranceExitStopsWalkingTimeAndFirstLast() {
+        val route = transitRouteSample()
+
+        val text = routeObservation(localizer, route, route.origin!!, route.destination!!, null, null)
+
+        assertTrue(text.contains("步行 600 米"))
+        assertTrue(text.contains("步行 300 米（4 分钟）"))
+        assertTrue(text.contains("龙翔桥 → 武林广场"))
+        assertTrue(text.contains("经停 3 站：龙翔桥、凤起路、武林广场"))
+        assertTrue(text.contains("入口 龙翔桥站B口"))
+        assertTrue(text.contains("出口 武林广场站A口"))
+        assertTrue(text.contains("8.3 公里"))
+        assertTrue(text.contains("首班 06:00 末班 22:30"))
+        assertNoCardWording(text)
+    }
 }

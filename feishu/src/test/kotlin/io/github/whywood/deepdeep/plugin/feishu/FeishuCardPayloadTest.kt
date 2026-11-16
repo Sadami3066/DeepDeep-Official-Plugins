@@ -19,11 +19,11 @@ class FeishuCardPayloadTest {
               "total": 10,
               "items": [
                 {"title": "提交报告", "subtitle": "截止 11-15", "meta": "11-15", "badge": "待办",
-                 "url": "https://applink.feishu.cn/client/todo/task?guid=1"},
+                 "url": "https://applink.feishu.cn/client/todo/task?guid=1", "body": "成员：ou_1、ou_2"},
                 {"title": "整理设计", "badge": "已完成"}
               ],
               "open_url": "https://applink.feishu.cn/client/todo/task?guid=1",
-              "note": "还有 8 条未显示"
+              "note": "正文约 120 字"
             }
         """.trimIndent()
         val model = decode(raw)!!
@@ -33,17 +33,27 @@ class FeishuCardPayloadTest {
         assertEquals(2, model.items.size)
         assertEquals("提交报告", model.items[0].title)
         assertEquals("https://applink.feishu.cn/client/todo/task?guid=1", model.items[0].url)
+        assertEquals("成员：ou_1、ou_2", model.items[0].body)
         assertEquals("已完成", model.items[1].badge)
-        assertEquals("还有 8 条未显示", model.note)
+        assertEquals("正文约 120 字", model.note)
         assertTrue(model.openUrl!!.contains("guid=1"))
     }
 
     @Test
-    fun capsRowsAtEight() {
+    fun keepsAllRowsWithoutCap() {
         val items = (1..12).joinToString(",") { """{"title":"行$it"}""" }
         val model = decode("""{"kind":"chat_list","total":12,"items":[$items]}""")!!
-        assertEquals(8, model.items.size)
+        assertEquals(12, model.items.size)
         assertEquals(12, model.total)
+    }
+
+    @Test
+    fun decodesBodyAndAvatar() {
+        val model = decode(
+            """{"kind":"messages","items":[{"title":"预览","avatar":"https://s3.example/a.png","body":"第一行\n第二行"}]}""",
+        )!!
+        assertEquals("https://s3.example/a.png", model.items.single().avatar)
+        assertEquals("第一行\n第二行", model.items.single().body)
     }
 
     @Test
