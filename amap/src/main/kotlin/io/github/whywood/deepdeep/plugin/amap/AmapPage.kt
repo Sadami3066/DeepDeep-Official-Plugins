@@ -43,6 +43,8 @@ import io.github.whywood.deepdeep.plugin.api.PluginHost
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
+private const val AMAP_KEY_DOC_URL = "https://lbs.amap.com/api/webservice/create-project-and-key"
+
 @Composable
 internal fun AmapPage(host: PluginHost) {
     val colors = deepDeepColors()
@@ -212,6 +214,11 @@ internal fun AmapPage(host: PluginHost) {
                         ),
                         style = DdType.micro,
                         color = colors.inkTertiary,
+                    )
+                    DdTextAction(
+                        text = host.t("去高德开放平台获取 Key", "Get a key on the Amap open platform"),
+                        onClick = { runCatching { host.ui().openUrl(AMAP_KEY_DOC_URL) } },
+                        modifier = Modifier.testTag("amap_key_doc"),
                     )
                     DdTextField(
                         value = keyInput,

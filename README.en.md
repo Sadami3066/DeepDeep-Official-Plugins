@@ -14,13 +14,13 @@ This repository contains twelve official plugins, published by `milous`:
 |---|---|---|---|---|
 | `feishu` | Feishu | 2.7.0 | Read and write messages, calendar, docs, drive, mail and tasks through the official `lark-cli` | Office users who work in Feishu every day |
 | `wecom` | WeCom | 2.6.1 | Operate messages, mail, docs, schedules and to-dos through the official `wecom-cli` | Teams that use WeCom |
-| `sysu` | SYSU CLI | 2.7.0 | Run the Node.js `sysu` CLI inside the Linux environment: timetable, grades, assignments, course files, venue booking, campus network fees and SSO tickets | Students and staff at Sun Yat-sen University |
+| `sysu` | SYSU CLI | 2.7.1 | Run the Node.js `sysu` CLI inside the Linux environment: timetable, grades, assignments, course files, venue booking, campus network fees and SSO tickets | Students and staff at Sun Yat-sen University |
 | `wechat` | WeChat Export | 0.5.2 | Sync and decrypt the local WeChat database, export complete chat records for a date range and let the agent summarize | Users who need a complete WeChat export |
 | `micloud` | Xiaomi Cloud | 2.7.4 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
 | `mail` | Mail | 1.6.1 | Connect an IMAP/SMTP mailbox with an authorization code: inbox, conversations, composing with attachments, account management and in-chat mail cards, with agent search, reading, archiving, drafting and sending | Users of standard IMAP/SMTP mailboxes such as QQ, 163, Gmail or iCloud |
-| `ride` | DiDi Ride | 1.3.0 | Didi estimates, order creation, ride status and driver location; payment happens in Didi | Commuters and travellers who need a ride, price comparison or driver status |
+| `ride` | DiDi Ride | 1.3.1 | Didi estimates, order creation, ride status and driver location; payment happens in Didi | Commuters and travellers who need a ride, price comparison or driver status |
 | `hotel` | RollingGo Hotels | 1.4.1 | Search RollingGo hotels, view rooms and orders, create a pending booking; payment happens on RollingGo | Anyone who wants AI help finding, checking or booking hotels |
-| `amap` | Amap Maps | 1.5.2 | Amap MCP for place search, nearby POIs, driving/transit/walking/cycling routes and weather, rendered as cards; requires an Amap key | Commuters and travellers planning routes or looking up places |
+| `amap` | Amap Maps | 1.5.3 | Amap MCP for place search, nearby POIs, driving/transit/walking/cycling routes and weather, rendered as cards; requires an Amap key | Commuters and travellers planning routes or looking up places |
 | `rail` | 12306 Railway | 1.4.0 | Search 12306 trains, times and seat availability, then book on 12306 | Anyone travelling by rail who wants train and seat options first |
 | `themes` | Themes | 1.0.1 | Provides eight light and dark colour themes that can be switched from the host appearance settings | Users who want a different visual mood |
 | `zanao` | Campus Market | 1.0.18 | Bundled offline token catcher and offline-signing CLI: browsing, posting with images, author profiles and history search | Zanao campus marketplace users |

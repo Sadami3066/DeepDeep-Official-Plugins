@@ -71,7 +71,7 @@ internal object SysuContent {
 
         ## 教务（sysu jwxt）
 
-        - 本周课表：`sysu jwxt`；指定周 `--week 8`；`--today` / `--tomorrow`
+        - 本周课表：`sysu jwxt schedule`；指定周 `--week 8`；`--today` / `--tomorrow`
         - 成绩：`sysu jwxt scores`（`--all` 全部学期）
         - 学分：`sysu jwxt credits`；考试：`sysu jwxt exams`
         - 一门课：`sysu jwxt course <课程码或课名>`（`--intro` / `--syllabus`）

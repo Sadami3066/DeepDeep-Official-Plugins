@@ -139,7 +139,7 @@ class SysuToolBridgeTest {
     fun jsonErrorRawStaysParseableAfterRedaction() = runTest {
         val host = SysuFakeHost()
         val hooks = hooks(host)
-        hooks.beforeToolCall(call("sysu jwxt"))
+        hooks.beforeToolCall(call("sysu jwxt schedule"))
         val output = """{"ok":false,"error":{"message":"没有会话文件：/root/.config/sysu/jwxt/session.json"}}
 
             [exit: 1]""".trimIndent()

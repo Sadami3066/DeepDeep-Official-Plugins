@@ -20,9 +20,8 @@ class SysuCommandTest {
 
     @Test
     fun matchesSupportedReadCommandsWithoutJsonFlag() {
-        assertEquals(SysuCommandKind.Schedule, supported("sysu jwxt").kind)
         assertEquals(SysuCommandKind.Schedule, supported("sysu jwxt schedule").kind)
-        assertEquals(SysuCommandKind.Schedule, supported("sysu jwxt --week 8").kind)
+        assertEquals(SysuCommandKind.Schedule, supported("sysu jwxt schedule --week 8").kind)
         assertEquals(SysuCommandKind.Schedule, supported("sysu jwxt schedule --today").kind)
         assertEquals(SysuCommandKind.Scores, supported("sysu jwxt scores").kind)
         assertEquals(SysuCommandKind.Scores, supported("sysu jwxt scores --all").kind)
@@ -42,8 +41,8 @@ class SysuCommandTest {
 
     @Test
     fun acceptsLegacyJsonFlagWithoutAppendingIt() {
-        assertEquals(SysuCommandKind.Schedule, supported("sysu jwxt --json").kind)
-        assertEquals("sysu jwxt --week 8", supported("sysu jwxt --week 8 --json").commandLine)
+        assertEquals(SysuCommandKind.Schedule, supported("sysu jwxt schedule --json").kind)
+        assertEquals("sysu jwxt schedule --week 8", supported("sysu jwxt schedule --week 8 --json").commandLine)
         assertEquals("sysu gym slots 乒乓球", supported("sysu gym slots 乒乓球 --json").commandLine)
         assertEquals("sysu netpay", supported("sysu netpay --json").commandLine)
     }
@@ -51,7 +50,7 @@ class SysuCommandTest {
     @Test
     fun acceptsQuotedArgumentsAndAbsoluteExecutable() {
         assertEquals(SysuCommandKind.GymSlots, supported("sysu gym slots '乒乓球'").kind)
-        assertEquals(SysuCommandKind.Schedule, supported("/usr/local/bin/sysu jwxt").kind)
+        assertEquals(SysuCommandKind.Schedule, supported("/usr/local/bin/sysu jwxt schedule").kind)
         assertEquals(SysuCommandKind.Netpay, supported("  sysu   netpay  ").kind)
     }
 
@@ -76,6 +75,8 @@ class SysuCommandTest {
 
     @Test
     fun keepsUnsupportedReadsAsOther() {
+        other("sysu jwxt")
+        other("sysu jwxt --week 8")
         other("sysu jwxt course LN3015")
         other("sysu jwxt notice")
         other("sysu jwxt room --sections 9-11")

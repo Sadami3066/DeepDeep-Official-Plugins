@@ -99,7 +99,7 @@ internal object SysuCommandParser {
         flags: Set<String>,
         values: Map<String, String>,
     ): SysuInvocation.Supported? {
-        val sub = positionals.firstOrNull() ?: "schedule"
+        val sub = positionals.firstOrNull() ?: return null
         if (positionals.size > 1) return null
         val kind = when (sub) {
             "schedule" -> SysuCommandKind.Schedule

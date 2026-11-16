@@ -42,6 +42,8 @@ import io.github.whywood.deepdeep.plugin.api.PluginHost
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
+private const val DIDI_KEY_DOC_URL = "https://lbs.xiaojukeji.com/docs/ai-dev-tools/mcp-server-key.html"
+
 @Composable
 internal fun RidePage(host: PluginHost) {
     val colors = deepDeepColors()
@@ -212,6 +214,11 @@ internal fun RidePage(host: PluginHost) {
                     verticalArrangement = Arrangement.spacedBy(DdSpacing.Sm),
                 ) {
                     DdText(host.t("填写滴滴 Key", "Enter Didi key"), style = DdType.body, color = colors.ink)
+                    DdTextAction(
+                        text = host.t("去滴滴开放平台获取 Key", "Get a key on the Didi open platform"),
+                        onClick = { runCatching { host.ui().openUrl(DIDI_KEY_DOC_URL) } },
+                        modifier = Modifier.testTag("ride_key_doc"),
+                    )
                     DdTextField(
                         value = keyInput,
                         onValueChange = {

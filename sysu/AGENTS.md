@@ -7,7 +7,7 @@
 
 | 文件 | 职责 |
 |---|---|
-| `build.gradle.kts` | `implementation(project(":cli-common"))`（类随插件进 `.ddp`）；版本 2.7.0 / versionCode 20；design 0.11.0；内置 CLI 3.5.0 |
+| `build.gradle.kts` | `implementation(project(":cli-common"))`（类随插件进 `.ddp`）；版本 2.7.1 / versionCode 21；design 0.11.0；内置 CLI 3.5.0 |
 | `src/main/assets/plugin.json` | 清单：id/version/apiLevel=6/`ui.apiLevel`=2/minHostVersion=1.4.0/capabilities（含 `chat`、`logs`）/entryClass/provides（skills `deepdeep-sysu`、uiSlots `chat.message:sysu.card`、page `main`、publisher `milous`） |
 | `src/main/assets/sysu/**` | Node.js 校园 CLI（bin 与 src），安装时从 `host.assetsDir` 拷入 proot；`src/netpay.js` 遇到登录页、`success:false` 或登录失效文案时自动 `login()` 重试一次 |
 | `src/main/kotlin/.../SysuCli.kt` | 安装路径、Node 检查、四站状态命令（`session.json`/`lms.json`/`gym.json`/`netpay.json`）、四站 login 命令与验证码判定 |
@@ -33,6 +33,8 @@
 | `src/test/**` | 命令匹配、四站状态解析、payload 解码、观察文本、卡片模型编解码、错误映射/脱敏、raw 脱敏、共享桥集成（fake host）测试；`fixtures/` 为真机只读输出的脱敏结构样本 |
 
 ## 要点
+
+- 课表只接受显式 `sysu jwxt schedule`（含 `--week/--today/--tomorrow`）；裸 `sysu jwxt` 不再当作课表被桥接管，避免与 `schedule` 重复出卡，裸命令原样交给 bash。
 
 - 凭证存 `host.secrets()`（netid/password），页面只回显 netid，密码默认隐藏、可切换显示。
 - 页面结构：顶部标题 + 一句用途 → 状态摘要卡（账号、教务/在线教学/场馆/网费四行、运行环境、服务版本，行间 `DdHairline`）→ 环境与错误 `DdNoticeBar`（可重试、可就地重新检查）→ 登录/验证码/已登录阶段各只有一个主操作 `DdPrimaryButton`，次级动作用 `DdTextAction`（返回、重发、刷新、连接未登录服务、退出）→ 底部一句说明；不展示 CLI 参数、JSON 或表单内部字段名。
