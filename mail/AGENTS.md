@@ -1,12 +1,12 @@
 # mail · 邮箱外部插件
 
-DeepDeep 官方邮箱插件，当前 1.6.0，打成外部 `.ddp`：不依赖 CLI，用 JVM 网络栈直连 IMAP/SMTP；提供 `mail_search`、`mail_read`、`mail_save_attachment`、`mail_draft`、`mail_send`、`mail_mark`、`mail_archive` 七个工具与插件自绘页面。只 `compileOnly` 依赖公开 Maven 仓库 `https://sadami3066.github.io/deepdeep-maven` 的 `io.github.sadami3066.deepdeep:plugin-api`（1.2.0 与 1.3.0）与 `design` 0.10.0，不引用宿主内部类型；唯一 `implementation` 依赖是 `org.apache.james:apache-mime4j-core:0.8.15`。
+DeepDeep 官方邮箱插件，当前 1.6.2，打成外部 `.ddp`：不依赖 CLI，用 JVM 网络栈直连 IMAP/SMTP；提供 `mail_search`、`mail_read`、`mail_save_attachment`、`mail_draft`、`mail_send`、`mail_mark`、`mail_archive` 七个工具与插件自绘页面。只 `compileOnly` 依赖公开 Maven 仓库 `https://sadami3066.github.io/deepdeep-maven` 的 `io.github.sadami3066.deepdeep:plugin-api`（1.2.0 与 1.3.0）与 `design` 0.10.0，不引用宿主内部类型；唯一 `implementation` 依赖是 `org.apache.james:apache-mime4j-core:0.8.15`。
 
 ## 文件
 
 | 文件 | 职责 |
 |---|---|
-| `build.gradle.kts` | application 模块配置（namespace/applicationId/versionName 1.6.0、versionCode 10、plugin-api、design 0.10.0、Compose、mime4j 与 JVM 单测依赖）；打包签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
+| `build.gradle.kts` | application 模块配置（namespace/applicationId/versionName 1.6.2、versionCode 12、plugin-api、design 0.10.0、Compose、mime4j 与 JVM 单测依赖）；打包签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
 | `src/main/assets/plugin.json` | 清单：id/version 1.6.0/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.3.0/capabilities（含 `chat`、`media`、`background`）/entryClass/provides（pages `mail`、uiSlots `chat.message:mail.search`、`chat.message:mail.read`、`chat.message:mail.draft`） |
 | `src/main/kotlin/.../MailPlugin.kt` | 入口：availability / uninstall / skills / promptSections / contributions（工具与 hooks）/ ui；提示词正文为同文件的 `mailPromptBody` |
 | `.../MailRuntime.kt` | 插件页与工具共用的运行状态：账号、文件夹、消息、草稿、同步、发送、附件与状态快照；搜索按账号、文件夹与关键词（主题/发件人/收件人/预览）过滤 |
@@ -43,4 +43,5 @@ DeepDeep 官方邮箱插件，当前 1.6.0，打成外部 `.ddp`：不依赖 CLI
 - 构建：在仓库根执行 `./scripts/gradlew-locked :mail:testDebugUnitTest :mail:verifyPlugin`，产物 `mail/build/plugin/mail.ddp`。
 - 插件页顶部在「收件箱 / 已发送」之间切换；SENT 由同步映射，SMTP 发送成功后把邮件 append 到 Sent。已发送列表同样显示收件人。
 - 用户可见文案中英成对（`host.t`/`host.tf`），卡片不出现 App 名、插件名、「卡片」「结果」这类开发词；卡片 id 行由宿主追加。
+- IMAP 登录后按 RFC 2971 发 `ID` 声明客户端（163/126 要求，否则 `SELECT` 返回 `Unsafe Login`）；`ID` 失败不影响连接，错误文本对 `UNSAFE LOGIN` 给专门提示。
 - 工具结果文本始终列出完整事实（id/主题/收件人/发件人/时间/附件/正文/头字段），卡片只是另一种呈现；发送前需要用户明确要求，`mail_send` 不重复确认。

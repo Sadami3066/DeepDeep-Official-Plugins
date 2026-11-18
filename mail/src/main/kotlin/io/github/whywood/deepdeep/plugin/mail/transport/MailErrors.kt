@@ -208,11 +208,22 @@ internal class MailTexts(
                 is MailNetworkException -> connectionFailed(error.target)
                 is MailConnectionLostException -> connectionLost()
                 is MailAuthenticationException -> loginFailed
-                is MailServerException -> serverRejected()
+                is MailServerException -> serverRejectedText(error.detail)
                 is MailStorageException -> storageFailed()
                 else -> unknown()
             }
         }.getOrElse { fallbackText }
+    }
+
+    private fun serverRejectedText(detail: String?): String {
+        val normalized = detail?.uppercase().orEmpty()
+        if (normalized.contains("UNSAFE LOGIN")) {
+            return text(
+                "163/126 邮箱要求客户端标识，请更新邮箱插件后再试；仍然失败请检查 IMAP 是否已开启并使用授权码。",
+                "163/126 requires client identification. Update the mail plugin; if it still fails, check that IMAP is enabled and use an authorization code.",
+            )
+        }
+        return serverRejected()
     }
 
     private val fallbackText: String = runCatching {

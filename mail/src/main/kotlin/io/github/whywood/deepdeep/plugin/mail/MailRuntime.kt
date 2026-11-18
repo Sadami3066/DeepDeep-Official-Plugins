@@ -60,6 +60,9 @@ internal class MailRuntime(
     private val transport: MailTransport = SecureMailTransport,
 ) : MailRepository {
     private val texts = MailTexts(host)
+    private val clientVersion: String by lazy {
+        runCatching { host.manifest.version }.getOrDefault("1.0")
+    }
     private val store = MailStore(File(host.dataDir, "mail")) { message, error ->
         host.logs().warn(message, error)
     }
@@ -1260,7 +1263,7 @@ internal class MailRuntime(
                 val client = transport.imap(
                     settings.imapHost,
                     settings.imapPort,
-                    ImapCredentials(account.email, password),
+                    ImapCredentials(account.email, password, clientVersion),
                 )
                 try {
                     client.connect()
@@ -1291,7 +1294,7 @@ internal class MailRuntime(
             val client = transport.imap(
                 servers.imapHost,
                 servers.imapPort,
-                ImapCredentials(email, password),
+                ImapCredentials(email, password, clientVersion),
             )
             try {
                 client.connect()

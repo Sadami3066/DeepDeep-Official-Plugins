@@ -110,6 +110,32 @@ class MailTransportIntegrationTest {
     )
 
     @Test
+    fun sendsClientIdBeforeSelectWhenServerRequiresIt() {
+        val server = FakeImapServer(
+            mutableListOf(FakeFolder("INBOX")),
+            requireId = true,
+            advertiseId = true,
+        )
+        try {
+            val client = ImapClient(
+                ImapEndpoint("127.0.0.1", server.port, tls = false),
+                ImapCredentials("user@example.com", "secret", "1.6.2"),
+            )
+            try {
+                client.connect()
+                client.login()
+                assertTrue(server.commands.any { it.contains(" ID (") })
+                val status = client.select("INBOX", readOnly = true)
+                assertEquals(0L, status.exists)
+            } finally {
+                client.close()
+            }
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
     fun imapSessionCoversListFetchStoreMoveAndAppend() {
         val inbox = FakeFolder(
             "INBOX",

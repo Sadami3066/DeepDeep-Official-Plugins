@@ -40,6 +40,8 @@ internal class FakeImapServer(
     private val loginPassword: String = "secret",
     private val loginDisabled: Boolean = false,
     private val stallAfterGreeting: Boolean = false,
+    private val requireId: Boolean = false,
+    private val advertiseId: Boolean = false,
 ) : AutoCloseable {
     private val serverSocket = ServerSocket(0, 20, InetAddress.getLoopbackAddress())
     private val connections = CopyOnWriteArrayList<Socket>()
@@ -69,6 +71,7 @@ internal class FakeImapServer(
         append("IMAP4rev1")
         if (supportMove) append(" MOVE")
         if (supportUidPlus) append(" UIDPLUS")
+        if (advertiseId) append(" ID")
     }
 
     private fun handle(socket: Socket) {
@@ -89,6 +92,10 @@ internal class FakeImapServer(
                 command.startsWith("CAPABILITY", ignoreCase = true) -> {
                     val caps = if (state.authenticated) capabilityList() else preAuthCapabilities()
                     write(output, "* CAPABILITY $caps\r\n$tag OK capability done\r\n")
+                }
+                command.startsWith("ID", ignoreCase = true) -> {
+                    state.identified = true
+                    write(output, "* ID (\"name\" \"fake\")\r\n$tag OK id done\r\n")
                 }
                 command.startsWith("LOGIN", ignoreCase = true) -> {
                     val user = quotedArgument(command, 0).orEmpty()
@@ -119,6 +126,9 @@ internal class FakeImapServer(
                 }
                 command.startsWith("EXAMINE", ignoreCase = true) ||
                     command.startsWith("SELECT", ignoreCase = true) -> {
+                    if (requireId && !state.identified) {
+                        write(output, "$tag NO [UNAVAILABLE] SELECT Unsafe Login. Please contact kefu@188.com for help\r\n")
+                    } else {
                     val name = ImapCodec.decodeMailbox(quotedArgument(command, 0).orEmpty())
                     val folder = folders.firstOrNull { it.name == name }
                     if (folder == null) {
@@ -133,6 +143,7 @@ internal class FakeImapServer(
                                 "* FLAGS (\\Seen \\Flagged \\Deleted)\r\n" +
                                 "$tag OK [READ-ONLY] selected\r\n",
                         )
+                    }
                     }
                 }
                 command.startsWith("UID SEARCH", ignoreCase = true) -> {
@@ -362,6 +373,7 @@ internal class FakeImapServer(
     private data class ConnectionState(
         var authenticated: Boolean = false,
         var selected: FakeFolder? = null,
+        var identified: Boolean = false,
     )
 
     companion object {

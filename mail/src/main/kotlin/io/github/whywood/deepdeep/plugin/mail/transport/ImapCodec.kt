@@ -80,6 +80,16 @@ internal object ImapCodec {
 
     fun quoteMailbox(name: String): String = quote(encodeMailbox(name))
 
+    fun clientId(version: String): String = buildString {
+        append("(\"name\" ")
+        append(quote("DeepDeep Mail"))
+        append(" \"version\" ")
+        append(quote(version))
+        append(" \"vendor\" ")
+        append(quote("DeepDeep"))
+        append(')')
+    }
+
     fun uidSet(uids: Collection<Long>): String {
         if (uids.isEmpty()) return ""
         val sorted = uids.toSortedSet()

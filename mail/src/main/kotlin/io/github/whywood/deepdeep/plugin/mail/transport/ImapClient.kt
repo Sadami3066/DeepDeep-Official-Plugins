@@ -27,6 +27,7 @@ internal data class ImapEndpoint(
 internal data class ImapCredentials(
     val email: String,
     val password: String,
+    val clientVersion: String = "1.0",
 )
 
 internal data class ImapBodyTarget(
@@ -92,6 +93,16 @@ internal class ImapClient(
         }
         authenticated = true
         capabilities = null
+        identifyClient()
+    }
+
+    private fun identifyClient() {
+        val advertised = runCatching { capability() }.getOrDefault(emptySet())
+        val requiresIdentity = "ID" in advertised ||
+            endpoint.host.endsWith("163.com") ||
+            endpoint.host.endsWith("126.com")
+        if (!requiresIdentity) return
+        runCatching { execute("ID " + ImapCodec.clientId(credentials.clientVersion)) }
     }
 
     fun capability(): Set<String> {
