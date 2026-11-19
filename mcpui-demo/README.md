@@ -1,38 +1,38 @@
 # MCP UI Demo
 
-工具结果渲染器的开发示例，不上市场。
+A development sample for the tool result renderer; not published to the market.
 
-它证明两件事：
+It proves two things:
 
-1. 插件可以按 `source/server/tool` 给 MCP 工具结果提供 Compose 卡片，而不是只能给插件自己的工具名注册卡槽；
-2. `tool_execute` 包装的 MCP 工具会被宿主还原成真实工具身份，渲染器不需要关心调用层。
+1. A plugin can provide Compose cards for MCP tool results by `source/server/tool` instead of only registering slots for its own tool names;
+2. MCP tools wrapped by `tool_execute` are restored to their real tool identity by the host, so the renderer does not need to care about the call layer.
 
-## 构建
+## Build
 
-需要 `plugin-api 1.3.0`（本分支的 SDK；发布前用 `./scripts/gradlew-locked :plugin-api:publishToMavenLocal` 从宿主仓库装到本地）：
+Requires `plugin-api 1.3.0` (the SDK on this branch; before release, install it into the local Maven cache from the host repository with `./scripts/gradlew-locked :plugin-api:publishToMavenLocal`):
 
 ```bash
 ./scripts/gradlew-locked :mcpui-demo:verifyPlugin
 ```
 
-产物 `mcpui-demo/build/plugin/mcpui-demo.ddp`；`plugin.json` 要求宿主 1.1.0+。
+Produces `mcpui-demo/build/plugin/mcpui-demo.ddp`; `plugin.json` requires host 1.1.0+.
 
-## 验证
+## Verify
 
-1. 本机启动 mock MCP 服务器：
+1. Start the mock MCP server locally:
 
    ```bash
    python3 mcpui-demo/server/mock_mcp.py 8765
    ```
 
-2. 在 App 的 MCP 设置添加：
+2. Add it in the app's MCP settings:
 
    ```json
    {"mcpServers":{"demo":{"type":"streamable-http","url":"http://10.0.2.2:8765/mcp"}}}
    ```
 
-   真机改成电脑局域网 IP；模拟器用 `10.0.2.2`。
+   On a physical device use the computer's LAN IP; the emulator uses `10.0.2.2`.
 
-3. 安装插件，让 Agent 调 `weather`。工具结果会被 `tool_execute` 包一层，但插件渲染器应显示天气卡片，而不是默认文本卡片。
+3. Install the plugin and have the agent call `weather`. The tool result is wrapped by `tool_execute`, but the plugin renderer should show the weather card instead of the default text card.
 
-插件页「MCP UI」也直接展示了同一张卡片的静态效果。
+The "MCP UI" plugin page also shows the same card as a static preview.

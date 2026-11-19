@@ -1,35 +1,35 @@
-# amap · 高德地图 / Amap Maps
+# amap · Amap Maps plugin
 
-在对话里搜索地点、查看周边、把坐标还原成地址、规划驾车/公交/步行/骑行路线和查询天气。结果以卡片展示，点卡片可在高德地图里查看和导航；导航与打车在高德地图内完成。
+Search places in chat, look at nearby POIs, turn coordinates back into addresses, plan driving, transit, walking and cycling routes, and check the weather. Results appear as cards; tap a card to view it in Amap and navigate there. Navigation and ride-hailing happen inside Amap.
 
-回答区四类卡片各有版式：地点和周边是地图主视觉加编号地点行，坐标反查是地址大字加位置图，路线是分段交通时间轴加总耗时，天气是当前温度大数字加未来几天条。地点、周边和坐标卡片带静态地图预览：点地图在高德地图中打开，右上角可全屏查看；地图预览使用同一个 Web 服务 Key，未开通静态地图服务时只显示占位说明，不影响查询结果。
+The four card types in the answer area each have their own layout: places and nearby use a map hero with numbered place rows, reverse geocoding uses a large address with a location map, routes use a per-leg timeline with total time, and weather uses a large current temperature with bars for the coming days. Place, nearby and coordinate cards carry a static map preview: tap the map to open Amap, top right to view full screen. The preview uses the same Web Service key; when the static map service is not enabled, a placeholder note appears without affecting results.
 
-## 配置
+## Configuration
 
-1. 在高德开放平台创建应用并申请 Web 服务 Key。
-2. 打开「高德地图」插件页，粘贴 Key 并保存；插件会验证连接，成功后才保存。
-3. Key 只保存在本机，用于向高德请求地图数据。
+1. Create an app on the Amap open platform and request a Web Service key.
+2. Open the "Amap Maps" plugin page, paste the key and save; the plugin verifies the connection and saves only on success.
+3. The key stays on the device and is used only to request map data from Amap.
 
-## 工具
+## Tools
 
-| 工具 | 用途 |
+| Tool | Purpose |
 |---|---|
-| `amap_place_search` | 按关键词和城市搜索地点 |
-| `amap_around_search` | 搜索坐标附近的地点 |
-| `amap_regeo` | 把经纬度转换为行政区划地址 |
-| `amap_route_driving` | 驾车路线 |
-| `amap_route_transit` | 公交、地铁和火车路线 |
-| `amap_route_walking` | 步行路线 |
-| `amap_route_bicycling` | 骑行路线 |
-| `amap_weather` | 城市天气预报 |
+| `amap_place_search` | Search places by keyword and city |
+| `amap_around_search` | Search places near a coordinate |
+| `amap_regeo` | Convert coordinates into an administrative address |
+| `amap_route_driving` | Driving routes |
+| `amap_route_transit` | Transit, subway and train routes |
+| `amap_route_walking` | Walking routes |
+| `amap_route_bicycling` | Cycling routes |
+| `amap_weather` | City weather forecast |
 
-所有工具都是只读查询，不会下单、导航或打车；这些动作由用户在高德地图内完成。工具结果包含名称、地址、类型、坐标、距离、耗时、分步指引和天气数值等完整事实，模型不需要从卡片反推数据。
+All tools are read-only queries; they never book, navigate or hail a ride — the user does those in Amap. Results carry the full facts such as name, address, type, coordinates, distance, duration, step-by-step directions and weather values, so the model does not need to infer data from cards.
 
-## 页面
+## Page
 
-插件页负责 Key 配置、连接状态和错误重试；聊天里的地点、坐标、路线和天气按各自版式呈现，地图可点开高德地图，加载、无结果和失败各有对应状态。
+The plugin page handles key configuration, connection state and error retry; places, coordinates, routes and weather in chat use their own layouts, the map opens Amap, and loading, empty and failure states each have a matching presentation.
 
-## 构建
+## Build
 
 ```bash
 ./scripts/gradlew-locked :amap:testDebugUnitTest :amap:verifyPlugin

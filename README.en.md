@@ -1,12 +1,12 @@
-# DeepDeep Official Plugins
+# Super PI Agent Official Plugins
 
 English | [简体中文](README.md)
 
-The official external-plugin source repository maintained by the DeepDeep project. It brings Feishu, WeCom, SYSU campus services, WeChat export, Xiaomi Cloud, standard IMAP/SMTP mailboxes and Campus Market into DeepDeep, packaged as Ed25519-signed `.ddp` plugin bundles.
+The official external-plugin source repository maintained by the Super PI Agent project. It brings Feishu, WeCom, SYSU campus services, WeChat export, Xiaomi Cloud, standard IMAP/SMTP mailboxes and Campus Market into PI, packaged as Ed25519-signed `.ddp` plugin bundles.
 
 ## Overview
 
-DeepDeep is a personal AI agent on Android ([app repository](https://github.com/Sadami3066/DeepDeep)). Plugins implement the host contract `plugin-api` in Kotlin, load inside the App process, and extend the agent with tools, skills, prompt sections and self-drawn pages. Plugins are installed only from `.ddp` files, and every plugin is a separate Android application module.
+Super PI Agent is a personal AI agent on Android ([app repository](https://github.com/Sadami3066/DeepDeep)). Plugins implement the host contract `plugin-api` in Kotlin, load inside the App process, and extend the agent with tools, skills, prompt sections and self-drawn pages. Plugins are installed only from `.ddp` files, and every plugin is a separate Android application module.
 
 This repository contains twelve official plugins, published by `milous`:
 
@@ -27,7 +27,7 @@ This repository contains twelve official plugins, published by `milous`:
 
 `cli-common/` is an internal shared module (CLI update/install core plus text and JSON helpers). It is not a plugin, is not listed in manifests, and is not published to the market.
 
-Versions follow `version` in each module's `src/main/assets/plugin.json`. All twelve manifests declare `apiLevel` 6 and are built against `plugin-api` 1.4.0 and `design` 0.11.0, compatible with DeepDeep 1.4.3+; the exact minimum host version is in each manifest. Runtime dependencies: Feishu uses `lark-cli` 1.0.100, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.6.0; WeChat Export bundles its own `wechat` CLI and needs Root plus local WeChat data; Amap Maps uses the Amap MCP for places and routes with an Amap key; Trains queries 12306 directly; Hotels uses the official `rgh` CLI with OAuth (Node.js/npm required); Ride calls the Didi MCP HTTP API directly with a key configured on its plugin page; Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page; the Mail plugin needs no CLI and connects to IMAP/SMTP directly over the JVM network stack (QQ, 163, 126, Tencent Exmail, Alibaba Mail, Gmail, iCloud, Fastmail, Yahoo, Zoho and custom servers); Campus Market bundles its own offline token catcher and Python CLI.
+Versions follow `version` in each module's `src/main/assets/plugin.json`. All twelve manifests declare `apiLevel` 6 and are built against `plugin-api` 1.4.0 and `design` 0.11.0; most plugins require Super PI Agent 1.4.3+; the exact minimum host version is in each manifest. Runtime dependencies: Feishu uses `lark-cli` 1.0.100, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.6.0; WeChat Export bundles its own `wechat` CLI and needs Root plus local WeChat data; Amap Maps uses the Amap MCP for places and routes with an Amap key; Trains queries 12306 directly; Hotels uses the official `rgh` CLI with OAuth (Node.js/npm required); Ride calls the Didi MCP HTTP API directly with a key configured on its plugin page; Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page; the Mail plugin needs no CLI and connects to IMAP/SMTP directly over the JVM network stack (QQ, 163, 126, Tencent Exmail, Alibaba Mail, Gmail, iCloud, Fastmail, Yahoo, Zoho and custom servers); Campus Market bundles its own offline token catcher and Python CLI.
 
 ## What's in the repository
 
@@ -107,12 +107,12 @@ The task chain is `assemblePlugin → signPlugin → verifyPlugin`:
 
 ### Install from the plugin market
 
-Search and install from DeepDeep's "Plugins → Market". Market entry versions match this repository, and artifacts are published in the GitHub Releases of [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) (releases are named `plugins-YYYYMMDD`, assets look like `feishu-2.1.0.ddp`). Each entry records the official `keyId` as `publisherKeyId`.
+Search and install from Super PI Agent's "Plugins → Market". Market entry versions match this repository, and artifacts are published in the GitHub Releases of [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) (releases are named `plugins-YYYYMMDD`, assets look like `feishu-2.1.0.ddp`). Each entry records the official `keyId` as `publisherKeyId`.
 
 ### Import a .ddp manually
 
 1. Download a `.ddp` from a market release, or build one as described above.
-2. In DeepDeep, open the Plugins page, tap "Import plugin" and choose the file.
+2. In Super PI Agent, open the Plugins page, tap "Import plugin" and choose the file.
 3. The confirmation screen shows the publisher, `keyId`, whole-bundle sha256, size and declared `capabilities`; after you confirm, the key is pinned in the trust store and the plugin is installed and enabled.
 4. To update, import a newer `.ddp` with the same `id`: it must be signed by the same key. With no busy sessions the update activates immediately; otherwise it stays pending and activates when sessions go idle or the app restarts.
 
@@ -129,13 +129,13 @@ Both `plugin.publisherKeyId` in the market entry and `keyId` in the bundle's `ME
 
 ## Risks
 
-- **Same process, same permissions**: plugins load inside the DeepDeep process and have the same Android permissions and data access as the App. Only install plugins signed by a publisher you trust.
+- **Same process, same permissions**: plugins load inside the PI process and have the same Android permissions and data access as the App. Only install plugins signed by a publisher you trust.
 - **Capabilities**: plugins declare what they need in `plugin.json` under `capabilities` (this repository uses `files`, `linux`, `network`, `secrets` and `ui`), and the first-install confirmation lists them. The Feishu, WeCom and SYSU plugins install and run CLIs inside the App's Linux environment and need network access and account credentials; Xiaomi Cloud requests only `secrets`.
 - **Account credentials**: Feishu sign-in state lives in `/root/.lark-cli` and `/root/.local/share/lark-cli`, WeCom credentials in `/root/.config/wecom`, and SYSU credentials and sessions (credentials, jwxt/LMS/venue/network sessions) in `/root/.config/sysu`; Xiaomi Cloud stores its cookie in the App's encrypted secrets. Uninstalling a plugin invokes its cleanup logic (for example, the SYSU plugin removes `/root/.config/sysu` and its install directory, while Feishu and WeCom remove their CLIs and sign-in directories), but it is still a good idea to sign out and change passwords once you stop using them.
 - **Signing key**: losing the private key means no more updates as the official publisher; leaking it allows forged updates. The official public key maps to a fixed `keyId`, and a new key means a new publisher.
 - **Third-party services**: these plugins are third-party integrations maintained by an individual and are not affiliated with Feishu, Tencent, Xiaomi or Sun Yat-sen University. Automated access to third-party services may be restricted by their terms of service and risks account limits or bans; API changes can also break features.
 - **Trusted sources**: get `.ddp` files only from this repository or the official market, and never install bundles from unknown sources.
-- **Pre-release stage**: DeepDeep and the plugin contract are still evolving, so interfaces and behavior may change.
+- **Pre-release stage**: Super PI Agent and the plugin contract are still evolving, so interfaces and behavior may change.
 
 ## License
 
@@ -146,6 +146,6 @@ The source code and documentation in this repository are licensed under [Apache-
 - This is a third-party integration maintained by an individual, with no affiliation or endorsement from Feishu, Tencent, Xiaomi, Sun Yat-sen University or their affiliates.
 - Please report problems, suggestions and feedback via [GitHub Issues](https://github.com/Sadami3066/DeepDeep-Official-Plugins/issues). Do not post signing private keys, credentials or security vulnerabilities publicly; contact the maintainer privately on GitHub first.
 - The project is provided as-is and maintained on a best-effort basis, with no guarantee of service availability, response time or continued availability of third-party APIs.
-- Related repositories: [DeepDeep app](https://github.com/Sadami3066/DeepDeep) · [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) · [DeepDeep-Plugins](https://github.com/Sadami3066/DeepDeep-Plugins)
+- Related repositories: [Super PI Agent app](https://github.com/Sadami3066/DeepDeep) · [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) · [DeepDeep-Plugins](https://github.com/Sadami3066/DeepDeep-Plugins)
 
 Development sample: [`mcpui-demo/`](mcpui-demo/README.md) renders MCP tool results with a plugin card. It is not in the market and requires `plugin-api 1.3.0` / host 1.1.0+.

@@ -9,3 +9,5 @@ keys/*.pem
 keys/*.pub
 *.log
 .agents/
+
+AGENTS.md

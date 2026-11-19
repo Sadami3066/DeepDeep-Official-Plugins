@@ -1,3 +1,3 @@
-# 真机 CLI 采样
+# Real-device CLI samples
 
-`registry-latest.json`：2026-11 的 `GET https://registry.npmjs.org/@wecom/cli-linux-arm64/latest`，含 version / dist.tarball / dist.integrity（sha512），校验和与 1.3.4 官方 tarball 一致，供更新检查测试使用。
+`registry-latest.json`: the November 2026 response of `GET https://registry.npmjs.org/@wecom/cli-linux-arm64/latest`, containing version / dist.tarball / dist.integrity (sha512). The checksum matches the official 1.3.4 tarball, and the fixture feeds the update-check tests.

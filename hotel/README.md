@@ -1,29 +1,29 @@
-# hotel · RollingGo 酒店插件
+# hotel · RollingGo Hotels plugin
 
-连接 RollingGo，在对话里搜索酒店、查看实时房型、创建待支付订单、查询订单列表和单笔订单详情；插件页负责服务安装、更新和登录，不需要 API Key。
+Connects to RollingGo so you can search hotels in chat, see live room rates, create pending orders, and check order lists and single-order details. The plugin page handles service install, update and sign-in; no API key is required.
 
-## 页面
+## Page
 
-- 安装 / 更新酒店服务；
-- 登录 RollingGo：自动打开授权链接，也可手动打开或复制；
-- 退出登录；
-- 查看运行环境、服务版本与登录状态；失败可就地重试，登录可取消。
+- install / update the hotel service;
+- sign in to RollingGo: opens the authorization link automatically, or open or copy it manually;
+- sign out;
+- view the runtime, service version and sign-in state; failures retry in place, sign-in can be cancelled.
 
-## 工具
+## Tools
 
-- `hotel_search`：按地点、日期、人数、星级搜索酒店，文本给出星级、参考价、距离、地址、全部标签与设施、hotelId 与预订链接；卡片首店用图片 hero，其余酒店可展开；
-- `hotel_detail`：按房型归并价格方案，逐方案给出每晚均价、按入离日期计算的总价、床型、早餐与份数、全部取消政策、价格方案 ID、入离日期、房间信息（面积/楼层/可住人数/窗/网络）与房型图片；卡片列出全部房型，组内方案可展开到全部；均价换算的总价标注“按 N 晚折算”；
-- `hotel_book`：用户确认后锁价并创建待支付订单，返回官方支付链接；可选 `rate_plan_id`，同一房型有多个方案时会弹出原生选择；
-- `hotel_orders`：查看订单号、酒店、房型、日期、晚数、房间数、早餐、取消政策、状态、总价、下单时间和支付链接；全部订单可展开；
-- `hotel_order_detail`：按订单号查看单笔订单全字段，包括酒店确认号、酒店地址/电话/坐标、房型/床型/入住人、联系人、支付截止时间、取消政策与免费取消截止时间；卡片可展开全部信息。
+- `hotel_search`: search hotels by place, dates, guests and star rating; the text gives star rating, reference price, distance, address, all tags and facilities, hotelId and booking link; the card shows the first hotel as an image hero and expands the remaining hotels;
+- `hotel_detail`: groups rate plans by room type, with nightly average, total for the check-in and check-out dates, bed type, breakfast and count, all cancellation policies, rate plan ID, dates, room information (area/floor/capacity/window/network) and room photos; the card lists every room type and expands all plans within a group; totals converted from averages are marked "based on N nights";
+- `hotel_book`: locks the price and creates a pending order after the user confirms, returning the official payment link; optional `rate_plan_id`, and a native picker appears when one room type has several plans;
+- `hotel_orders`: shows order number, hotel, room type, dates, nights, room count, breakfast, cancellation policy, status, total, order time and payment link; all orders can be expanded;
+- `hotel_order_detail`: shows every field of a single order by order number, including hotel confirmation number, hotel address/phone/coordinates, room type/bed type/guests, contact, payment deadline, cancellation policy and free-cancellation deadline; the card expands to all fields.
 
-搜索和房型只读；预订前会弹出原生确认，只创建待支付订单，支付由用户在 RollingGo 完成。RollingGo 房型报价返回的是每晚均价，插件按入住/离店日期换算为整段总价并标注折算。工具的原始 CLI 输出随结果返回，卡片只做可读呈现。
+Search and room types are read-only. Booking shows a native confirmation first and only creates a pending order; the user pays on RollingGo. RollingGo quotes a nightly average, so the plugin converts it to a total for the stay and marks the conversion. Raw CLI output is returned with the result; cards only present it readably.
 
-## 技能
+## Skill
 
-`deepdeep-hotel` 指导 Agent 优先使用上述工具；用户明确确认酒店、房型、价格方案、日期和总价，并提供联系人信息后，才调用 `hotel_book` 锁价并创建待支付订单；同一房型有多个价格方案时让用户明确选择并把价格方案 ID 传给 `hotel_book`。用户问订单确认号、酒店电话、入住人或支付截止时间时用 `hotel_order_detail`。插件不代替用户支付。
+`deepdeep-hotel` tells the agent to prefer the tools above. It calls `hotel_book` to lock the price and create a pending order only after the user has explicitly confirmed the hotel, room type, rate plan, dates and total and provided contact details. When one room type has several rate plans, it asks the user to choose and passes the plan ID to `hotel_book`. For a confirmation number, hotel phone number, guest name or payment deadline it uses `hotel_order_detail`. The plugin never pays on the user's behalf.
 
-## 构建
+## Build
 
 ```bash
 ./scripts/gradlew-locked :hotel:test :hotel:verifyPlugin

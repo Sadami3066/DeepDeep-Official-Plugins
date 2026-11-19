@@ -54,7 +54,7 @@ function readCredentials() {
     if (!cred.netid || !cred.password) throw new Error('缺 netid 或 password');
     return cred;
   } catch (err) {
-    throw new Error(`读不到凭据 ${file}：${err.message}\n账号密码由用户在 DeepDeep 的「中山大学教务」插件页填写。`);
+    throw new Error(`读不到凭据 ${file}：${err.message}\n账号密码由用户在 PI 的「中山大学教务」插件页填写。`);
   }
 }
 

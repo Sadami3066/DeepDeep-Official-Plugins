@@ -1,12 +1,12 @@
-# DeepDeep 官方插件
+# Super PI Agent 官方插件
 
 [English](README.en.md) | 简体中文
 
-DeepDeep 官方维护的外部插件源码仓库：把飞书、企业微信、中山大学校园服务、微信记录导出、小米云服务、标准邮箱和校园集市接入 DeepDeep，统一打包成带 Ed25519 签名的 `.ddp` 插件包。
+Super PI Agent 官方维护的外部插件源码仓库：把飞书、企业微信、中山大学校园服务、微信记录导出、小米云服务、标准邮箱和校园集市接入 PI，统一打包成带 Ed25519 签名的 `.ddp` 插件包。
 
 ## 概览
 
-DeepDeep 是一个运行在 Android 上的个人智能体（[应用仓库](https://github.com/Sadami3066/DeepDeep)）。插件用 Kotlin 实现宿主契约 `plugin-api`，在 App 进程内加载，通过工具、技能、提示词和自绘页面扩展助手能力；插件只从 `.ddp` 安装，每个插件是一个独立的 Android application 模块。
+Super PI Agent 是一个运行在 Android 上的个人智能体（[应用仓库](https://github.com/Sadami3066/DeepDeep)）。插件用 Kotlin 实现宿主契约 `plugin-api`，在 App 进程内加载，通过工具、技能、提示词和自绘页面扩展助手能力；插件只从 `.ddp` 安装，每个插件是一个独立的 Android application 模块。
 
 本仓库包含十二个官方插件，发布者为 `milous`：
 
@@ -27,7 +27,7 @@ DeepDeep 是一个运行在 Android 上的个人智能体（[应用仓库](https
 
 `cli-common/` 是仓库内部共享模块（CLI 更新/安装核心与文本、JSON 工具），不是插件、不进插件清单、不随市场发布。
 
-版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。十二个插件的清单均为 `apiLevel` 6，使用 `plugin-api` 1.4.0 与 `design` 0.11.0 构建，并与 DeepDeep 1.1.0+ 兼容（图片服务要求宿主 1.4.0+），具体最低宿主版本以各模块清单为准。运行时依赖：飞书使用 `lark-cli` 1.0.100，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.6.0；微信导出插件自带 `wechat` CLI，需要 Root 和微信本地数据；高德地图插件通过高德 MCP 提供地点与路线，需要高德 Key；火车票插件直接查询 12306；酒店插件通过官方 `rgh` CLI 与 OAuth 登录（需要 Node.js/npm）；打车插件直接访问滴滴 MCP HTTP API（需要滴滴 Key，插件页配置）；小米云服务没有 CLI，通过插件页内 WebView 登录；邮箱插件不依赖 CLI，用 JVM 网络栈直连 IMAP/SMTP（QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义服务器）；校园集市插件内置离线 Token 捕捉器和 Python CLI，不需要外部 CLI。
+版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。十二个插件的清单均为 `apiLevel` 6，使用 `plugin-api` 1.4.0 与 `design` 0.11.0 构建，多数插件要求 PI 1.4.3+，具体最低宿主版本以各模块清单为准。运行时依赖：飞书使用 `lark-cli` 1.0.100，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.6.0；微信导出插件自带 `wechat` CLI，需要 Root 和微信本地数据；高德地图插件通过高德 MCP 提供地点与路线，需要高德 Key；火车票插件直接查询 12306；酒店插件通过官方 `rgh` CLI 与 OAuth 登录（需要 Node.js/npm）；打车插件直接访问滴滴 MCP HTTP API（需要滴滴 Key，插件页配置）；小米云服务没有 CLI，通过插件页内 WebView 登录；邮箱插件不依赖 CLI，用 JVM 网络栈直连 IMAP/SMTP（QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义服务器）；校园集市插件内置离线 Token 捕捉器和 Python CLI，不需要外部 CLI。
 
 开发示例：[`mcpui-demo/`](mcpui-demo/README.md) 演示把 MCP 工具结果渲染成插件卡片，不上市场，需要 `plugin-api 1.3.0` / 宿主 1.1.0+。
 
@@ -109,12 +109,12 @@ chmod 600 keys/plugin-signing.pem
 
 ### 从插件市场安装
 
-在 DeepDeep 的「插件 → 市场」中搜索并安装。市场条目版本与本仓库一致，制品发布在 [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) 的 GitHub Releases 中（Release 名形如 `plugins-YYYYMMDD`，资产名形如 `feishu-2.1.0.ddp`），条目记录的 `publisherKeyId` 为官方 `keyId`。
+在 PI 的「插件 → 市场」中搜索并安装。市场条目版本与本仓库一致，制品发布在 [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) 的 GitHub Releases 中（Release 名形如 `plugins-YYYYMMDD`，资产名形如 `feishu-2.1.0.ddp`），条目记录的 `publisherKeyId` 为官方 `keyId`。
 
 ### 手动导入 .ddp
 
 1. 从市场 Release 下载 `.ddp`，或按上文自行构建。
-2. 在 DeepDeep 的插件页点击「导入插件」，选择该文件。
+2. 在 PI 的插件页点击「导入插件」，选择该文件。
 3. 确认页会展示发布者、`keyId`、整包 sha256、体积与插件声明的能力（`capabilities`）；确认后写入信任库并安装启用。
 4. 更新时导入同 `id` 的新版本 `.ddp`：签名必须由同一密钥签出；没有忙碌会话时立即激活，否则保持待重启状态，等会话空闲或下次启动后激活。
 
@@ -131,13 +131,13 @@ chmod 600 keys/plugin-signing.pem
 
 ## 风险
 
-- **与 App 同进程、同权限**：插件在 DeepDeep 进程内加载，拥有与 App 相同的 Android 权限和数据访问范围。只安装你信任的发布者签名的插件。
+- **与 App 同进程、同权限**：插件在 PI 进程内加载，拥有与 App 相同的 Android 权限和数据访问范围。只安装你信任的发布者签名的插件。
 - **能力范围**：插件在 `plugin.json` 的 `capabilities` 中声明所需能力（本仓库涉及 `files`、`linux`、`network`、`secrets`、`ui`），首次安装的确认页会列出。飞书、企业微信、中山大学插件会在 App 的 Linux 环境里安装并运行 CLI，需要网络与账号凭据；小米云服务插件只申请 `secrets`。
 - **账号凭据**：飞书登录态在 Linux 环境的 `/root/.lark-cli` 与 `/root/.local/share/lark-cli`，企业微信凭据在 `/root/.config/wecom`，中山大学的凭据与登录态（credentials、教务/LMS/场馆/网费会话）在 `/root/.config/sysu`；小米云 cookie 存放在 App 的加密 secrets。卸载插件时宿主会调用插件的清理逻辑（如中山大学插件会删除 `/root/.config/sysu` 和安装目录，飞书、企业微信插件会删除 CLI 与登录目录），但建议在不再使用时退出登录并修改相关密码。
 - **签名密钥**：私钥丢失后无法再以官方发布者身份更新；私钥泄露则可能被用来伪造更新。官方公钥对应固定的 `keyId`，换钥等于换发布者。
 - **第三方服务**：这些插件是个人维护的第三方集成，与飞书、腾讯、小米、中山大学无隶属关系。自动化访问第三方服务可能受其服务条款限制，存在账号受限或封禁的风险；第三方接口变更也可能让功能失效。
 - **来源可信**：只从本仓库或官方市场获取 `.ddp`，不要安装来源不明的插件包。
-- **发布前阶段**：DeepDeep 与插件契约仍在迭代，接口或行为可能变化。
+- **发布前阶段**：Super PI Agent 与插件契约仍在迭代，接口或行为可能变化。
 
 ## 权益与许可
 
@@ -148,4 +148,4 @@ chmod 600 keys/plugin-signing.pem
 - 本项目为个人维护的第三方集成，与飞书、腾讯、小米、中山大学及其关联公司无隶属或背书关系。
 - 问题、建议与使用反馈请提交到 [GitHub Issues](https://github.com/Sadami3066/DeepDeep-Official-Plugins/issues)。涉及签名私钥、凭据或安全漏洞的内容请不要公开，先通过 GitHub 私下联系维护者。
 - 项目按现状提供，尽力维护，不承诺服务可用性、响应时间或第三方接口的持续可用。
-- 相关仓库：[DeepDeep 应用](https://github.com/Sadami3066/DeepDeep) · [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) · [DeepDeep-Plugins](https://github.com/Sadami3066/DeepDeep-Plugins)
+- 相关仓库：[Super PI Agent 应用](https://github.com/Sadami3066/DeepDeep) · [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) · [DeepDeep-Plugins](https://github.com/Sadami3066/DeepDeep-Plugins)

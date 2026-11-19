@@ -25,9 +25,9 @@
     "en": "Mail"
   },
   "summary": {
-    "default": "接入 IMAP/SMTP 邮箱，让 DeepDeep 读信、找邮件、起草与发送",
-    "zh": "接入 IMAP/SMTP 邮箱，让 DeepDeep 读信、找邮件、起草与发送",
-    "en": "Connect IMAP/SMTP mailboxes so DeepDeep can read, search, draft and send"
+    "default": "接入 IMAP/SMTP 邮箱，让 PI 读信、找邮件、起草与发送",
+    "zh": "接入 IMAP/SMTP 邮箱，让 PI 读信、找邮件、起草与发送",
+    "en": "Connect IMAP/SMTP mailboxes so PI can read, search, draft and send"
   },
   "description": {
     "default": "用授权码或应用专用密码接入 QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义 IMAP/SMTP 邮箱。插件提供邮件列表、会话阅读、写信与账户管理，并让 Agent 搜索、阅读、归档邮件、起草回复；你明确要求时可以让 Agent 直接发送。",
