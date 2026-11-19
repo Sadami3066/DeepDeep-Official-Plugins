@@ -93,7 +93,7 @@ chmod 600 keys/plugin-signing.pem
 - `signPlugin` 对规范化后的条目摘要做 Ed25519 签名，生成 `<module>/build/plugin/<module>.ddp`，签名写在 `META-INF/plugin-signature.json`；任务输出会打印 `publisher keyId` 与 `bundle sha256`，市场条目的 `artifact.sha256` 使用该值。
 - `verifyPlugin` 用签名内嵌公钥复算 `keyId` 并对包体验签。
 
-`scripts/gradlew-locked` 支持用环境变量 `DEEPDEEP_GRADLE_WORKERS`（默认 1）与 `DEEPDEEP_GRADLE_JVMARGS` 调整构建参数。
+`scripts/gradlew-locked` 支持用环境变量 `SUPERPI_GRADLE_WORKERS`（默认 1）与 `SUPERPI_GRADLE_JVMARGS` 调整构建参数。
 
 ### 常见失败
 

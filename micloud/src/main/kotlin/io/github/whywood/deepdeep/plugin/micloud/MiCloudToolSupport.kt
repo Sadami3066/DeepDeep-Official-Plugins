@@ -24,11 +24,11 @@ internal const val DEFAULT_LIST_LIMIT = 20
 
 internal const val MAX_LIST_LIMIT = 200
 
-internal const val DEEPDEEP_RAW_KEY = Cards.RAW_KEY
+internal const val SUPERPI_RAW_KEY = Cards.RAW_KEY
 
-internal const val DEEPDEEP_GUIDANCE_KEY = Cards.GUIDANCE_KEY
+internal const val SUPERPI_GUIDANCE_KEY = Cards.GUIDANCE_KEY
 
-internal const val DEEPDEEP_CARD_KEY = Cards.KEY
+internal const val SUPERPI_CARD_KEY = Cards.KEY
 
 internal data class MiCloudResponse(
     val body: String,
@@ -104,10 +104,10 @@ internal fun toolResultDetails(
     guidance: String = "",
     card: MiCloudCard? = null,
 ): JsonObject = buildJsonObject {
-    if (raw.isNotBlank()) put(DEEPDEEP_RAW_KEY, raw)
-    if (guidance.isNotBlank()) put(DEEPDEEP_GUIDANCE_KEY, guidance)
+    if (raw.isNotBlank()) put(SUPERPI_RAW_KEY, raw)
+    if (guidance.isNotBlank()) put(SUPERPI_GUIDANCE_KEY, guidance)
     card?.let { value ->
-        putJsonObject(DEEPDEEP_CARD_KEY) {
+        putJsonObject(SUPERPI_CARD_KEY) {
             put("title", value.title)
             put("payload", value.payload)
         }
@@ -115,7 +115,7 @@ internal fun toolResultDetails(
 }
 
 internal fun cardPayload(details: JsonObject?): JsonObject? {
-    val descriptor = details?.get(DEEPDEEP_CARD_KEY) as? JsonObject
+    val descriptor = details?.get(SUPERPI_CARD_KEY) as? JsonObject
     val payload = descriptor?.get("payload") as? JsonObject
     return payload ?: details
 }

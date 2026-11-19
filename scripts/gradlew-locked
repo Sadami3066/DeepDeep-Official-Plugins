@@ -10,6 +10,6 @@ if ! flock -n 9; then
 fi
 
 exec ./gradlew \
-  --max-workers="${DEEPDEEP_GRADLE_WORKERS:-1}" \
-  -Dorg.gradle.jvmargs="${DEEPDEEP_GRADLE_JVMARGS:--Xmx1536m -XX:MaxMetaspaceSize=512m}" \
+  --max-workers="${SUPERPI_GRADLE_WORKERS:-1}" \
+  -Dorg.gradle.jvmargs="${SUPERPI_GRADLE_JVMARGS:--Xmx1536m -XX:MaxMetaspaceSize=512m}" \
   "$@"

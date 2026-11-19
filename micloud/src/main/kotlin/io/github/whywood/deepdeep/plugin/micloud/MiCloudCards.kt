@@ -292,7 +292,7 @@ internal fun MiCloudGalleryToolCard(host: PluginHost, state: ToolResultState) {
 }
 
 private fun shouldRenderCard(result: PluginToolResult?): Boolean =
-    result == null || result.isError || result.details?.get(DEEPDEEP_CARD_KEY) is JsonObject
+    result == null || result.isError || result.details?.get(SUPERPI_CARD_KEY) is JsonObject
 
 @Composable
 private fun MiCloudCardReveal(content: @Composable () -> Unit) {

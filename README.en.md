@@ -91,7 +91,7 @@ The task chain is `assemblePlugin → signPlugin → verifyPlugin`:
 - `signPlugin` signs the canonical entry digest with Ed25519 and produces `<module>/build/plugin/<module>.ddp`; the signature is stored in `META-INF/plugin-signature.json`. The task prints the `publisher keyId` and `bundle sha256`; market entries use that sha256 as `artifact.sha256`.
 - `verifyPlugin` recomputes the `keyId` from the embedded public key and verifies the bundle.
 
-`scripts/gradlew-locked` accepts `DEEPDEEP_GRADLE_WORKERS` (default 1) and `DEEPDEEP_GRADLE_JVMARGS` to tune the build.
+`scripts/gradlew-locked` accepts `SUPERPI_GRADLE_WORKERS` (default 1) and `SUPERPI_GRADLE_JVMARGS` to tune the build.
 
 ### Common failures
 

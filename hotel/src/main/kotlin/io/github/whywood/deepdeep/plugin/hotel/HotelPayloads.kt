@@ -6,9 +6,9 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-internal const val DEEPDEEP_RAW_KEY = Cards.RAW_KEY
-internal const val DEEPDEEP_GUIDANCE_KEY = Cards.GUIDANCE_KEY
-internal const val DEEPDEEP_CARD_KEY = Cards.KEY
+internal const val SUPERPI_RAW_KEY = Cards.RAW_KEY
+internal const val SUPERPI_GUIDANCE_KEY = Cards.GUIDANCE_KEY
+internal const val SUPERPI_CARD_KEY = Cards.KEY
 internal const val HOTEL_MESSAGE_KEY = "message"
 
 private val ANSI_PATTERN = Regex("\u001B\\[[;\\d]*[ -/]*[@-~]")
@@ -32,9 +32,9 @@ internal fun hotelResultDetails(
     title: String,
 ): JsonObject = JsonObject(
     body + mapOf(
-        DEEPDEEP_RAW_KEY to JsonPrimitive(cleanHotelRaw(raw)),
-        DEEPDEEP_GUIDANCE_KEY to JsonPrimitive(guidance),
-        DEEPDEEP_CARD_KEY to buildJsonObject { put("title", title) },
+        SUPERPI_RAW_KEY to JsonPrimitive(cleanHotelRaw(raw)),
+        SUPERPI_GUIDANCE_KEY to JsonPrimitive(guidance),
+        SUPERPI_CARD_KEY to buildJsonObject { put("title", title) },
     ),
 )
 
@@ -42,8 +42,8 @@ internal fun hotelErrorDetails(message: String, raw: String?): JsonObject = buil
     put(HOTEL_MESSAGE_KEY, message)
     val text = cleanHotelRaw(raw)
     if (text.isNotEmpty()) {
-        put(DEEPDEEP_RAW_KEY, text)
-        put(DEEPDEEP_GUIDANCE_KEY, message)
+        put(SUPERPI_RAW_KEY, text)
+        put(SUPERPI_GUIDANCE_KEY, message)
     }
 }
 

@@ -350,15 +350,15 @@ class MiCloudObservationTest {
         }
         val details = toolResultDetails(raw = "{}", card = MiCloudCard("小米云空间（1 项）", payload))
         assertEquals("quota", cardPayload(details)?.stringOrNull("mode"))
-        assertEquals(setOf(DEEPDEEP_RAW_KEY, DEEPDEEP_CARD_KEY), details.keys)
-        val descriptor = details[DEEPDEEP_CARD_KEY] as JsonObject
+        assertEquals(setOf(SUPERPI_RAW_KEY, SUPERPI_CARD_KEY), details.keys)
+        val descriptor = details[SUPERPI_CARD_KEY] as JsonObject
         assertEquals("小米云空间（1 项）", descriptor.stringOrNull("title"))
         assertNull(descriptor["customType"])
         assertTrue(descriptor["payload"] is JsonObject)
         val legacy = buildJsonObject {
             put("mode", ACCOUNT_MODE_PROFILE)
             put("nickname", "小明")
-            put(DEEPDEEP_CARD_KEY, buildJsonObject { put("title", "小米账号") })
+            put(SUPERPI_CARD_KEY, buildJsonObject { put("title", "小米账号") })
         }
         assertEquals("小明", cardPayload(legacy)?.stringOrNull("nickname"))
     }
@@ -402,7 +402,7 @@ class MiCloudObservationTest {
     private fun PluginToolResult.payload(): JsonObject? = cardPayload(details)
 
     private fun PluginToolResult.cardTitle(): String? =
-        ((details?.get(DEEPDEEP_CARD_KEY) as? JsonObject)?.get("title") as? JsonPrimitive)?.contentOrNull
+        ((details?.get(SUPERPI_CARD_KEY) as? JsonObject)?.get("title") as? JsonPrimitive)?.contentOrNull
 
     @Test
     fun todoRealEntityShapeYieldsContentDoneReminderAndTimes() {

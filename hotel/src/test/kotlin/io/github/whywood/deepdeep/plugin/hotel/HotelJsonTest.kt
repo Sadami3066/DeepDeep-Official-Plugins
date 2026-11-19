@@ -833,11 +833,11 @@ class HotelJsonTest {
 
         val details = hotelResultDetails(body, raw, "使用说明", "酒店订单（1 笔）")
 
-        assertEquals("{\"success\":true}", details[DEEPDEEP_RAW_KEY]?.jsonPrimitive?.contentOrNull)
-        assertEquals("使用说明", details[DEEPDEEP_GUIDANCE_KEY]?.jsonPrimitive?.contentOrNull)
+        assertEquals("{\"success\":true}", details[SUPERPI_RAW_KEY]?.jsonPrimitive?.contentOrNull)
+        assertEquals("使用说明", details[SUPERPI_GUIDANCE_KEY]?.jsonPrimitive?.contentOrNull)
         assertEquals(
             "酒店订单（1 笔）",
-            (details[DEEPDEEP_CARD_KEY] as kotlinx.serialization.json.JsonObject)["title"]?.jsonPrimitive?.contentOrNull,
+            (details[SUPERPI_CARD_KEY] as kotlinx.serialization.json.JsonObject)["title"]?.jsonPrimitive?.contentOrNull,
         )
         assertEquals("查询成功", details["message"]?.jsonPrimitive?.contentOrNull)
     }
@@ -850,9 +850,9 @@ class HotelJsonTest {
         )
 
         assertEquals("需要先安装酒店服务", details["message"]?.jsonPrimitive?.contentOrNull)
-        assertEquals("需要先安装酒店服务", details[DEEPDEEP_GUIDANCE_KEY]?.jsonPrimitive?.contentOrNull)
-        assertEquals("boom", details[DEEPDEEP_RAW_KEY]?.jsonPrimitive?.contentOrNull)
-        assertTrue(!details.containsKey(DEEPDEEP_CARD_KEY))
+        assertEquals("需要先安装酒店服务", details[SUPERPI_GUIDANCE_KEY]?.jsonPrimitive?.contentOrNull)
+        assertEquals("boom", details[SUPERPI_RAW_KEY]?.jsonPrimitive?.contentOrNull)
+        assertTrue(!details.containsKey(SUPERPI_CARD_KEY))
     }
 
     @Test
