@@ -7,6 +7,7 @@ import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
 import io.github.whywood.deepdeep.plugin.api.HostAccessLevel
 import io.github.whywood.deepdeep.plugin.api.PluginAvailability
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.PrivilegeLevel
 import io.github.whywood.deepdeep.plugin.api.PluginPage
 import io.github.whywood.deepdeep.plugin.api.PluginSkill
 import io.github.whywood.deepdeep.plugin.api.pluginSkill
@@ -27,6 +28,30 @@ internal data class ZanaoStatus(
     val tokenLength: Int,
     val helperInstalled: Boolean,
 )
+
+internal suspend fun syncCliToken(host: PluginHost) {
+    val token = runCatching { host.secrets().get(SECRET_TOKEN) }.getOrNull()
+        ?.takeIf { it.isNotBlank() } ?: return
+    val device = runCatching { host.secrets().get(SECRET_DEVICE) }.getOrNull().orEmpty()
+    val alias = runCatching { host.settings().get(SETTING_ALIAS) }.getOrNull()
+        ?.takeIf { it.isNotBlank() } ?: DEFAULT_ALIAS
+    val payload = JSONObject().put("token", token).put("device", device).put("alias", alias).toString()
+    val quoted = "'" + payload.replace("'", "'\\''") + "'"
+    val linux = runCatching { host.linux() }.getOrNull() ?: return
+    if (!linux.available) return
+    runCatching { linux.exec("umask 077; mkdir -p /root && printf '%s' $quoted > /root/.zanao.json") }
+    runCatching {
+        host.privilege().exec(
+            "rm -f /sdcard/Download/Zanao/zanao-token.json /sdcard/Download/zanao-token.json",
+            PrivilegeLevel.AUTO,
+        )
+    }
+}
+
+internal suspend fun clearCliToken(host: PluginHost) {
+    val linux = runCatching { host.linux() }.getOrNull() ?: return
+    if (linux.available) runCatching { linux.exec("rm -f /root/.zanao.json") }
+}
 
 class ZanaoPlugin : DeepDeepPlugin {
     @Volatile
@@ -151,6 +176,7 @@ class ZanaoPlugin : DeepDeepPlugin {
         host.secrets().put(SECRET_TOKEN, token)
         host.secrets().put(SECRET_DEVICE, device)
         host.settings().put(SETTING_ALIAS, alias)
+        syncCliToken(host)
     }
 
     internal suspend fun saveAlias(host: PluginHost, alias: String) {
@@ -160,6 +186,7 @@ class ZanaoPlugin : DeepDeepPlugin {
     internal suspend fun clearAccount(host: PluginHost) {
         host.secrets().remove(SECRET_TOKEN)
         host.secrets().remove(SECRET_DEVICE)
+        clearCliToken(host)
     }
 
     internal suspend fun feed(host: PluginHost, limit: Int = 20): List<ZanaoThread> =

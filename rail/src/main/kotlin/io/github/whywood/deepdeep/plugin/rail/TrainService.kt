@@ -1,5 +1,6 @@
 package io.github.whywood.deepdeep.plugin.rail
 
+import io.github.whywood.deepdeep.plugin.api.Cards
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -22,11 +23,11 @@ import kotlinx.serialization.json.jsonObject
 
 internal const val RAIL_DATE_WINDOW_DAYS = 15
 
-internal const val RAIL_RAW_DETAILS_KEY = "deepdeep.raw"
+internal const val RAIL_RAW_DETAILS_KEY = Cards.RAW_KEY
 
-internal const val RAIL_GUIDANCE_DETAILS_KEY = "deepdeep.guidance"
+internal const val RAIL_GUIDANCE_DETAILS_KEY = Cards.GUIDANCE_KEY
 
-internal const val RAIL_CARD_DETAILS_KEY = "deepdeep.card"
+internal const val RAIL_CARD_DETAILS_KEY = Cards.KEY
 
 internal const val RAIL_MESSAGE_DETAILS_KEY = "message"
 

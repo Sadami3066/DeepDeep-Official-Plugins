@@ -7,8 +7,8 @@
 
 | 文件 | 职责 |
 |---|---|
-| `build.gradle.kts` | 版本 1.5.3 / versionCode 11；compileOnly `plugin-api 1.3.1` 与 `design 0.11.0`；打包/签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
-| `src/main/assets/plugin.json` | 清单：id/version/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.4.0/capabilities（logs/network/secrets/settings/ui/images）/entryClass/provides（8 个工具、skill `deepdeep-amap`、page `main`） |
+| `build.gradle.kts` | 版本 1.5.3 / versionCode 11；compileOnly `plugin-api 1.4.0` 与 `design 0.11.0`；打包/签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
+| `src/main/assets/plugin.json` | 清单：id/version/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.4.3/capabilities（logs/network/secrets/settings/ui/images）/entryClass/provides（8 个工具、skill `deepdeep-amap`、page `main`） |
 | `src/main/kotlin/.../AmapPlugin.kt` | `DeepDeepPlugin` 入口：availability、Key 迁移、贡献工具/技能/页面、8 个工具结果渲染器注册；技能 markdown 说明各工具的真实边界 |
 | `src/main/kotlin/.../AmapPage.kt` | 插件页：Key 配置/验证/更换、连接状态与错误重试；Key 编辑区提供「去高德开放平台获取 Key」跳转 `https://lbs.amap.com/api/webservice/create-project-and-key` |
 | `src/main/kotlin/.../AmapClient.kt` | 高德 MCP 客户端：initialize/tools list/call、SSE 与 JSON 信封、会话过期重连、拆信封后的 raw、HTTP/JSON-RPC/上游错误分类、Key 脱敏；插件内共用一个实例并串行调用 |

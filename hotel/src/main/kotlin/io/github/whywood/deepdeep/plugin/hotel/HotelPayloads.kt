@@ -1,13 +1,14 @@
 package io.github.whywood.deepdeep.plugin.hotel
 
+import io.github.whywood.deepdeep.plugin.api.Cards
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-internal const val DEEPDEEP_RAW_KEY = "deepdeep.raw"
-internal const val DEEPDEEP_GUIDANCE_KEY = "deepdeep.guidance"
-internal const val DEEPDEEP_CARD_KEY = "deepdeep.card"
+internal const val DEEPDEEP_RAW_KEY = Cards.RAW_KEY
+internal const val DEEPDEEP_GUIDANCE_KEY = Cards.GUIDANCE_KEY
+internal const val DEEPDEEP_CARD_KEY = Cards.KEY
 internal const val HOTEL_MESSAGE_KEY = "message"
 
 private val ANSI_PATTERN = Regex("\u001B\\[[;\\d]*[ -/]*[@-~]")

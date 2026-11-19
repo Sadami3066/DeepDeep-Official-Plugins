@@ -14,7 +14,7 @@
 | `src/main/kotlin/.../SysuStatus.kt` | `host.settings()`：安装状态、登录账号、教务/在线教学/场馆/网费四站连接状态（旧 `status.json` 首次读入后迁移删除） |
 | `src/main/kotlin/.../SysuPlugin.kt` | `DeepDeepPlugin` 入口：availability / skills / promptSections / contributions（`SysuToolBridge` hooks）/ ui（聊天卡片绑定）；`loginSite` 执行单站 login 并返回成功/需要验证码/失败；`onUpgrade` 调用 `ensureInstalled` 重装内置 CLI，`onEnable` 只读状态 |
 | `src/main/kotlin/.../SysuPage.kt` | 插件自绘页：标题与用途、状态摘要卡（账号 + 四站状态 + 运行环境 + 服务版本）、登录/验证码一条流程、单站验证码提示、连接未登录服务、就地错误重试与退出登录 |
-| `src/main/kotlin/.../SysuContent.kt` | zh/en 文案与技能 markdown（`deepdeep-sysu`）；技能包含四站 login、`present` 交付与 gym slots 单类型/最多 2 天说明 |
+| `src/main/kotlin/.../SysuContent.kt` | zh/en 文案与技能 markdown（`deepdeep-sysu`）；技能包含四站 login、结果卡片与 gym slots 单类型/最多 2 天说明 |
 | `src/main/kotlin/.../SysuCommand.kt` | bash 命令解析（词法用 `CliCommandLine`）：只认单条 `sysu` 命令（拒绝管道/重定向/`&&`/`cd` 前缀），识别支持的八类 JSON 查询与命令所属站点（旧命令带 `--json` 仍可识别） |
 | `src/main/kotlin/.../SysuBridge.kt` | 共享 `CliToolBridge` 配置（`CliJsonEnvelope.LENIENT` 裸对象/数组 payload、`JsonElement` observer、`redactRaw`）；`errorMapper` 保留错误原文并追加按站点的 login 建议；KEEP 结果补 `deepdeep.raw`、脱敏与 netpay 旧文本提示 |
 | `src/main/kotlin/.../SysuJson.kt` | 插件输出 DTO（课表/成绩/考试/学分/LMS/场馆/网费）：从共享层提取的 `JsonElement` 解码，含考试周次/类型、场馆费用 Identity/Timeslot、网费全部服务字段与到期原文 |
@@ -43,7 +43,7 @@
 - 安装：检查 Node 版本 → 从 `host.assetsDir/sysu/**` 复制到 proot（`/root/projects/sysu` 与 `/usr/local/bin/sysu`）；插件升级走 `onUpgrade` 重装内置 CLI，`onEnable` 不重装。
 - 配置在 `/root/.config/sysu/`：`credentials`、`jwxt/session.json`、`jwxt/mfa.json`、`lms.json`、`gym.json`、`netpay.json`（`jwxt/` 是 CLI 的教务站点目录，与插件名无关）。状态解析只读这些文件，不发网络请求。
 - 页面动作结束调用 `host.requestContributionsRefresh()`；页面用 `:design` 的 Dd 组件，内容直接挂在 `PluginPage.content`。设备 ABI 用 `host.device().info.abis` 判断；安装完成与登录成功发稳定 id 通知，退出登录前用 `host.ui().confirm` 确认，结果用 `host.ui().snackbar` 提示。
-- 查询桥不新增 PluginTool：`bash` 里运行 `sysu jwxt schedule|scores|...`、`sysu lms`、`sysu gym ...`、`sysu netpay` 时，共享桥关联 callId、提取裸对象/数组 payload，插件提供 observation 与 `CliCardModel`；共享层把卡片放进结果 details 的 `deepdeep.card`（customType + payload + title），把完整上游输出写进 `deepdeep.raw`（`redactRaw` 先脱敏），宿主在所有 hook 之后统一追加 raw 与卡片 id，由模型决定是否调用 `present` 展示。插件自己不再拼「卡片 id」。
+- 查询桥不新增 PluginTool：`bash` 里运行 `sysu jwxt schedule|scores|...`、`sysu lms`、`sysu gym ...`、`sysu netpay` 时，共享桥关联 callId、提取裸对象/数组 payload，插件提供 observation 与 `CliCardModel`；共享层把卡片放进结果 details 的 `deepdeep.card`（customType + payload + title），完整上游输出与 guidance 作为 `Cards.deliver` 的输入生成模型文本（含 `present` 调用指令），宿主不再追加卡片 id；未识别的子命令保持 KEEP，不生成卡片。
 - raw 与脱敏：`redactRaw` 调用 `SysuFailures.redactSensitive`，含 TGC/Cookie/JSESSIONID/session.json/mfa.json/ticket/password 的文本行被去掉并留「已隐去」说明，JSON 输出则保留结构、只替换敏感值；其余 CLI 输出（包括不支持的 sysu 子命令和登录等写操作）在 KEEP 结果上补 `deepdeep.raw`。
 - 错误：`SysuFailures.actionable` 不再整段替换，返回「原错误（脱敏后）+ 建议动作」。单站会话失效时建议先执行对应站点的 `login`（教务 `sysu login`、LMS `sysu lms login`、场馆 `sysu gym login`、网费 `sysu netpay login`），需要企业微信验证码或 login 失败才引导插件页；原始错误保留，票据值以「已隐去」代替。
 - supported kinds 的模型文本只写 guidance（下一步、空态说明、登录提示），不重复数据行；数据全量进卡片的 payload 与 `deepdeep.raw`，不截断。上游没有分页，不造分页。

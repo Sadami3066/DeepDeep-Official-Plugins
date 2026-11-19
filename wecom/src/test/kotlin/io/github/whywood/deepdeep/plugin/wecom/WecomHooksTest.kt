@@ -110,7 +110,8 @@ class WecomHooksTest {
         val hooks = bridge.hooks(host)
         hooks.beforeToolCall(request("call-1", "wecom-cli chat groups list | head -20"))
         val decision = hooks.afterToolExecution(result("call-1", wecomFixture("chat-groups.json")))
-        assertEquals(ToolResultAction.KEEP, decision.action)
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        assertTrue(decision.result?.text.orEmpty().contains("如有卡片展示需要，请重新执行完整命令：wecom-cli chat groups list"))
         assertNull(decision.result?.details?.get("deepdeep.card"))
     }
 
@@ -202,7 +203,7 @@ class WecomHooksTest {
         val output = "[wecom] json repair: ok\n${wecomFixture("todo-list.json")}\n\n[exit: 0]"
         val decision = hooks.afterToolExecution(result("call-1", output))
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        assertTrue(guidanceOf(decision).contains("退出码：0"))
+        assertFalse(guidanceOf(decision).contains("退出码：0"))
         assertFalse(guidanceOf(decision).contains("整理接口文档"))
         assertNotNull(cardOf(decision))
     }
@@ -215,8 +216,8 @@ class WecomHooksTest {
         val decision = hooks.afterToolExecution(
             result("call-1", wecomFixture("chat-groups.json") + "\n\n[exit: 0]"),
         )
-        assertEquals("", decision.result!!.text)
-        assertTrue(guidanceOf(decision).contains("退出码：0"))
+        assertTrue(decision.result!!.text.orEmpty().contains("present("))
+        assertFalse(guidanceOf(decision).contains("退出码：0"))
         assertTrue(rawOf(decision)!!.contains("\"chats\""))
         assertFalse(rawOf(decision)!!.contains("[exit: 0]"))
     }
@@ -235,7 +236,7 @@ class WecomHooksTest {
         assertFalse(text.contains("未能读取文件内容"))
         assertTrue(cardOf(decision)!!.summary!!.contains("第二段正文"))
         assertTrue(rawOf(decision)!!.contains("file_path"))
-        assertFalse(rawOf(decision)!!.contains("第二段正文"))
+        assertTrue(rawOf(decision)!!.contains("第二段正文"))
     }
 
     @Test
@@ -387,11 +388,30 @@ class WecomHooksTest {
             result = textResult(text, isError = isError),
         )
 
-    private fun guidanceOf(decision: ToolResultDecision): String =
-        (decision.result?.details?.get("deepdeep.guidance") as? JsonPrimitive)?.contentOrNull.orEmpty()
+    private fun resultText(decision: ToolResultDecision): String = decision.result?.text.orEmpty()
 
-    private fun rawOf(decision: ToolResultDecision): String? =
-        (decision.result?.details?.get("deepdeep.raw") as? JsonPrimitive)?.content
+    private fun guidanceOf(decision: ToolResultDecision): String {
+        val text = resultText(decision)
+        val marker = "使用说明：\n"
+        val start = text.indexOf(marker)
+        if (start < 0) return text.substringBefore("\n\n完整返回（上游原样）：")
+        val rest = text.substring(start + marker.length)
+        val end = rest.indexOf("\n\n展示这张卡片")
+        return if (end >= 0) rest.substring(0, end) else rest
+    }
+
+    private fun rawOf(decision: ToolResultDecision): String? {
+        val text = resultText(decision)
+        val marker = "完整返回（上游原样）：\n"
+        val start = text.indexOf(marker)
+        if (start < 0) return null
+        val rest = text.substring(start + marker.length)
+        val guidance = rest.indexOf("\n\n使用说明：")
+        val card = rest.indexOf("\n\n展示这张卡片")
+        val ends = listOf(guidance, card).filter { it >= 0 }
+        val end = ends.minOrNull() ?: -1
+        return if (end >= 0) rest.substring(0, end) else rest
+    }
 
     private fun cardOf(decision: ToolResultDecision): CliCardModel? =
         cardPayload(decision)?.let(::decode)

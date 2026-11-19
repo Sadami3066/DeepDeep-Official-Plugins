@@ -2,7 +2,7 @@
   "id": "io.github.whywood.deepdeep.plugin.amap",
   "version": "1.5.3",
   "apiLevel": 6,
-  "minHostVersion": "1.4.0",
+  "minHostVersion": "1.4.3",
   "capabilities": [
     "logs",
     "network",

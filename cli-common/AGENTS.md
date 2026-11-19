@@ -53,8 +53,8 @@ internal class MyToolBridge {
 - `beforeToolCall` 命中后记录命令；`afterToolExecution` 只有在结果成功、输出非空且 ≤ 256 KiB、payload 可提取、观测可构造时才 `resultReplace`，其余一律 `resultKeep`。
 - 默认走严格信封（`requireSuccessEnvelope = true` 且 `envelope.successField = "ok"`）：要求 JSON 对象带 `ok: true` 并剥 `_notice`。裸对象/顶层数组等无 `ok` 的 CLI 用 `envelope = CliJsonEnvelope.LENIENT`（`successField = null`）或 `requireSuccessEnvelope = false`，由 `payloadFinder`/`CliJsonEnvelope.element` 取第一个平衡 JSON，业务失败由插件 observer 判定。
 - `CliObservationBuilder` 的 `JsonObject` 版本是 SAM 入口；需要处理顶层数组时实现 `JsonElement` 重载（默认重载会把对象转给 `JsonObject` 版本）。
-- 卡片不直接上屏：观测有 `card` 时共享层把 `cardEncoder(card)` 写进结果 details 的 `deepdeep.card`（`customType` + `title` + `payload`）；同时把完整原始输出写进 details 的 `deepdeep.raw`（`redactRaw` 先脱敏）。宿主在所有插件 hook 之后统一把 raw 追加到模型文本、给出 `卡片 id：<callId>（标题）`，再从 details 删除 raw。`CliObservation.customType` 非空时覆盖配置里的槽位类型（WeCom 一类按命令分槽位的插件用它）。观测 `card = null` 时只替换文本、不带卡片。
-- `CliObservation.isError = true` 时用 `textResult(text, isError = true)` 替换且不追加卡片 id 提示；错误卡片仍写 details，供后续展示错误态卡片（失败文案由插件决定）。
+- 卡片交付归插件侧：观测有 `card` 时共享层把 `cardEncoder(card)` 写进结果 details 的 `deepdeep.card`，完整原始输出写进 `deepdeep.raw`（`redactRaw` 先脱敏），guidance 写进 `deepdeep.guidance`；随后调 `Cards.deliver(callId, result)` 由插件 SDK 生成模型文本（完整返回、使用说明与 `present` 调用指令）和展示文本（`deepdeep.display`），宿主不再追加卡片 id。`CliObservation.customType` 非空时覆盖配置里的槽位类型（WeCom 一类按命令分槽位的插件用它）。观测 `card = null` 时只替换文本、不带卡片。
+- `CliObservation.isError = true` 时结果按错误返回：不写卡片描述符、不追加 `present` 指令，只保留错误文本与完整返回（失败文案由插件决定）。
 - 需要改写错误结果（例如未授权错误映射成可操作提示）时用 `errorMapper`：
 
 ```kotlin
@@ -181,6 +181,6 @@ cd DeepDeep-Official-Plugins
 - 模块是内部共享层：不放插件清单、不做 UI、不引入 Compose，渲染由各插件用 `:design` 组件完成。
 - 不新增第三方依赖；`plugin-api`/协程/序列化必须保持 `compileOnly`，否则 `.ddp` 会把宿主库重复打包。
 - 卡片 wire 格式是已发布插件的历史消息格式，改字段要同时考虑旧会话解码，只能加字段不能改名。
-- 卡片通过结果 details 的 `deepdeep.card` 交给宿主，raw 通过 `deepdeep.raw` 交给宿主；插件不再自己拼 `卡片 id`（宿主统一追加），也不要写进卡片 payload。
+- 卡片数据通过结果 details 的 `deepdeep.card` 交给宿主渲染；raw/guidance 只作为 `Cards.deliver` 的输入，不留在最终 details 里；卡片 id 与 `present` 指令由插件 SDK 生成。
 - CLI 只识别单条普通命令，接管道/重定向/多命令一律不接管；不打印参数值、JSON 正文或凭据。
 - 构建：`./scripts/gradlew-locked :cli-common:testDebugUnitTest`；依赖方（飞书）用 `:feishu:testDebugUnitTest :feishu:verifyPlugin` 验证类已进 `.ddp`。

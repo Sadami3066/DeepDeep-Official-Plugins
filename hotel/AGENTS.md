@@ -6,8 +6,8 @@
 
 | 文件 | 职责 |
 |---|---|
-| `build.gradle.kts` | application 模块配置（namespace/applicationId/versionName 1.4.1、versionCode 22、Compose，plugin-api 1.3.1、design 0.11.0）；打包签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
-| `src/main/assets/plugin.json` | 清单：id/version 1.4.1/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.4.0/capabilities（clipboard/files/images/linux/logs/settings/ui）/entryClass/provides（7 个工具、skill `deepdeep-hotel`、7 个工具卡槽位、page `main`） |
+| `build.gradle.kts` | application 模块配置（namespace/applicationId/versionName 1.4.1、versionCode 22、Compose，plugin-api 1.4.0、design 0.11.0）；打包签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
+| `src/main/assets/plugin.json` | 清单：id/version 1.4.1/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.4.3/capabilities（clipboard/files/images/linux/logs/settings/ui）/entryClass/provides（7 个工具、skill `deepdeep-hotel`、7 个工具卡槽位、page `main`） |
 | `HotelModels.kt` | 搜索/房型/订单/订单详情/预订/取消/标签的 `@Serializable` 结构：搜索带筛选与 `sortedBy`、预算标注；房型含价格方案、取消政策、房间信息与图片；订单列表与订单详情全字段；`HotelCancelQuote`/`HotelCancelResult`/`HotelSearchTags`/`HotelGuest` |
 | `HotelJson.kt` | rgh 输出解析：搜索 `hotelInformationList`、房型 `roomRatePlans`、订单 `orderList`（兼容旧形态）、`order-detail` 的模块化字段、锁价 `priceDetailsInfo`、下单 `bookingResult`、取消预检/确认、`hotel-tags`；房型按去掉括号营销后缀的名称归组、组内按总价排序；预算/距离排序与差异日期、金额、距离、标签等纯函数 |
 | `HotelObservations.kt` | 模型侧 guidance：预算/筛选/排序说明、房型折算与需确认说明、订单列表与详情下一步、标签用法、取消预检与取消结果说明；订单/支付状态映射为中文/英文短语（不把内部状态码当用户文案） |

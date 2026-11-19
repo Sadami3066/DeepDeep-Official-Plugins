@@ -1,5 +1,6 @@
 package io.github.whywood.deepdeep.plugin.micloud
 
+import io.github.whywood.deepdeep.plugin.api.Cards
 import io.github.whywood.deepdeep.plugin.api.PluginToolResult
 import io.github.whywood.deepdeep.plugin.api.textResult
 import java.io.File
@@ -23,11 +24,11 @@ internal const val DEFAULT_LIST_LIMIT = 20
 
 internal const val MAX_LIST_LIMIT = 200
 
-internal const val DEEPDEEP_RAW_KEY = "deepdeep.raw"
+internal const val DEEPDEEP_RAW_KEY = Cards.RAW_KEY
 
-internal const val DEEPDEEP_GUIDANCE_KEY = "deepdeep.guidance"
+internal const val DEEPDEEP_GUIDANCE_KEY = Cards.GUIDANCE_KEY
 
-internal const val DEEPDEEP_CARD_KEY = "deepdeep.card"
+internal const val DEEPDEEP_CARD_KEY = Cards.KEY
 
 internal data class MiCloudResponse(
     val body: String,

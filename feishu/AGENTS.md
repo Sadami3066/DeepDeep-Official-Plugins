@@ -6,8 +6,8 @@ DeepDeep 官方飞书插件，当前 2.7.0，打成外部 `.ddp`：无工具，�
 
 | 文件 | 职责 |
 |---|---|
-| `build.gradle.kts` | application 模块配置（namespace/applicationId/versionName 2.7.0、versionCode 20、plugin-api 1.3.1、design 0.11.0、Compose 与 JVM 单测依赖、`:cli-common` 依赖）；打包签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
-| `src/main/assets/plugin.json` | 清单：id/version 2.7.0/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.4.0/capabilities（含 `chat`/`logs`）/entryClass/icon/provides（skills `deepdeep-feishu`、pages `main`、`uiSlots` `chat.message:feishu.card`） |
+| `build.gradle.kts` | application 模块配置（namespace/applicationId/versionName 2.7.0、versionCode 20、plugin-api 1.4.0、design 0.11.0、Compose 与 JVM 单测依赖、`:cli-common` 依赖）；打包签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
+| `src/main/assets/plugin.json` | 清单：id/version 2.7.0/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.4.3/capabilities（含 `chat`/`logs`）/entryClass/icon/provides（skills `deepdeep-feishu`、pages `main`、`uiSlots` `chat.message:feishu.card`） |
 | `src/main/assets/icon.png` | 清单 `icon: asset:icon.png` 引用的飞书图标 |
 | `src/main/kotlin/.../FeishuPlugin.kt` | 入口：availability/onEnable/onDisable/close/skills/promptSections/contributions/ui/uninstall 与提示词正文；注册 bash 桥 hooks 与自定义消息卡槽位 |
 | `.../FeishuCommandBridge.kt` | bash 工具桥：命令解析（会话/消息/消息搜索/日程/日程创建/云文档搜索/文档读取/文档创建/任务读取/相关任务/任务搜索/任务创建/邮件列表/邮件正文/邮件撰写/发消息/登录状态）、观测构造（`summary` 作卡片标题、`text` 只放 guidance、卡片 payload 全量）、写入结果卡与错误映射；消息发送者优先 `sender_i18n_names.zh_cn`，正文 `<p>`/`<card>` 转纯文本并保留换行，系统消息占位符不臆造；云文档标题/摘要优先 `title_highlighted`/`summary_highlighted` 且高亮标签不补空格，token/url/owner/doc_types 从 `result_meta` 取；文档读取链接只复用见过的租户 URL；`mail` 的 15180001/4013 映射为「账号未开通邮箱」；`auth status` 的 scope 清单收敛成一句摘要；未识别命令原样透传。callId 关联、成功 JSON 信封、`_notice` 剥离、输出上限、`deepdeep.raw` 挂载、卡片 details 与 `resultReplace` 全部由 `:cli-common` 的通用桥完成 |

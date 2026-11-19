@@ -3,7 +3,13 @@ package io.github.whywood.deepdeep.plugin.hotel
 import io.github.whywood.deepdeep.plugin.api.LinuxService
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 
-internal class HotelToolException(message: String, val raw: String? = null) : Exception(message)
+internal open class HotelToolException(message: String, val raw: String? = null) : Exception(message)
+
+internal class HotelPriceChangedException(
+    val confirmed: Double,
+    val current: Double,
+    val currency: String?,
+) : HotelToolException("price changed")
 
 internal data class HotelOutput<T>(val details: T, val raw: String)
 
@@ -103,6 +109,8 @@ internal class HotelService(private val host: PluginHost) {
         email: String,
         guests: List<HotelGuest> = emptyList(),
         customerRequest: String? = null,
+        expectedTotal: Double? = null,
+        expectedCurrency: String? = null,
     ): HotelOutput<HotelBookingDetails> {
         ensureReady()
         val priceOutput = exec(
@@ -115,16 +123,24 @@ internal class HotelService(private val host: PluginHost) {
                 adults = adults,
             ),
         )
-        val referenceNo = parseHotelPriceConfirmation(priceOutput)
+        val price = parseHotelPriceConfirmation(priceOutput)
             ?: throw HotelToolException(
                 parseHotelOrderMessage(priceOutput)?.let {
                     host.t("锁价失败：$it", "Price confirmation failed: $it")
                 } ?: host.t("价格确认没有返回预订参考号，请稍后再试。", "Price confirmation didn't return a reference. Try again."),
                 priceOutput,
             )
+        val lockedTotal = price.totalPrice
+        if (expectedTotal != null && lockedTotal != null && kotlin.math.abs(expectedTotal - lockedTotal) > 0.01) {
+            throw HotelPriceChangedException(
+                confirmed = expectedTotal,
+                current = lockedTotal,
+                currency = price.currency ?: expectedCurrency,
+            )
+        }
         val bookOutput = exec(
             HotelCli.bookCommand(
-                referenceNo = referenceNo.referenceNo,
+                referenceNo = price.referenceNo,
                 firstName = firstName,
                 lastName = lastName,
                 email = email,
@@ -139,7 +155,17 @@ internal class HotelService(private val host: PluginHost) {
                 } ?: host.t("订单没有创建成功，请稍后再试。", "The order wasn't created. Try again."),
                 combineRaw(priceOutput, bookOutput),
             )
-        return HotelOutput(parsed, combineRaw(priceOutput, bookOutput))
+        val lockedText = lockedTotal?.let { money(it, price.currency ?: parsed.currency) }
+        val complete = if (lockedText != null) {
+            parsed.copy(
+                totalPrice = lockedText,
+                totalDerived = false,
+                currency = price.currency ?: parsed.currency,
+            )
+        } else {
+            parsed
+        }
+        return HotelOutput(complete, combineRaw(priceOutput, bookOutput))
     }
 
     suspend fun orders(

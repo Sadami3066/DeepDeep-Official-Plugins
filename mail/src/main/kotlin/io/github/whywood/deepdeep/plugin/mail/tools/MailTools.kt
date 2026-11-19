@@ -1,5 +1,6 @@
 package io.github.whywood.deepdeep.plugin.mail.tools
 
+import io.github.whywood.deepdeep.plugin.api.Cards
 import io.github.whywood.deepdeep.plugin.api.ChatAttachment
 import io.github.whywood.deepdeep.plugin.api.Contributions
 import io.github.whywood.deepdeep.plugin.api.PluginHost
@@ -42,7 +43,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 
-private const val CARD_DETAILS_KEY = "deepdeep.card"
+private const val CARD_DETAILS_KEY = Cards.KEY
 private const val SEARCH_DEFAULT_LIMIT = 20
 private const val SEARCH_MAX_LIMIT = 50
 

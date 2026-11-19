@@ -610,7 +610,7 @@ internal fun parseHotelCancelResult(raw: String, orderNo: String, hotelName: Str
 
 private val WHITESPACE = Regex("\\s+")
 
-private fun money(value: Double?, currency: String?): String? {
+internal fun money(value: Double?, currency: String?): String? {
     if (value == null) return null
     val amount = if (value % 1.0 == 0.0) {
         value.toLong().toString()

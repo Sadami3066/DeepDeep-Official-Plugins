@@ -62,8 +62,18 @@ class FeishuToolBridgeTest {
     private fun cardPayload(decision: ToolResultDecision): JsonObject? =
         cardOf(decision)?.get("payload") as? JsonObject
 
-    private fun rawText(decision: ToolResultDecision): String? =
-        (decision.result?.details?.get("deepdeep.raw") as? JsonPrimitive)?.contentOrNull
+    private fun rawText(decision: ToolResultDecision): String? {
+        val text = decision.result?.text.orEmpty()
+        val marker = "完整返回（上游原样）：\n"
+        val start = text.indexOf(marker)
+        if (start < 0) return null
+        val rest = text.substring(start + marker.length)
+        val guidance = rest.indexOf("\n\n使用说明：")
+        val card = rest.indexOf("\n\n展示这张卡片")
+        val ends = listOf(guidance, card).filter { it >= 0 }
+        val end = ends.minOrNull() ?: -1
+        return if (end >= 0) rest.substring(0, end) else rest
+    }
 
     private fun ToolResultDecision.text(): String = result?.text.orEmpty()
 
@@ -80,7 +90,7 @@ class FeishuToolBridgeTest {
         assertEquals(ToolResultAction.REPLACE, decision.action)
         val text = decision.text()
         assertTrue(guidanceOf(decision).contains("lark-cli im +chat-messages-list"))
-        assertFalse(text.contains("产品研发群"))
+        assertFalse(guidanceOf(decision).contains("产品研发群"))
         assertFalse(text.contains("卡片 id"))
         assertFalse(text.contains("{\"ok\":true}"))
         val raw = rawText(decision)
@@ -114,7 +124,8 @@ class FeishuToolBridgeTest {
         val hooks = FeishuToolBridge().hooks(host)
         hooks.beforeToolCall(request("call-3", "lark-cli im +chat-list | head -20"))
         val decision = hooks.afterToolExecution(result("call-3", loadFixture("chats.json")))
-        assertEquals(ToolResultAction.KEEP, decision.action)
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        assertTrue(decision.result?.text.orEmpty().contains("请重新执行完整命令：lark-cli im +chat-list"))
         assertNull(cardOf(decision))
     }
 
@@ -209,7 +220,8 @@ class FeishuToolBridgeTest {
         val hooks = FeishuToolBridge().hooks(host)
         hooks.beforeToolCall(request("call-13", "lark-cli im +chat-list 2>&1"))
         val decision = hooks.afterToolExecution(result("call-13", loadFixture("chats.json")))
-        assertEquals(ToolResultAction.KEEP, decision.action)
+        assertEquals(ToolResultAction.REPLACE, decision.action)
+        assertTrue(decision.result?.text.orEmpty().contains("请重新执行完整命令：lark-cli im +chat-list"))
         assertNull(cardOf(decision))
     }
 
@@ -251,7 +263,7 @@ class FeishuToolBridgeTest {
         val output = """{"ok":false,"error":{"type":"authentication","message":"invalid token"}}"""
         val decision = hooks.afterToolExecution(result("call-18", output, isError = true))
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        assertEquals("", decision.text())
+        assertTrue(decision.text().startsWith(""))
         assertTrue(guidanceOf(decision).contains("重新登录"))
         assertTrue(rawText(decision)!!.contains("invalid token"))
         assertNull(cardOf(decision))
@@ -412,7 +424,7 @@ class FeishuNoticeStrippingTest {
             ),
         )
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        assertFalse(decision.result?.text.orEmpty().contains("lark-cli update"))
+        assertFalse(guidanceOf(decision).contains("lark-cli update"))
         assertFalse(guidanceOf(decision).contains("_notice"))
         val card = decision.result?.details?.get("deepdeep.card") as? JsonObject
         val payload = card?.get("payload")?.jsonObject
@@ -422,5 +434,12 @@ class FeishuNoticeStrippingTest {
     }
 }
 
-private fun guidanceOf(decision: ToolResultDecision): String =
-    (decision.result?.details?.get("deepdeep.guidance") as? JsonPrimitive)?.contentOrNull.orEmpty()
+private fun guidanceOf(decision: ToolResultDecision): String {
+    val text = decision.result?.text.orEmpty()
+    val marker = "使用说明：\n"
+    val start = text.indexOf(marker)
+    if (start < 0) return text.substringBefore("\n\n完整返回（上游原样）：")
+    val rest = text.substring(start + marker.length)
+    val end = rest.indexOf("\n\n展示这张卡片")
+    return if (end >= 0) rest.substring(0, end) else rest
+}

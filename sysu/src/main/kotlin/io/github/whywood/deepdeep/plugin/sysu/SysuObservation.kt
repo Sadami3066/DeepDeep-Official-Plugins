@@ -345,8 +345,8 @@ internal object SysuObservation {
         return SysuRendered(
             summary = cardSummary(title, trailing, null),
             text = strings.text(
-                "待办已整理好，截止时间按本地时间展示；需要用户看到时用 present 交付。",
-                "The assignments are ready with due times in local time; use present when the user should see it.",
+                "待办已整理好，截止时间按本地时间展示。",
+                "The assignments are ready with due times in local time.",
             ),
             card = readyCard(
                 kind = SysuCardKind.Todo,
@@ -457,8 +457,8 @@ internal object SysuObservation {
         val trailing = strings.text("$venueCount 个场地", "$venueCount venues")
         val guidance = if (failureMessages.isNotEmpty()) {
             strings.text(
-                "场馆空位已整理好；部分类型查询失败（${failureMessages.joinToString("；")}），可重试。需要用户看到时用 present 交付。",
-                "The venue availability is ready; some venue types failed (${failureMessages.joinToString("; ")}). Retry if needed, and use present when the user should see it.",
+                "场馆空位已整理好；部分类型查询失败（${failureMessages.joinToString("；")}），可重试。",
+                "The venue availability is ready; some venue types failed (${failureMessages.joinToString("; ")}). Retry if needed.",
             )
         } else {
             cardGuidance(strings, "场馆空位", "The venue availability")
@@ -543,8 +543,8 @@ internal object SysuObservation {
     }
 
     private fun cardGuidance(strings: SysuStrings, zh: String, en: String): String = strings.text(
-        "${zh}已整理好；需要用户看到时用 present 交付。",
-        "$en is ready; use present when the user should see it.",
+        "${zh}已整理好。",
+        "$en is ready.",
     )
 
     private fun bodyLines(vararg pairs: Pair<String, String?>): String? = pairs.mapNotNull { (label, value) ->

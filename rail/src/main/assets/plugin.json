@@ -2,7 +2,7 @@
   "id": "io.github.whywood.deepdeep.plugin.rail",
   "version": "1.4.0",
   "apiLevel": 6,
-  "minHostVersion": "1.4.0",
+  "minHostVersion": "1.4.3",
   "capabilities": [
     "logs",
     "network",

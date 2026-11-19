@@ -26,7 +26,6 @@ class MiCloudObservationTest {
         ).run("mi_cloud_gallery")
 
         assertTrue(result.isError)
-        assertEquals("", result.text)
         assertEquals("相册读取未开启，请在插件页打开相册开关", result.guidance())
         assertNull(result.cardTitle())
         assertNull(result.rawBody())
@@ -39,7 +38,6 @@ class MiCloudObservationTest {
             .run("mi_cloud_account")
 
         assertFalse(result.isError)
-        assertEquals("", result.text)
         assertEquals(raw.toString(), result.rawBody())
         val card = MiCloudAccountCardData.fromJson(requireNotNull(result.payload()))
         assertEquals(ACCOUNT_MODE_PROFILE, card.mode)
@@ -65,7 +63,6 @@ class MiCloudObservationTest {
             .run("mi_cloud_account", buildJsonObject { put("action", "quota") })
 
         assertFalse(result.isError)
-        assertEquals("", result.text)
         val card = MiCloudAccountCardData.fromJson(requireNotNull(result.payload()))
         assertEquals(ACCOUNT_MODE_QUOTA, card.mode)
         assertEquals(2, card.entries.size)
@@ -93,7 +90,6 @@ class MiCloudObservationTest {
             .run("mi_cloud_notes", buildJsonObject { put("action", "list") })
 
         assertFalse(result.isError)
-        assertEquals("", result.text)
         assertTrue(result.guidance().orEmpty().contains("syncTag=tag-2"))
         assertFalse(result.guidance().orEmpty().contains("本页"))
         val rawBody = requireNotNull(result.rawBody())
@@ -116,8 +112,6 @@ class MiCloudObservationTest {
         )
         val result = tools(FakeReadApi(listOf("/note/full/page/" to raw)))
             .run("mi_cloud_notes", buildJsonObject { put("action", "list") })
-
-        assertEquals("", result.text)
         assertTrue(result.guidance().orEmpty().contains("原始数据"))
         assertEquals("52264873542819904", MiCloudNotesCardData.fromJson(requireNotNull(result.payload())).cursor)
     }
@@ -134,7 +128,6 @@ class MiCloudObservationTest {
             .run("mi_cloud_notes", buildJsonObject { put("action", "read"); put("id", "n1") })
 
         assertFalse(result.isError)
-        assertEquals("", result.text)
         assertTrue(result.rawBody().orEmpty().contains("<note>"))
         val card = MiCloudNotesCardData.fromJson(requireNotNull(result.payload()))
         assertEquals(NOTES_ACTION_READ, card.action)
@@ -155,7 +148,6 @@ class MiCloudObservationTest {
             .run("mi_cloud_todo", buildJsonObject { put("action", "list") })
 
         assertFalse(result.isError)
-        assertEquals("", result.text)
         val guidance = result.guidance().orEmpty()
         assertTrue(guidance.contains("增量同步"))
         assertTrue(guidance.contains("没有下一页"))
@@ -203,7 +195,6 @@ class MiCloudObservationTest {
             .run("mi_cloud_sms", buildJsonObject { put("limit", 20) })
 
         assertFalse(result.isError)
-        assertEquals("", result.text)
         val card = MiCloudSmsCardData.fromJson(requireNotNull(result.payload()))
         assertEquals(2, card.entries.size)
         val first = card.entries.first()
@@ -249,7 +240,6 @@ class MiCloudObservationTest {
             .run("mi_cloud_contacts", buildJsonObject { put("action", "list") })
 
         assertFalse(result.isError)
-        assertEquals("", result.text)
         val card = MiCloudContactsCardData.fromJson(requireNotNull(result.payload()))
         assertEquals(1, card.contacts.size)
         val contact = card.contacts.single()
@@ -283,7 +273,6 @@ class MiCloudObservationTest {
             .run("mi_cloud_gallery", buildJsonObject { put("action", "albums") })
 
         assertFalse(result.isError)
-        assertEquals("", result.text)
         val card = MiCloudGalleryCardData.fromJson(requireNotNull(result.payload()))
         assertEquals(GALLERY_MODE_ALBUMS, card.mode)
         assertEquals(2, card.items.size)
@@ -305,7 +294,6 @@ class MiCloudObservationTest {
         ).run("mi_cloud_gallery", buildJsonObject { put("action", "list") })
 
         assertTrue(result.isError)
-        assertEquals("", result.text)
         assertEquals("timeout", result.rawBody())
         assertEquals("小米云相册请求超时，可重试", result.guidance())
         assertNull(result.cardTitle())
@@ -321,7 +309,6 @@ class MiCloudObservationTest {
         ).run("mi_cloud_gallery", buildJsonObject { put("action", "albums") })
 
         assertTrue(result.isError)
-        assertEquals("", result.text)
         assertEquals("upstream boom", result.rawBody())
         assertTrue(result.guidance().orEmpty().contains("HTTP 500"))
         assertNull(result.cardTitle())
@@ -345,7 +332,6 @@ class MiCloudObservationTest {
             )
 
         assertFalse(result.isError)
-        assertEquals("", result.text)
         val card = MiCloudFileCardData.fromJson(requireNotNull(result.payload()))
         assertEquals(1, card.files.size)
         assertEquals(10, card.offset)
@@ -390,11 +376,28 @@ class MiCloudObservationTest {
         args: JsonObject = JsonObject(emptyMap()),
     ): PluginToolResult = runBlocking { getValue(name).execute(FakeToolCall(args)) }
 
-    private fun PluginToolResult.rawBody(): String? =
-        (details?.get(DEEPDEEP_RAW_KEY) as? JsonPrimitive)?.contentOrNull
+    private fun PluginToolResult.rawBody(): String? {
+        val text = text.orEmpty()
+        val marker = "完整返回（上游原样）：\n"
+        val start = text.indexOf(marker)
+        if (start < 0) return null
+        val rest = text.substring(start + marker.length)
+        val guidance = rest.indexOf("\n\n使用说明：")
+        val card = rest.indexOf("\n\n展示这张卡片")
+        val ends = listOf(guidance, card).filter { it >= 0 }
+        val end = ends.minOrNull() ?: -1
+        return if (end >= 0) rest.substring(0, end) else rest
+    }
 
-    private fun PluginToolResult.guidance(): String? =
-        (details?.get(DEEPDEEP_GUIDANCE_KEY) as? JsonPrimitive)?.contentOrNull
+    private fun PluginToolResult.guidance(): String? {
+        val text = text.orEmpty()
+        val marker = "使用说明：\n"
+        val start = text.indexOf(marker)
+        if (start < 0) return null
+        val rest = text.substring(start + marker.length)
+        val end = rest.indexOf("\n\n展示这张卡片")
+        return if (end >= 0) rest.substring(0, end) else rest
+    }
 
     private fun PluginToolResult.payload(): JsonObject? = cardPayload(details)
 

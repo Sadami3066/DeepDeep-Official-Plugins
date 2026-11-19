@@ -185,8 +185,6 @@ internal class ImapClient(
         requireOk(execute("UID STORE $uid +FLAGS (\\Deleted)"), "STORE")
         if (capability().contains("UIDPLUS")) {
             requireOk(execute("UID EXPUNGE $uid"), "EXPUNGE")
-        } else {
-            requireOk(execute("EXPUNGE"), "EXPUNGE")
         }
     }
 

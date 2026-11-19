@@ -7,8 +7,8 @@
 
 | 文件 | 职责 |
 |---|---|
-| `build.gradle.kts` | 版本 1.3.1 / versionCode 9；compileOnly `plugin-api 1.3.1` 与 `design 0.11.0`；打包/签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
-| `src/main/assets/plugin.json` | 清单：id/version 1.3.0/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.4.0/capabilities（logs/network/settings/ui/secrets）/entryClass/provides（7 个工具、skill `deepdeep-ride`、page `main`） |
+| `build.gradle.kts` | 版本 1.3.1 / versionCode 9；compileOnly `plugin-api 1.4.0` 与 `design 0.11.0`；打包/签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
+| `src/main/assets/plugin.json` | 清单：id/version 1.3.0/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.4.3/capabilities（logs/network/settings/ui/secrets）/entryClass/provides（7 个工具、skill `deepdeep-ride`、page `main`） |
 | `src/main/kotlin/.../RidePlugin.kt` | `DeepDeepPlugin` 入口：Key 迁移、工具/技能/页面贡献、7 个插件工具与 6 个 MCP 工具名的结果渲染器注册；技能 markdown 说明吸附点位、单位与限流 |
 | `src/main/kotlin/.../DidiClient.kt` | 滴滴 MCP JSON-RPC 客户端：tools/list 探测、tools/call、生产/体验环境、错误分类与 Key 脱敏；`RideResponse.raw` 是拆掉 MCP 信封后的 content 原文，有 structuredContent 时附在其后；错误时是错误对象原文 |
 | `src/main/kotlin/.../RideKeyStore.kt` | Key 存 `host.secrets()`（旧明文 settings 值迁移后删除） |

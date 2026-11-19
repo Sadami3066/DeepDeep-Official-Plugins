@@ -102,8 +102,8 @@ class RailPlugin : DeepDeepPlugin {
             put("required", JsonArray(listOf(JsonPrimitive("from"), JsonPrimitive("to"))))
         },
         promptSnippet = host.t(
-            "查火车票用 train_search；结果按车次分组，直接引用即可。需要把车次给用户看时用 present 交付结果卡片。",
-            "Use train_search for 12306 trains; results are grouped by train code. Deliver the result card with present when the user should see the trains.",
+            "查火车票用 train_search；结果按车次分组，直接引用即可。",
+            "Use train_search for 12306 trains; results are grouped by train code.",
         ),
         promptGuidelines = listOf(
             host.t(
@@ -142,8 +142,8 @@ class RailPlugin : DeepDeepPlugin {
             put("required", JsonArray(listOf(JsonPrimitive("from"), JsonPrimitive("to"), JsonPrimitive("train_code"))))
         },
         promptSnippet = host.t(
-            "用户问某趟车多少钱时，用 train_price 查票价；结果没有票价时直接说票价暂不可查。要把票价给用户看时用 present 交付结果卡片。",
-            "When the user asks about one train's fare, use train_price; if no fare comes back, say fares are unavailable. Deliver the result card with present when the user should see it.",
+            "用户问某趟车多少钱时，用 train_price 查票价；结果没有票价时直接说票价暂不可查。",
+            "When the user asks about one train's fare, use train_price; if no fare comes back, say fares are unavailable.",
         ),
         promptGuidelines = listOf(
             host.t(
@@ -182,8 +182,8 @@ class RailPlugin : DeepDeepPlugin {
                 "${details.from} → ${details.to} · $trainsLabel"
             }
             val guidance = host.t(
-                "要给用户看车次时用 present 交付本结果的卡片。问某趟车的票价时用 train_price，train_code 必填。",
-                "Deliver this result's card with present when the user should see the trains. For one train's fare call train_price with train_code.",
+                "问某趟车的票价时用 train_price，train_code 必填。",
+                "For one train's fare call train_price with train_code.",
             )
             textResult(
                 "",
@@ -235,8 +235,8 @@ class RailPlugin : DeepDeepPlugin {
             )
             val cardTitle = "${details.code} ${details.fromPlace} → ${details.toPlace}"
             val guidance = host.t(
-                "要给用户看票价时用 present 交付本结果的卡片。票价与余票以 12306 为准，不要说已购票或已锁座。",
-                "Deliver this result's card with present when the user should see the fare. Fares and availability follow 12306; never claim a ticket is booked or held.",
+                "票价与余票以 12306 为准，不要说已购票或已锁座。",
+                "Fares and availability follow 12306; never claim a ticket is booked or held.",
             )
             textResult(
                 "",

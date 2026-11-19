@@ -26,12 +26,12 @@ DeepDeep 官方邮箱插件，当前 1.6.2，打成外部 `.ddp`：不依赖 CLI
 
 - `mail_search`：`query` 匹配主题、发件人、收件人与预览；`folder` 取 `all`/`inbox`/`sent`/`drafts`/`archive`，默认 `all`；`offset` 继续翻页，`limit` 上限 50。文本逐封列出 id、主题、文件夹、账户、发件人、收件人、时间、已读/星标/附件/大小、会话与完整预览；返回总数与当前页，还有更多时写「匹配 N 封，返回 M 封，可用 offset 继续（offset=…）」。
 - `mail_read`：完整纯文本正文（多种 text part 按序拼接）、`HTML 原文`（没有纯文本或 HTML 更完整时单独成段）、全部已解析头字段（Message-ID/Reply-To/In-Reply-To/References/List-*）、全部附件（名称、类型、大小、id、内嵌标记与 Content-ID）。正文超过单段 1 MiB 或总计 2 MiB 时写明已截断；附件只给元数据，二进制不内联，保存走 `mail_save_attachment`。
-- 卡片 id 由宿主统一追加，插件不写「卡片 id」。
+- 卡片 id 与 `present` 指令由插件 SDK（`Cards.deliver`）统一生成，插件不写。
 
 ## 回答区卡片
 
-- 卡片投递：`mailPromptBody` 明确要求“工具结果带卡片 id 时用 `present` 交付卡片，正文只写结论与下一步，不复述卡片内容”；真机暴露过 prompt 未提示导致卡片不上屏的问题，1.6.1 已修。
-- 投递：`mail_search`/`mail_read`/`mail_draft` 把卡片写进工具结果 `details` 的 `deepdeep.card`：`{"customType": "mail.search|mail.read|mail.draft", "title": 摘要, "payload": MailCardPayloads 的 JSON}`；**不调用** `host.chat().postCustomMessage`，也不自己拼卡片 id。槽位与 payload 兼容旧会话。
+- 卡片投递：结果文本由 `Cards.deliver` 附带 `present` 调用指令，模型按指令交付；`mailPromptBody` 只保留“正文写结论与下一步，不要复述卡片内容”。
+- 投递：`mail_search`/`mail_read`/`mail_draft` 把卡片写进工具结果 `details` 的 `deepdeep.card`：`{"customType": "mail.search|mail.read|mail.draft", "title": 摘要, "payload": MailCardPayloads 的 JSON}`；**不调用** `host.chat().postCustomMessage`。槽位与 payload 兼容旧会话。
 - 搜索是信封列表：未读圆点 + 信封线稿 + 发件人（未读加粗）+ 主题 + 日期右对齐，行间虚线；收起显示 5 封，`DdExpandToggle` 展开全部，底部「打开邮箱」与总数。已发送的行改为显示收件人、箭头线稿与「已发送」chip。
 - 读信是信纸：发件人头像/名字/地址与时间、双细线信头、主题、完整正文（默认 4 行，`DdExpandToggle` 展开全文）、全部附件胶囊；已发送的信显示收件人与「已发送」；未读显示圆点，底部「打开邮件」。
 - 草稿是写信预览：`草稿 · 未发送` 状态条 + 账户、全部收件人/抄送 chip、主题、正文面板、全部附件胶囊，底部「编辑」与「发送」；发送中/失败/已发送/草稿已删除都有对应状态。
@@ -42,6 +42,7 @@ DeepDeep 官方邮箱插件，当前 1.6.2，打成外部 `.ddp`：不依赖 CLI
 
 - 构建：在仓库根执行 `./scripts/gradlew-locked :mail:testDebugUnitTest :mail:verifyPlugin`，产物 `mail/build/plugin/mail.ddp`。
 - 插件页顶部在「收件箱 / 已发送」之间切换；SENT 由同步映射，SMTP 发送成功后把邮件 append 到 Sent。已发送列表同样显示收件人。
-- 用户可见文案中英成对（`host.t`/`host.tf`），卡片不出现 App 名、插件名、「卡片」「结果」这类开发词；卡片 id 行由宿主追加。
+- 用户可见文案中英成对（`host.t`/`host.tf`），卡片不出现 App 名、插件名、「卡片」「结果」这类开发词。
 - IMAP 登录后按 RFC 2971 发 `ID` 声明客户端（163/126 要求，否则 `SELECT` 返回 `Unsafe Login`）；`ID` 失败不影响连接，错误文本对 `UNSAFE LOGIN` 给专门提示。
+- 删除/归档只在服务器支持 UIDPLUS 时用 `UID EXPUNGE <uid>`；不支持时只打 `\Deleted` 标记，绝不裸 `EXPUNGE`（会清掉同文件夹里其它已标记邮件）。
 - 工具结果文本始终列出完整事实（id/主题/收件人/发件人/时间/附件/正文/头字段），卡片只是另一种呈现；发送前需要用户明确要求，`mail_send` 不重复确认。

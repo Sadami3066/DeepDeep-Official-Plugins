@@ -123,7 +123,7 @@ class HotelPlugin : DeepDeepPlugin {
         val account = snapshot.account?.takeIf { it.isNotBlank() }?.let { "，账号 $it" }.orEmpty()
         return buildString {
             append("酒店插件已登录$account。")
-            append("查询酒店用 hotel_search，房型用 hotel_detail，预订用 hotel_book，订单列表用 hotel_orders，单笔订单完整信息用 hotel_order_detail，取消订单用 hotel_cancel，筛标签用 hotel_tags；工具结果正文是上游完整返回，另附使用说明，按使用说明回答，不要复述原始 JSON。结果带卡片 id 时用 present 交付卡片。")
+            append("查询酒店用 hotel_search，房型用 hotel_detail，预订用 hotel_book，订单列表用 hotel_orders，单笔订单完整信息用 hotel_order_detail，取消订单用 hotel_cancel，筛标签用 hotel_tags；工具结果正文是上游完整返回，另附使用说明，按使用说明回答，不要复述原始 JSON。")
             append("搜索支持预算 max_price（会传给上游筛选，未传时也会从 query 识别）、距离 distance_in_meter、必须标签 required_tags（合法标签名先用 hotel_tags 查）和品牌 preferred_brands；用户说「离地铁近」「要含早」「带娃」时用对应参数，不要自己编标签。")
             append("订单列表没有取消原因；用户问取消原因、确认号、酒店电话、入住人或支付截止时间时用 hotel_order_detail。")
             append("取消必须两步：先调用 hotel_cancel（不带 confirm）只拿到罚金和凭证，把罚金与政策告诉用户，用户明确同意后再带 confirm=true 真正取消；取消不可撤销，不能直接传 confirm=true。")

@@ -3,12 +3,10 @@ package io.github.whywood.deepdeep.plugin.wecom
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.PluginHooks
 import io.github.whywood.deepdeep.plugin.api.ToolExecutionResult
-import io.github.whywood.deepdeep.plugin.api.ToolResultAction
 import io.github.whywood.deepdeep.plugin.api.ToolResultDecision
 import io.github.whywood.deepdeep.plugin.api.resultReplace
 import io.github.whywood.deepdeep.plugin.api.textResult
 import io.github.whywood.deepdeep.plugin.cli.CliJsonEnvelope
-import io.github.whywood.deepdeep.plugin.cli.CliText
 import io.github.whywood.deepdeep.plugin.cli.bridge.CliBridgeConfig
 import io.github.whywood.deepdeep.plugin.cli.bridge.CliCommandParser
 import io.github.whywood.deepdeep.plugin.cli.bridge.CliErrorMapper
@@ -23,8 +21,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
 internal const val UNAUTHORIZED_ADVICE = "请打开「企业微信」插件页，扫码连接后重试。"
-
-private const val EXIT_LABEL = "退出码："
 
 private val WECOM_BRIDGE_CONFIG: CliBridgeConfig<WecomCommand, CliCardModel> = CliBridgeConfig(
     binaryName = WecomCommands.FILE_NAME,
@@ -47,12 +43,8 @@ internal class WecomToolBridge {
     fun hooks(host: PluginHost): PluginHooks {
         val base = bridge.hooks(host)
         return object : PluginHooks by base {
-            override suspend fun afterToolExecution(request: ToolExecutionResult): ToolResultDecision {
-                val exitCode = WecomCliOutputParser.exitCode(request.result.text.orEmpty())
-                val prepared = inlineContentFile(host, request)
-                val decision = withExitCode(base.afterToolExecution(prepared), exitCode)
-                return if (prepared !== request) restoreRaw(decision, request) else decision
-            }
+            override suspend fun afterToolExecution(request: ToolExecutionResult): ToolResultDecision =
+                base.afterToolExecution(inlineContentFile(host, request))
         }
     }
 
@@ -88,41 +80,6 @@ private suspend fun mapWecomError(request: ToolExecutionResult): ToolResultDecis
             isError = true,
         ),
     )
-}
-
-private fun withExitCode(decision: ToolResultDecision, exitCode: Int?): ToolResultDecision {
-    if (exitCode == null || decision.action != ToolResultAction.REPLACE) return decision
-    val result = decision.result ?: return decision
-    val details = result.details
-    val guidance = (details?.get("deepdeep.guidance") as? JsonPrimitive)?.contentOrNull
-    if (guidance != null) {
-        if (guidance.contains(EXIT_LABEL)) return decision
-        val updated = JsonObject(
-            details + ("deepdeep.guidance" to JsonPrimitive("${guidance.trimEnd()}\n$EXIT_LABEL$exitCode")),
-        )
-        return resultReplace(textResult(result.text.orEmpty(), details = updated, isError = result.isError))
-    }
-    val text = result.text ?: return decision
-    if (text.contains(EXIT_LABEL)) return decision
-    return resultReplace(
-        textResult(
-            "${text.trimEnd()}\n\n$EXIT_LABEL$exitCode",
-            details = result.details,
-            isError = result.isError,
-        ),
-    )
-}
-
-private fun restoreRaw(decision: ToolResultDecision, original: ToolExecutionResult): ToolResultDecision {
-    if (decision.action != ToolResultAction.REPLACE) return decision
-    val result = decision.result ?: return decision
-    val text = result.text ?: return decision
-    val raw = CliText.stripHostNotices(CliText.stripAnsi(original.result.text.orEmpty())).trimEnd()
-    if (raw.isEmpty()) return decision
-    val details = JsonObject(
-        (result.details ?: JsonObject(emptyMap())) + ("deepdeep.raw" to JsonPrimitive(raw)),
-    )
-    return resultReplace(textResult(text, details = details, isError = result.isError))
 }
 
 private suspend fun inlineContentFile(host: PluginHost, request: ToolExecutionResult): ToolExecutionResult {

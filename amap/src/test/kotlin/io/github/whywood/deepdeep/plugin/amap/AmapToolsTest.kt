@@ -32,11 +32,28 @@ class AmapToolsTest {
         return tool.execute(FakeToolCall(arguments))
     }
 
-    private fun raw(result: PluginToolResult): String =
-        (result.details?.get("deepdeep.raw") as JsonPrimitive).content
+    private fun raw(result: PluginToolResult): String {
+        val text = result.text.orEmpty()
+        val marker = "完整返回（上游原样）：\n"
+        val start = text.indexOf(marker)
+        if (start < 0) return ""
+        val rest = text.substring(start + marker.length)
+        val guidance = rest.indexOf("\n\n使用说明：")
+        val card = rest.indexOf("\n\n展示这张卡片")
+        val ends = listOf(guidance, card).filter { it >= 0 }
+        val end = ends.minOrNull() ?: -1
+        return if (end >= 0) rest.substring(0, end) else rest
+    }
 
-    private fun guidance(result: PluginToolResult): String =
-        (result.details?.get("deepdeep.guidance") as JsonPrimitive).content
+    private fun guidance(result: PluginToolResult): String {
+        val text = result.text.orEmpty()
+        val marker = "使用说明：\n"
+        val start = text.indexOf(marker)
+        if (start < 0) return ""
+        val rest = text.substring(start + marker.length)
+        val end = rest.indexOf("\n\n展示这张卡片")
+        return if (end >= 0) rest.substring(0, end) else rest
+    }
 
     private fun card(result: PluginToolResult): JsonObject =
         result.details?.get("deepdeep.card") as JsonObject
@@ -60,7 +77,6 @@ class AmapToolsTest {
         )
 
         assertFalse(result.isError)
-        assertEquals("", result.text)
         assertEquals(payload, raw(result))
         assertTrue(guidance(result).contains("2 个地点"))
         assertTrue(guidance(result).contains("没有坐标"))
@@ -161,7 +177,6 @@ class AmapToolsTest {
         )
 
         assertTrue(result.isError)
-        assertEquals("", result.text)
         assertTrue(raw(result).contains("INVALID_USER_KEY"))
         assertFalse(raw(result).contains("secret-key"))
         assertTrue(raw(result).contains("***"))

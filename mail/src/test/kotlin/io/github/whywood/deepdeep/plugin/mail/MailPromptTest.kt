@@ -22,8 +22,7 @@ class MailPromptTest {
         assertTrue(text, text.contains("user@example.com"))
         assertTrue(text, text.contains("未读 3"))
         assertTrue(text, text.contains("mail_save_attachment"))
-        assertTrue(text, text.contains("present"))
-        assertTrue(text, text.contains("卡片 id"))
+        assertTrue(text, text.contains("正文只写结论与下一步"))
         assertFalse(text, text.contains("不要再抄"))
     }
 
@@ -31,7 +30,7 @@ class MailPromptTest {
     fun promptMentionsMissingAccountAndPresentInstruction() {
         val text = mailPromptBody(MailState())
         assertTrue(text, text.contains("没有已连接的邮箱账号"))
-        assertTrue(text, text.contains("present"))
+        assertTrue(text, text.contains("正文只写结论与下一步"))
         assertFalse(text, text.contains("不要再抄"))
     }
 }

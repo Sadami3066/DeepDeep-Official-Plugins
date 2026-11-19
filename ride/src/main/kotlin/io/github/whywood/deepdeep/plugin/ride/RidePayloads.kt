@@ -1,5 +1,6 @@
 package io.github.whywood.deepdeep.plugin.ride
 
+import io.github.whywood.deepdeep.plugin.api.Cards
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.localizedText
 import kotlinx.serialization.json.Json
@@ -834,9 +835,9 @@ internal fun rideTimeText(value: String?): String? {
 }
 
 internal const val RIDE_ERROR_DETAIL_KEY = "error"
-internal const val RIDE_RAW_DETAIL_KEY = "deepdeep.raw"
-internal const val RIDE_CARD_DETAIL_KEY = "deepdeep.card"
-internal const val RIDE_GUIDANCE_DETAIL_KEY = "deepdeep.guidance"
+internal const val RIDE_RAW_DETAIL_KEY = Cards.RAW_KEY
+internal const val RIDE_CARD_DETAIL_KEY = Cards.KEY
+internal const val RIDE_GUIDANCE_DETAIL_KEY = Cards.GUIDANCE_KEY
 
 private val RIDE_RESULT_KEYS = setOf(
     RIDE_RAW_DETAIL_KEY,

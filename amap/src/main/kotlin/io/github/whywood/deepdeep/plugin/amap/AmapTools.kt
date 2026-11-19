@@ -1,5 +1,6 @@
 package io.github.whywood.deepdeep.plugin.amap
 
+import io.github.whywood.deepdeep.plugin.api.Cards
 import io.github.whywood.deepdeep.plugin.api.PluginHost
 import io.github.whywood.deepdeep.plugin.api.PluginTool
 import io.github.whywood.deepdeep.plugin.api.PluginToolCall
@@ -17,9 +18,9 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 
-private const val RAW_KEY = "deepdeep.raw"
-private const val GUIDANCE_KEY = "deepdeep.guidance"
-private const val CARD_KEY = "deepdeep.card"
+private const val RAW_KEY = Cards.RAW_KEY
+private const val GUIDANCE_KEY = Cards.GUIDANCE_KEY
+private const val CARD_KEY = Cards.KEY
 
 internal fun amapTools(host: PluginHost): List<PluginTool> {
     val client = AmapClient(host)

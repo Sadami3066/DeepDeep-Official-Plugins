@@ -108,8 +108,8 @@ internal fun hotelTools(host: PluginHost, toolState: HotelToolState = HotelToolS
                 "Search and room lookup are read-only. Only call hotel_book after the user explicitly confirms the hotel, room, dates and total price.",
             ),
             host.t(
-                "工具结果正文是上游完整返回，另附使用说明；按使用说明回答，不要复述原始 JSON。结果带卡片 id 时用 present 交付卡片。",
-                "The result body is the complete upstream output plus usage guidance; answer from the guidance and never repeat the raw JSON. Use present when the result carries a card id.",
+                "工具结果正文是上游完整返回，另附使用说明；按使用说明回答，不要复述原始 JSON。",
+                "The result body is the complete upstream output plus usage guidance; answer from the guidance and never repeat the raw JSON.",
             ),
             host.t(
                 "用户提到预算时把预算传给 max_price：工具只标注超预算数量和最低超预算价，不删除结果；回答时要说明哪些结果超预算。",
@@ -465,6 +465,8 @@ private suspend fun book(host: PluginHost, toolState: HotelToolState, call: Plug
             email = email,
             guests = guests,
             customerRequest = customerRequest,
+            expectedTotal = plan.totalPrice,
+            expectedCurrency = plan.currency,
         )
         val booking = output.details
         runCatching {
@@ -487,8 +489,8 @@ private suspend fun book(host: PluginHost, toolState: HotelToolState, call: Plug
             nights = hotelNights(checkIn, checkOut),
             roomCount = detail.roomCount,
             adultCount = detail.adultCount,
-            totalPrice = plan.priceText ?: booking.totalPrice,
-            totalDerived = plan.priceText != null && plan.totalDerived,
+            totalPrice = booking.totalPrice ?: plan.priceText,
+            totalDerived = booking.totalPrice == null && plan.totalDerived,
             currency = plan.currency ?: booking.currency,
             cancellation = plan.cancellations.ifEmpty { listOfNotNull(plan.cancellation) }.joinToString("；").takeIf { it.isNotBlank() },
             contactName = listOf(firstName, lastName).filter { it.isNotBlank() }.joinToString(" ")

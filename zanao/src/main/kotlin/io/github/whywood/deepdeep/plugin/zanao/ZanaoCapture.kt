@@ -107,6 +107,7 @@ internal class ZanaoCapture(private val scope: CoroutineScope) {
         session.device?.takeIf { it.isNotBlank() }?.let { host.secrets().put(SECRET_DEVICE, it) }
         val alias = session.alias?.takeIf { it.isNotBlank() } ?: DEFAULT_ALIAS
         host.settings().put(SETTING_ALIAS, alias)
+        syncCliToken(host)
     }
 
     private suspend fun readProxy(host: PluginHost): String? =

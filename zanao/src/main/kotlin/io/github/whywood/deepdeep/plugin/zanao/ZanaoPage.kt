@@ -310,7 +310,7 @@ private fun HomeView(
                 ) {
                     DdText(
                         host.t(
-                            "捕捉器只接管 api.app.zanao.com，不会改动系统全局代理。完成登录后复制 Token JSON，再回到这里导入。",
+                            "捕捉期间会临时把系统代理指向本机，结束自动恢复；只读取 api.app.zanao.com 的请求。完成登录后复制 Token JSON，再回到这里导入。",
                             "The catcher only routes api.app.zanao.com. Sign in, copy the token JSON, then import it here.",
                         ),
                         style = DdType.bodySmall,

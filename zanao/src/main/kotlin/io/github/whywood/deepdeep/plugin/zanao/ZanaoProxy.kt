@@ -99,7 +99,8 @@ internal class ZanaoProxy(
                     else -> headers.add(line)
                 }
             }
-            if (token != null && token.isNotBlank() && captured.compareAndSet(false, true)) {
+            val captureHost = if (method.equals("CONNECT", ignoreCase = true)) target else host.orEmpty()
+            if (token != null && token.isNotBlank() && isZanaoHost(captureHost) && captured.compareAndSet(false, true)) {
                 onSession(CapturedSession(token, device, alias))
             }
 
@@ -205,4 +206,8 @@ internal class ZanaoProxy(
         }
         return if (offset == count) data else data.copyOf(offset)
     }
+
+    private fun isZanaoHost(value: String): Boolean =
+        value.substringBefore(':').trim().equals("api.app.zanao.com", ignoreCase = true)
+
 }

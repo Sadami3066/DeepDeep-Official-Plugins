@@ -6,8 +6,8 @@
 
 | 文件 | 职责 |
 |---|---|
-| `build.gradle.kts` | 版本 1.4.0 / versionCode 10104；compileOnly `plugin-api 1.3.1`、`design 0.11.0`；打包/签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
-| `src/main/assets/plugin.json` | 清单：version 1.4.0/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.4.0/capabilities（logs/network/settings/ui）/entryClass/provides（`train_search`、`train_price`、工具卡槽位 `tool.card.content:train_search` 与 `tool.card.content:train_price`、page `main`） |
+| `build.gradle.kts` | 版本 1.4.0 / versionCode 10104；compileOnly `plugin-api 1.4.0`、`design 0.11.0`；打包/签名由根 `gradle/plugin-bundle.gradle.kts` 提供 |
+| `src/main/assets/plugin.json` | 清单：version 1.4.0/apiLevel=6/`ui.apiLevel`=2/minHostVersion 1.4.3/capabilities（logs/network/settings/ui）/entryClass/provides（`train_search`、`train_price`、工具卡槽位 `tool.card.content:train_search` 与 `tool.card.content:train_price`、page `main`） |
 | `src/main/assets/station_name.js` | 内置车站表（电报码、站名、城市、拼音、简拼） |
 | `StationIndex.kt` | 车站解析：站名/去「站」/全拼/简拼/城市；同名车站返回候选列表，城市名优先匹配同名车站 |
 | `TrainModels.kt` | `@Serializable` 车次、席别余票、票价、最近路线与车次分组；`SeatStatus` 区分有票/无票/未开售/未返回/无此席别，`SeatAvailability.code` 保留 12306 席别代码；`TrainOption.date` 原样保存上游行日期，`TrainPriceDetails` 带实际到站与站序号 |
@@ -24,7 +24,7 @@
 - 席别状态来自 12306 原始字段：数字或「有」为可售，「无」为无票，「*」为未开售，空值结合该车 `seat_types` 判断是「未返回」还是「无此席别」，「--」为无此席别。余票措辞统一为「有票 / N 张 / 无票 / 未开售」；无此席别在每个车次汇总一次，payload 仍全量。席别顺序固定：二等→一等→商务→优选一等→特等→软卧→硬卧→软座→硬座→高级软卧→动卧→无座。
 - 上游行日期原样进 payload；与查询日期不一致时文本和卡片标注「上游日期 YYYY-MM-DD」，不当作错误修正。
 - `deepdeep.raw` 是生产者生成的完整文本，不是 12306 原始 JSON；请求原文只进插件日志用于排错。成功结果的 details 另有 `deepdeep.card`（title 一行路线与趟数，payload 全量到站组合、席别、票价、日期与预订链接）。
-- 卡片 id 由宿主追加，插件不自己拼「卡片 id」；两张卡都需要非空 title 才能让模型 `present` 交付。
+- 卡片 id 与 `present` 指令由插件 SDK 生成；两张卡都需要非空 title。
 - 卡片：车次卡每趟三行——第一行发车时刻与站名（左）、车次·类型·历时（中）、到达时刻与站名（右，跨日加「次日」），第二行席别用「席别 有/19 张/无」紧凑文本（有票取主色、无票弱化、未开售提示色），同车次其他到站/发车变体列「另有 …」、上游行日期与查询日不一致时用提示色标「发车日期 11-16」；默认 4 组、超过时用 `DdExpandToggle` 展开全部。票价卡按固定席别顺序列票价（行间分隔线、价格加粗），带日期、更新时间与底部预订入口。颜色、字号、间距、圆角只取 `deepDeepColors()`/`DdType`/`DdSpacing`/`DdShapes`，深浅色都成立；文案走 `host.t(zh, en)`。
 - 同一路线 10 分钟内的 `train_price` 复用最近一次 `train_search` 的 trains 拿 `train_no`/站序号/`seat_types`，不再重复查询 `queryG`；缓存没有匹配才回退搜索。
 - 票价只来自 12306 票价接口；接口没有票价时明确说明票价暂不可查，不编造价格。

@@ -5,7 +5,7 @@
     "name": "milous"
   },
   "apiLevel": 6,
-  "minHostVersion": "1.4.0",
+  "minHostVersion": "1.4.3",
   "ui": {
     "apiLevel": 2
   },

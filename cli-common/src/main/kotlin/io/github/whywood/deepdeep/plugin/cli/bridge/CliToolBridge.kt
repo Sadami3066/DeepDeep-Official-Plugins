@@ -1,6 +1,7 @@
 package io.github.whywood.deepdeep.plugin.cli.bridge
 
 import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.deepdeep.plugin.api.Cards
 import io.github.whywood.deepdeep.plugin.api.PluginHooks
 import io.github.whywood.deepdeep.plugin.api.RunFinishedEvent
 import io.github.whywood.deepdeep.plugin.api.SessionClosedEvent
@@ -11,7 +12,6 @@ import io.github.whywood.deepdeep.plugin.api.ToolResultAction
 import io.github.whywood.deepdeep.plugin.api.ToolResultDecision
 import io.github.whywood.deepdeep.plugin.api.resultKeep
 import io.github.whywood.deepdeep.plugin.api.resultReplace
-import io.github.whywood.deepdeep.plugin.api.richResult
 import io.github.whywood.deepdeep.plugin.api.textResult
 import io.github.whywood.deepdeep.plugin.api.toolContinue
 import io.github.whywood.deepdeep.plugin.cli.CliCommandLine
@@ -76,6 +76,8 @@ class CliBridgeConfig<C : Any, CARD : Any>(
 class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, CARD>) {
     private class Pending<C>(val sessionId: String, val command: C)
 
+    private class Unsupported(val sessionId: String, val suggestion: String)
+
     private class CliOutput(
         val text: String,
         val truncated: Boolean,
@@ -89,6 +91,11 @@ class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, 
 
     private val handled = object : LinkedHashMap<String, Boolean>() {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?): Boolean =
+            size > config.maxPending
+    }
+
+    private val unsupported = object : LinkedHashMap<String, Unsupported>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Unsupported>?): Boolean =
             size > config.maxPending
     }
 
@@ -107,7 +114,7 @@ class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, 
         }
 
         override suspend fun afterToolExecution(request: ToolExecutionResult): ToolResultDecision = try {
-            replace(host, request)
+            withRetryHint(request, replace(host, request))
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: Throwable) {
@@ -132,6 +139,7 @@ class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, 
         synchronized(this) {
             pending.clear()
             handled.clear()
+            unsupported.clear()
         }
     }
 
@@ -141,6 +149,9 @@ class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, 
         val summary = CliCommandLine.diagnosticSummary(raw, config.binaryName)
         val command = config.parser.parse(raw)
         if (command == null) {
+            retrySuggestion(raw)?.let { suggestion ->
+                synchronized(this) { unsupported[request.callId] = Unsupported(request.sessionId, suggestion) }
+            }
             log(host, "before call=${request.callId} match=none $summary")
             return toolContinue()
         }
@@ -168,7 +179,7 @@ class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, 
         if (request.result.isError) {
             log(host, "after call=${request.callId} skip=is-error")
             val mapped = config.errorMapper?.map(host, request, invocation.command)
-            if (mapped != null) return attachRaw(host, source, mapped)
+            if (mapped != null) return withRaw(host, request, source, mapped)
             return truncationHint(request, source)
         }
         val output = source.text
@@ -203,59 +214,78 @@ class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, 
             warn(host, "after call=${request.callId} parse=observation-miss command=${invocation.command}")
             return truncationHint(request, source)
         }
-        val cardPayload = observation.card?.let { card ->
-            runCatching { config.cardEncoder(card) }.getOrNull()
+        val raw = redactedRaw(host, source)
+        val cardPayload = observation.card?.let { value ->
+            runCatching { config.cardEncoder(value) }.getOrNull()
         }
-        val rawDetails = rawDetails(host, source)
         val guidance = observation.text.trim().takeIf { it.isNotEmpty() }
-        val details = buildJsonObject {
-            if (cardPayload != null) {
-                put(
-                    CARD_DETAILS_KEY,
-                    buildJsonObject {
-                        put("customType", observation.customType ?: config.customType)
-                        observation.summary.takeIf { it.isNotBlank() }?.let { put("title", it) }
-                        put("payload", cardPayload)
-                    },
-                )
-            }
-            rawDetails?.forEach { (key, value) -> put(key, value) }
-            if (rawDetails != null) {
-                guidance?.let { put(GUIDANCE_DETAILS_KEY, JsonPrimitive(it)) }
-            }
-        }.takeIf { it.isNotEmpty() }
         log(
             host,
             "after call=${request.callId} observation=ok guidance=${guidance?.length ?: 0} " +
-                "card=${cardPayload != null} raw=${rawDetails != null} error=${observation.isError}",
+                "card=${cardPayload != null} raw=${raw != null} error=${observation.isError}",
         )
-        val content = if (rawDetails != null) "" else guidance.orEmpty()
-        return resultReplace(textResult(content, details = details, isError = observation.isError))
+        val details = buildJsonObject {
+            if (cardPayload != null) {
+                put(
+                    Cards.KEY,
+                    Cards.descriptor(
+                        customType = observation.customType ?: config.customType,
+                        title = observation.summary.takeIf { it.isNotBlank() },
+                        payload = cardPayload,
+                    ),
+                )
+            }
+            raw?.let { put(Cards.RAW_KEY, JsonPrimitive(it)) }
+            guidance?.let { put(Cards.GUIDANCE_KEY, JsonPrimitive(it)) }
+        }.takeIf { it.isNotEmpty() }
+        return resultReplace(Cards.deliver(request.callId, textResult("", details, observation.isError)))
     }
 
-    private suspend fun attachRaw(
+    private suspend fun withRaw(
         host: PluginHost,
+        request: ToolExecutionResult,
         source: CliOutput,
         decision: ToolResultDecision,
     ): ToolResultDecision {
-        val raw = rawDetails(host, source) ?: return decision
+        val raw = redactedRaw(host, source) ?: return decision
         if (decision.action != ToolResultAction.REPLACE) return decision
         val result = decision.result ?: return decision
-        val guidance = result.text?.trim()?.takeIf { it.isNotEmpty() }
         val details = buildJsonObject {
-            (result.details as? JsonObject)?.forEach { (key, value) -> put(key, value) }
-            raw.forEach { (key, value) -> put(key, value) }
-            guidance?.let { put(GUIDANCE_DETAILS_KEY, JsonPrimitive(it)) }
+            (result.details ?: JsonObject(emptyMap())).forEach { (key, value) -> put(key, value) }
+            put(Cards.RAW_KEY, JsonPrimitive(raw))
         }
-        return resultReplace(textResult("", details = details, isError = result.isError))
+        return resultReplace(Cards.deliver(request.callId, textResult(result.text.orEmpty(), details, result.isError)))
     }
 
-    private suspend fun rawDetails(host: PluginHost, source: CliOutput): JsonObject? {
+    private fun withRetryHint(request: ToolExecutionResult, decision: ToolResultDecision): ToolResultDecision {
+        val suggestion = synchronized(this) { unsupported.remove(request.callId)?.suggestion } ?: return decision
+        val base = if (decision.action == ToolResultAction.REPLACE) {
+            decision.result ?: return decision
+        } else {
+            request.result
+        }
+        if (base.isError) return decision
+        val hint = "如有卡片展示需要，请重新执行完整命令：$suggestion"
+        val text = base.text.orEmpty().let { existing ->
+            if (existing.isBlank()) hint else "$existing\n\n$hint"
+        }
+        return resultReplace(textResult(text, base.details, base.isError))
+    }
+
+    private fun retrySuggestion(raw: String): String? {
+        if (config.parser.parse(raw) != null) return null
+        val base = raw.takeWhile { it !in SHELL_BREAKS }.trim()
+        if (base.isEmpty() || base == raw.trim()) return null
+        val tokens = CliCommandLine.tokenize(base)
+        if (tokens.isEmpty()) return null
+        if (!CliCommandLine.isBinary(tokens.first(), config.binaryName)) return null
+        return if (config.parser.parse(base) != null) base else null
+    }
+
+    private suspend fun redactedRaw(host: PluginHost, source: CliOutput): String? {
         val cleaned = CliText.stripHostNotices(CliText.stripAnsi(source.text)).trimEnd()
         if (cleaned.isBlank()) return null
-        val redacted = runCatching { config.redactRaw(host, cleaned) }.getOrNull() ?: return null
-        if (redacted.isBlank()) return null
-        return buildJsonObject { put(RAW_DETAILS_KEY, redacted) }
+        return runCatching { config.redactRaw(host, cleaned) }.getOrNull()?.takeIf { it.isNotBlank() }
     }
 
     private fun truncationHint(request: ToolExecutionResult, source: CliOutput): ToolResultDecision {
@@ -288,20 +318,12 @@ class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, 
         return CliOutput(recovered, true, true)
     }
 
-    private companion object {
-        const val CARD_DETAILS_KEY: String = "deepdeep.card"
-        const val RAW_DETAILS_KEY: String = "deepdeep.raw"
-        const val GUIDANCE_DETAILS_KEY: String = "deepdeep.guidance"
-        const val MAX_RECOVERED_OUTPUT_BYTES: Long = 4L * 1024L * 1024L
-        const val TRUNCATION_HINT: String =
-            "（上游输出超过单次上限已被截断，无法完整读取；请缩小范围后重试，例如 --page-size、--page-token 或更短的时间区间。）"
-    }
-
     private fun clearSession(host: PluginHost, sessionId: String) {
         val removed = synchronized(this) {
-            val before = pending.size
+            val before = pending.size + unsupported.size
             pending.entries.removeAll { it.value.sessionId == sessionId }
-            before - pending.size
+            unsupported.entries.removeAll { it.value.sessionId == sessionId }
+            before - pending.size - unsupported.size
         }
         log(host, "clear pending=$removed remaining=${pendingSize()}")
     }
@@ -320,5 +342,12 @@ class CliToolBridge<C : Any, CARD : Any>(private val config: CliBridgeConfig<C, 
 
     private fun warn(host: PluginHost, message: String) {
         runCatching { host.logs().warn("${config.logTag} $message") }
+    }
+
+    private companion object {
+        const val MAX_RECOVERED_OUTPUT_BYTES: Long = 4L * 1024L * 1024L
+        const val SHELL_BREAKS: String = "|><;&`"
+        const val TRUNCATION_HINT: String =
+            "（上游输出超过单次上限已被截断，无法完整读取；请缩小范围后重试，例如 --page-size、--page-token 或更短的时间区间。）"
     }
 }

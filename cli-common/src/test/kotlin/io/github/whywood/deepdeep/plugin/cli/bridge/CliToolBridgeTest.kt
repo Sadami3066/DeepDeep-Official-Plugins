@@ -166,8 +166,10 @@ class CliToolBridgeTest {
         result = textResult(output),
     )
 
-    private fun ToolResultDecision?.guidance(): String? =
-        (this?.result?.details as? JsonObject)?.get("deepdeep.guidance")?.jsonPrimitive?.content
+    private fun ToolResultDecision?.text(): String = this?.result?.text.orEmpty()
+
+    private fun ToolResultDecision?.presentInstruction(callId: String): Boolean =
+        text().contains("present({\"items\":[{\"type\":\"card\",\"id\":\"$callId\"}]})")
 
     @Test
     fun cardBecomesDetailsWithRawPayload() = runTest {
@@ -175,13 +177,18 @@ class CliToolBridgeTest {
         assertEquals(ToolCallAction.CONTINUE, hooks.beforeToolCall(call("call-1")).action)
         val decision = hooks.afterToolExecution(result("call-1"))
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        assertEquals("", decision.result?.text)
-        assertEquals("第一行\n第二行", decision.guidance())
-        val card = decision.result?.details?.get("deepdeep.card") as JsonObject
+        val text = decision.text()
+        assertTrue(text.contains("完整返回（上游原样）：\n{\"ok\":true,\"data\":[]}"))
+        assertTrue(text.contains("使用说明：\n第一行\n第二行"))
+        assertTrue(decision.presentInstruction("call-1"))
+        val details = decision.result?.details as JsonObject
+        assertEquals(null, details["deepdeep.raw"])
+        assertEquals(null, details["deepdeep.guidance"])
+        assertEquals("摘要", details["deepdeep.display"]?.jsonPrimitive?.content)
+        val card = details["deepdeep.card"] as JsonObject
         assertEquals("fake.card", card.getValue("customType").jsonPrimitive.content)
         assertEquals("摘要", card.getValue("title").jsonPrimitive.content)
         assertEquals("payload", card.getValue("payload").jsonObject.getValue("value").jsonPrimitive.content)
-        assertEquals("""{"ok":true,"data":[]}""", decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content)
     }
 
     @Test
@@ -201,11 +208,13 @@ class CliToolBridgeTest {
         val decision = hooks.afterToolExecution(result("call-1"))
         assertEquals(ToolResultAction.REPLACE, decision.action)
         assertEquals(true, decision.result?.isError)
-        assertEquals("", decision.result?.text)
-        assertEquals("未登录，请重新授权", decision.guidance())
-        val card = decision.result?.details?.get("deepdeep.card") as JsonObject
-        assertEquals("fake.card", card.getValue("customType").jsonPrimitive.content)
-        assertEquals("""{"ok":true,"data":[]}""", decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content)
+        val text = decision.text()
+        assertTrue(text.contains("未登录，请重新授权"))
+        assertTrue(text.contains("""{"ok":true,"data":[]}"""))
+        assertEquals(false, decision.presentInstruction("call-1"))
+        val details = decision.result?.details as JsonObject
+        assertEquals(null, details["deepdeep.card"])
+        assertEquals(null, details["deepdeep.raw"])
     }
 
     @Test
@@ -214,10 +223,13 @@ class CliToolBridgeTest {
         hooks.beforeToolCall(call("call-1"))
         val decision = hooks.afterToolExecution(result("call-1"))
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        assertEquals("", decision.result?.text)
-        assertEquals("第一行\n第二行", decision.guidance())
-        assertEquals(null, decision.result?.details?.get("deepdeep.card"))
-        assertEquals("""{"ok":true,"data":[]}""", decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content)
+        val text = decision.text()
+        assertTrue(text.contains("第一行\n第二行"))
+        assertTrue(text.contains("""{"ok":true,"data":[]}"""))
+        val details = decision.result?.details as JsonObject
+        assertEquals(null, details["deepdeep.card"])
+        assertEquals("第一行\n第二行", details["deepdeep.display"]?.jsonPrimitive?.content)
+        assertEquals(false, decision.presentInstruction("call-1"))
     }
 
     @Test
@@ -236,9 +248,11 @@ class CliToolBridgeTest {
         val errorResult = ToolExecutionResult(sessionId, "call-1", "bash", textResult("boom", isError = true))
         val decision = hooks.afterToolExecution(errorResult)
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        assertEquals("", decision.result?.text)
-        assertEquals("已处理错误", decision.guidance())
-        assertEquals("boom", decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content)
+        val text = decision.text()
+        assertTrue(text.startsWith("已处理错误"))
+        assertTrue(text.contains("boom"))
+        assertEquals(false, decision.presentInstruction("call-1"))
+        assertEquals(null, (decision.result?.details as JsonObject)["deepdeep.card"])
     }
 
     @Test
@@ -262,10 +276,10 @@ class CliToolBridgeTest {
         hooks.beforeToolCall(call("call-1"))
         val decision = hooks.afterToolExecution(result("call-1", """{"items":[{"id":1}]}"""))
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        val text = decision.result?.text.orEmpty()
-        assertEquals("", text)
-        assertEquals("条目数 1", decision.guidance())
-        assertEquals("""{"items":[{"id":1}]}""", decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content)
+        val text = decision.text()
+        assertTrue(text.contains("使用说明：\n条目数 1"))
+        assertTrue(text.contains("""{"items":[{"id":1}]}"""))
+        assertTrue(decision.presentInstruction("call-1"))
     }
 
     @Test
@@ -295,10 +309,8 @@ class CliToolBridgeTest {
             result("call-1", "日志行\n[{\"id\":1},{\"id\":2}]\n[exit: 0]"),
         )
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        val text = decision.result?.text.orEmpty()
-        assertEquals("", text)
-        assertEquals("数组条目 2", decision.guidance())
-        assertTrue(decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content.orEmpty().contains("[{\"id\":1},{\"id\":2}]"))
+        assertTrue(decision.text().contains("数组条目 2"))
+        assertTrue(decision.presentInstruction("call-1"))
     }
 
     @Test
@@ -321,9 +333,10 @@ class CliToolBridgeTest {
         )
         val decision = hooks.afterToolExecution(truncated)
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        assertEquals("", decision.result?.text)
-        assertEquals("第一行\n第二行", decision.guidance())
-        assertEquals("""{"ok":true,"data":[1,2,3]}""", decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content)
+        val text = decision.text()
+        assertTrue(text.contains("""{"ok":true,"data":[1,2,3]}"""))
+        assertTrue(text.contains("第一行\n第二行"))
+        assertTrue(decision.presentInstruction("call-1"))
         file.delete()
     }
 
@@ -362,7 +375,7 @@ class CliToolBridgeTest {
         val hooks = CliToolBridge(redacted).hooks(FakeHost())
         hooks.beforeToolCall(call("call-1"))
         val decision = hooks.afterToolExecution(result("call-1", """{"ok":true,"token":"secret"}"""))
-        assertEquals("""{"ok":true,"token":"***"}""", decision.result?.details?.get("deepdeep.raw")?.jsonPrimitive?.content)
+        assertTrue(decision.text().contains("""{"ok":true,"token":"***"}"""))
     }
 
     @Test
@@ -387,8 +400,8 @@ class CliToolBridgeTest {
         hooks.beforeToolCall(call("call-1"))
         val decision = hooks.afterToolExecution(result("call-1", "not json at all"))
         assertEquals(ToolResultAction.REPLACE, decision.action)
-        assertEquals("", decision.result?.text.orEmpty())
-        assertEquals("custom=found", decision.guidance())
+        assertTrue(decision.text().contains("custom=found"))
+        assertTrue(decision.presentInstruction("call-1"))
     }
 
     @Test

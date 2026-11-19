@@ -32,7 +32,7 @@ class SysuObservationTest {
     @Test
     fun scheduleObservationKeepsFullDataInCardAndOnlyGuidanceInText() {
         val rendered = render(SysuCommandKind.Schedule, "schedule.json")
-        assertTrue(rendered.text.contains("present"))
+        assertTrue(rendered.card != null)
         guidanceDoesNotLeakData(rendered, "2026-11-09", "第 9-11 节", "岭南学院", "6 门")
         val card = rendered.card
         assertNotNull(card)
@@ -61,7 +61,7 @@ class SysuObservationTest {
     @Test
     fun scoresObservationPutsCodesAndGpaInCardOnly() {
         val rendered = render(SysuCommandKind.Scores, "scores.json")
-        assertTrue(rendered.text.contains("present"))
+        assertTrue(rendered.card != null)
         guidanceDoesNotLeakData(rendered, "2025-2", "2.433", "课程甲", "3.3")
         val card = rendered.card!!
         assertEquals("3 门", card.trailing)
@@ -88,7 +88,7 @@ class SysuObservationTest {
     @Test
     fun examsObservationKeepsDatesAndTeacherDetailsInCardOnly() {
         val rendered = render(SysuCommandKind.Exams, "exams.json")
-        assertTrue(rendered.text.contains("present"))
+        assertTrue(rendered.card != null)
         guidanceDoesNotLeakData(rendered, "2026-11-26", "2026-12-08", "教师甲", "第 12 周", "2 场")
         val card = rendered.card!!
         assertEquals("2 场", card.trailing)
@@ -129,7 +129,7 @@ class SysuObservationTest {
     @Test
     fun lmsCourseObservationKeepsIdProgressAndEndDateInCard() {
         val rendered = render(SysuCommandKind.LmsCourses, "lms_courses.json")
-        assertTrue(rendered.text.contains("present"))
+        assertTrue(rendered.card != null)
         guidanceDoesNotLeakData(rendered, "1005339", "80%", "2027-01-31", "课程甲")
         val card = rendered.card!!
         assertEquals("3 门", card.trailing)
@@ -153,7 +153,7 @@ class SysuObservationTest {
     @Test
     fun gymObservationKeepsSlotsAndFeesInCard() {
         val rendered = render(SysuCommandKind.GymSlots, "gym_slots.json")
-        assertTrue(rendered.text.contains("present"))
+        assertTrue(rendered.card != null)
         guidanceDoesNotLeakData(rendered, "2026-11-15", "08:00-09:00", "5 积分", "场地1")
         val card = rendered.card!!
         assertEquals("3 个场地", card.trailing)
@@ -220,7 +220,7 @@ class SysuObservationTest {
     @Test
     fun netpayServicesShowServiceStatusAndExpiryInCard() {
         val rendered = render(SysuCommandKind.Netpay, "netpay_services.json")
-        assertTrue(rendered.text.contains("present"))
+        assertTrue(rendered.card != null)
         guidanceDoesNotLeakData(rendered, "张三", "学号 00000000", "校园网-学生宿舍", "2027-06-30", "227")
         val card = rendered.card!!
         assertEquals("1 个服务", card.trailing)

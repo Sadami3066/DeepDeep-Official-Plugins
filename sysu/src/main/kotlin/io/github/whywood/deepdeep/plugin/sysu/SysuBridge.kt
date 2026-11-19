@@ -33,7 +33,6 @@ internal const val SYSU_CARD_TYPE = "sysu.card"
 
 private const val SYSU_BINARY = "sysu"
 private const val BASH_TOOL = "bash"
-private const val RAW_KEY = "deepdeep.raw"
 
 private val SYSU_OBSERVER: CliObservationBuilder<SysuInvocation, CliCardModel> =
     object : CliObservationBuilder<SysuInvocation, CliCardModel> {
@@ -127,79 +126,25 @@ internal fun PluginHost.sysuStrings(): SysuStrings = SysuStrings { zh, en ->
 internal class SysuToolBridge {
     private val bridge = CliToolBridge(SYSU_BRIDGE_CONFIG)
 
-    private val tracked = object : LinkedHashMap<String, Boolean>() {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?): Boolean =
-            size > MAX_TRACKED
-    }
-
     fun hooks(host: PluginHost): PluginHooks {
         val base = bridge.hooks(host)
         return object : PluginHooks by base {
-            override suspend fun beforeToolCall(request: ToolCallRequest): ToolCallDecision {
-                val decision = base.beforeToolCall(request)
-                if (request.toolName == BASH_TOOL) {
-                    val raw = (request.args[COMMAND_ARGUMENT] as? JsonPrimitive)?.contentOrNull.orEmpty()
-                    if (SysuCommandParser.parse(raw) != null) {
-                        synchronized(tracked) { tracked[request.callId] = true }
-                    }
-                }
-                return decision
-            }
-
             override suspend fun afterToolExecution(request: ToolExecutionResult): ToolResultDecision {
                 val decision = base.afterToolExecution(request)
-                if (request.toolName != BASH_TOOL) {
-                    tracked.remove(request.callId)
-                    return decision
-                }
-                val isTracked = synchronized(tracked) { tracked.remove(request.callId) == true }
-                if (decision.action == ToolResultAction.REPLACE) {
-                    return decision.withRaw(host, request, isTracked)
-                }
+                if (request.toolName != BASH_TOOL) return decision
+                if (decision.action == ToolResultAction.REPLACE) return decision
                 val text = request.result.text ?: return decision
                 val strings = host.sysuStrings()
                 val safe = SysuFailures.redactSensitive(text, strings)
                 val hint = if (safe == null) SysuFailures.legacyHint(text, strings) else null
-                if (!isTracked && safe == null && hint == null) return decision
-                val body = safe ?: hint ?: text
-                val details = if (isTracked) request.result.details.withRaw(text, strings) else request.result.details
-                return resultReplace(textResult(body, details = details, isError = request.result.isError))
-            }
-
-            override suspend fun runFinished(event: RunFinishedEvent) {
-                base.runFinished(event)
-                synchronized(tracked) { tracked.clear() }
-            }
-
-            override suspend fun sessionClosed(event: SessionClosedEvent) {
-                base.sessionClosed(event)
-                synchronized(tracked) { tracked.clear() }
+                if (safe == null && hint == null) return decision
+                return resultReplace(textResult(safe ?: hint ?: text, isError = request.result.isError))
             }
         }
     }
 
-    private fun ToolResultDecision.withRaw(
-        host: PluginHost,
-        request: ToolExecutionResult,
-        isTracked: Boolean,
-    ): ToolResultDecision {
-        if (!isTracked) return this
-        val result = result ?: return this
-        if (result.details?.get(RAW_KEY) != null) return this
-        val text = result.text ?: request.result.text ?: return this
-        if (text.isBlank()) return this
-        return resultReplace(textResult(text, details = result.details.withRaw(text, host.sysuStrings()), isError = result.isError))
-    }
-
-    private fun JsonObject?.withRaw(text: String, strings: SysuStrings): JsonObject {
-        val cleaned = CliText.stripHostNotices(text).trimEnd()
-        val raw = SysuFailures.redactSensitive(cleaned, strings) ?: cleaned
-        return JsonObject((this ?: JsonObject(emptyMap())) + buildJsonObject { put(RAW_KEY, raw) })
-    }
-
-    private companion object {
-        const val MAX_TRACKED = 64
-        const val COMMAND_ARGUMENT = "command"
+    fun clear() {
+        bridge.clear()
     }
 }
 
