@@ -1,34 +1,34 @@
-package io.github.whywood.deepdeep.plugin.mail
+package io.github.whywood.superpi.plugin.mail
 
-import io.github.whywood.deepdeep.plugin.api.BackgroundTaskEvent
-import io.github.whywood.deepdeep.plugin.api.NotificationActionEvent
-import io.github.whywood.deepdeep.plugin.api.PluginBackgroundKind
-import io.github.whywood.deepdeep.plugin.api.PluginRunSignal
-import io.github.whywood.deepdeep.plugin.api.PluginToolCall
-import io.github.whywood.deepdeep.plugin.api.PluginToolResult
-import io.github.whywood.deepdeep.plugin.mail.mime.MailMimeParser
-import io.github.whywood.deepdeep.plugin.mail.store.MailAccountIndex
-import io.github.whywood.deepdeep.plugin.mail.store.MailFolderIndex
-import io.github.whywood.deepdeep.plugin.mail.store.MailServerSettings
-import io.github.whywood.deepdeep.plugin.mail.store.MailStore
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapClient
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapCredentials
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapEndpoint
-import io.github.whywood.deepdeep.plugin.mail.transport.MailLocalizedException
-import io.github.whywood.deepdeep.plugin.mail.transport.MailTransport
-import io.github.whywood.deepdeep.plugin.mail.transport.SmtpClient
-import io.github.whywood.deepdeep.plugin.mail.transport.SmtpCredentials
-import io.github.whywood.deepdeep.plugin.mail.transport.SmtpEndpoint
-import io.github.whywood.deepdeep.plugin.mail.tools.MAIL_OPEN_ACTION_ID
-import io.github.whywood.deepdeep.plugin.mail.tools.MAIL_SYNC_TASK_ID
-import io.github.whywood.deepdeep.plugin.mail.tools.MailChatCardTypes
-import io.github.whywood.deepdeep.plugin.mail.tools.MailReadCardPayload
-import io.github.whywood.deepdeep.plugin.mail.tools.MailSearchCardPayload
-import io.github.whywood.deepdeep.plugin.mail.tools.mailCardJson
-import io.github.whywood.deepdeep.plugin.mail.tools.mailHooks
-import io.github.whywood.deepdeep.plugin.mail.tools.mailNotificationPayload
-import io.github.whywood.deepdeep.plugin.mail.tools.mailTools
-import io.github.whywood.deepdeep.plugin.mail.transport.SmtpSecurity
+import io.github.whywood.superpi.plugin.api.BackgroundTaskEvent
+import io.github.whywood.superpi.plugin.api.NotificationActionEvent
+import io.github.whywood.superpi.plugin.api.PluginBackgroundKind
+import io.github.whywood.superpi.plugin.api.PluginRunSignal
+import io.github.whywood.superpi.plugin.api.PluginToolCall
+import io.github.whywood.superpi.plugin.api.PluginToolResult
+import io.github.whywood.superpi.plugin.mail.mime.MailMimeParser
+import io.github.whywood.superpi.plugin.mail.store.MailAccountIndex
+import io.github.whywood.superpi.plugin.mail.store.MailFolderIndex
+import io.github.whywood.superpi.plugin.mail.store.MailServerSettings
+import io.github.whywood.superpi.plugin.mail.store.MailStore
+import io.github.whywood.superpi.plugin.mail.transport.ImapClient
+import io.github.whywood.superpi.plugin.mail.transport.ImapCredentials
+import io.github.whywood.superpi.plugin.mail.transport.ImapEndpoint
+import io.github.whywood.superpi.plugin.mail.transport.MailLocalizedException
+import io.github.whywood.superpi.plugin.mail.transport.MailTransport
+import io.github.whywood.superpi.plugin.mail.transport.SmtpClient
+import io.github.whywood.superpi.plugin.mail.transport.SmtpCredentials
+import io.github.whywood.superpi.plugin.mail.transport.SmtpEndpoint
+import io.github.whywood.superpi.plugin.mail.tools.MAIL_OPEN_ACTION_ID
+import io.github.whywood.superpi.plugin.mail.tools.MAIL_SYNC_TASK_ID
+import io.github.whywood.superpi.plugin.mail.tools.MailChatCardTypes
+import io.github.whywood.superpi.plugin.mail.tools.MailReadCardPayload
+import io.github.whywood.superpi.plugin.mail.tools.MailSearchCardPayload
+import io.github.whywood.superpi.plugin.mail.tools.mailCardJson
+import io.github.whywood.superpi.plugin.mail.tools.mailHooks
+import io.github.whywood.superpi.plugin.mail.tools.mailNotificationPayload
+import io.github.whywood.superpi.plugin.mail.tools.mailTools
+import io.github.whywood.superpi.plugin.mail.transport.SmtpSecurity
 import java.io.File
 import java.io.RandomAccessFile
 import java.net.ServerSocket
@@ -412,7 +412,7 @@ class MailRuntimeIntegrationTest {
             assertFalse(draftResult.text.orEmpty(), draftResult.isError)
             val draft = rig.runtime.state.value.drafts.single()
             assertTrue(draftResult.text.orEmpty().contains(draft.id))
-            val draftCard = draftResult.details?.get("deepdeep.card")?.jsonObject
+            val draftCard = draftResult.details?.get("superpi.card")?.jsonObject
             assertNotNull(draftCard)
             assertEquals(MailChatCardTypes.DRAFT, (draftCard!!["customType"] as JsonPrimitive).contentOrNull)
             assertTrue((draftCard["title"] as JsonPrimitive).contentOrNull.orEmpty().isNotBlank())
@@ -1039,7 +1039,7 @@ class MailRuntimeIntegrationTest {
             assertTrue(text, Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}").containsMatchIn(text))
             assertTrue(text, text.contains("含附件"))
             assertFalse(text, text.contains("卡片 id："))
-            val card = result.details?.get("deepdeep.card")?.jsonObject
+            val card = result.details?.get("superpi.card")?.jsonObject
             assertNotNull(card)
             assertEquals(MailChatCardTypes.SEARCH, (card!!["customType"] as JsonPrimitive).contentOrNull)
         } finally {
@@ -1082,7 +1082,7 @@ class MailRuntimeIntegrationTest {
             assertTrue(text, text.contains("附件：1 个"))
             assertTrue(text, text.contains("report.pdf（application/pdf，9 B，id=att-0）"))
             assertFalse(text, text.contains("卡片 id："))
-            val card = result.details?.get("deepdeep.card")?.jsonObject
+            val card = result.details?.get("superpi.card")?.jsonObject
             assertNotNull(card)
             assertEquals(MailChatCardTypes.READ, (card!!["customType"] as JsonPrimitive).contentOrNull)
         } finally {
@@ -1171,7 +1171,7 @@ class MailRuntimeIntegrationTest {
             val text = page.text.orEmpty()
             assertTrue(text, text.contains("匹配 7 封，返回 3 封"))
             assertTrue(text, text.contains("可用 offset 继续（offset=5）"))
-            val pageCard = page.details?.get("deepdeep.card")?.jsonObject
+            val pageCard = page.details?.get("superpi.card")?.jsonObject
             assertNotNull(pageCard)
             val pagePayload = mailCardJson.decodeFromJsonElement(
                 MailSearchCardPayload.serializer(),
@@ -1188,7 +1188,7 @@ class MailRuntimeIntegrationTest {
                 ),
             )
             assertFalse(all.text.orEmpty(), all.isError)
-            val card = all.details?.get("deepdeep.card")?.jsonObject
+            val card = all.details?.get("superpi.card")?.jsonObject
             assertNotNull(card)
             val payload = mailCardJson.decodeFromJsonElement(
                 MailSearchCardPayload.serializer(),
@@ -1234,7 +1234,7 @@ class MailRuntimeIntegrationTest {
             assertTrue(text, text.contains("<p>Hello <b>HTML</b> world</p>"))
             assertTrue(text, text.contains(paragraph))
             assertTrue(text, text.contains("Message-ID：<html-1@example.com>"))
-            val card = result.details?.get("deepdeep.card")?.jsonObject
+            val card = result.details?.get("superpi.card")?.jsonObject
             assertNotNull(card)
             val payload = mailCardJson.decodeFromJsonElement(
                 MailReadCardPayload.serializer(),

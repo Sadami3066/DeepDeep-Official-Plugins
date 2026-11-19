@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.mime
+package io.github.whywood.superpi.plugin.mail.mime
 
 internal object HtmlText {
     fun toPlainText(html: String): String {

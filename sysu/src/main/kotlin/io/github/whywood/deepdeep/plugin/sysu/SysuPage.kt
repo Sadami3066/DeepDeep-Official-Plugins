@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.sysu
+package io.github.whywood.superpi.plugin.sysu
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -28,27 +28,27 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdGroupCard
-import io.github.whywood.deepdeep.design.DdHairline
-import io.github.whywood.deepdeep.design.DdIconButton
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdMotion
-import io.github.whywood.deepdeep.design.DdNoticeBar
-import io.github.whywood.deepdeep.design.DdNoticeTone
-import io.github.whywood.deepdeep.design.DdLoadingBlock
-import io.github.whywood.deepdeep.design.DdPrimaryButton
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdSpinner
-import io.github.whywood.deepdeep.design.DdStatusRow
-import io.github.whywood.deepdeep.design.DdStatusTone
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.DdTextField
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.LocalDdMotionEnabled
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.uiConfirmRequest
+import io.github.whywood.superpi.design.DdGroupCard
+import io.github.whywood.superpi.design.DdHairline
+import io.github.whywood.superpi.design.DdIconButton
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdMotion
+import io.github.whywood.superpi.design.DdNoticeBar
+import io.github.whywood.superpi.design.DdNoticeTone
+import io.github.whywood.superpi.design.DdLoadingBlock
+import io.github.whywood.superpi.design.DdPrimaryButton
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdSpinner
+import io.github.whywood.superpi.design.DdStatusRow
+import io.github.whywood.superpi.design.DdStatusTone
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.DdTextField
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.LocalDdMotionEnabled
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.uiConfirmRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -448,11 +448,11 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
         verticalArrangement = Arrangement.spacedBy(DdSpacing.Lg),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Xs)) {
-            DdText(host.text(TEXT_PAGE_TITLE), style = DdType.heading, color = deepDeepColors().ink)
+            DdText(host.text(TEXT_PAGE_TITLE), style = DdType.heading, color = superPiColors().ink)
             DdText(
                 host.text(TEXT_PAGE_SUBTITLE),
                 style = DdType.bodySmall,
-                color = deepDeepColors().inkSecondary,
+                color = superPiColors().inkSecondary,
             )
         }
         StatusCard(host, state)
@@ -506,7 +506,7 @@ internal fun SysuPage(plugin: SysuPlugin, host: PluginHost) {
         DdText(
             host.text(TEXT_FOOTER),
             style = DdType.micro,
-            color = deepDeepColors().inkTertiary,
+            color = superPiColors().inkTertiary,
         )
     }
 }
@@ -584,7 +584,7 @@ private fun siteTone(status: SysuStatus?, progress: SiteProgress?, site: SysuSit
 
 @Composable
 private fun SignInSection(host: PluginHost, state: SysuPageState, onSignIn: () -> Unit) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     DdGroupCard {
         Column(
             modifier = Modifier
@@ -671,7 +671,7 @@ private fun CodeSection(
     onSubmit: () -> Unit,
     onResend: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val site = state.codeSite ?: SysuSite.Jwxt
     val hint = if (site == SysuSite.Jwxt) {
         host.text(TEXT_CODE_HINT)
@@ -755,7 +755,7 @@ private fun SignedInSection(
     onConnect: () -> Unit,
     onSignOut: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     DdGroupCard {
         Column(
             modifier = Modifier
@@ -804,13 +804,13 @@ private fun FieldError(text: String) {
         text = text,
         modifier = Modifier.padding(horizontal = DdSpacing.Xs),
         style = DdType.bodySmall,
-        color = deepDeepColors().danger,
+        color = superPiColors().danger,
     )
 }
 
 @Composable
 private fun ProgressRow(text: String) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Center,

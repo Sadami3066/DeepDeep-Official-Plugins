@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.amap
+package io.github.whywood.superpi.plugin.amap
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -40,25 +40,25 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdExpandToggle
-import io.github.whywood.deepdeep.design.DdGroupCard
-import io.github.whywood.deepdeep.design.DdHairline
-import io.github.whywood.deepdeep.design.DdIcon
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdImageViewer
-import io.github.whywood.deepdeep.design.DdMotion
-import io.github.whywood.deepdeep.design.DdPressable
-import io.github.whywood.deepdeep.design.DdRemoteImage
-import io.github.whywood.deepdeep.design.DdShapes
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdSpinner
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.LocalDdMotionEnabled
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginToolResult
-import io.github.whywood.deepdeep.plugin.api.ToolResultState
+import io.github.whywood.superpi.design.DdExpandToggle
+import io.github.whywood.superpi.design.DdGroupCard
+import io.github.whywood.superpi.design.DdHairline
+import io.github.whywood.superpi.design.DdIcon
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdImageViewer
+import io.github.whywood.superpi.design.DdMotion
+import io.github.whywood.superpi.design.DdPressable
+import io.github.whywood.superpi.design.DdRemoteImage
+import io.github.whywood.superpi.design.DdShapes
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdSpinner
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.LocalDdMotionEnabled
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginToolResult
+import io.github.whywood.superpi.plugin.api.ToolResultState
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -93,7 +93,7 @@ internal fun AmapWeatherCard(host: PluginHost, state: ToolResultState) {
         AmapCardPhase.READY -> Unit
     }
     val details = decodeWeatherDetails(result?.details) ?: return
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val current = details.days.first()
     val future = details.days.drop(1)
     val preview = future.take(WEATHER_PREVIEW_DAYS)
@@ -162,7 +162,7 @@ private const val WEATHER_PREVIEW_DAYS = 3
 
 @Composable
 private fun WeatherFeaturedDay(host: PluginHost, day: AmapWeatherDay) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -187,7 +187,7 @@ private fun WeatherFeaturedDay(host: PluginHost, day: AmapWeatherDay) {
 
 @Composable
 private fun WeatherDayRow(host: PluginHost, day: AmapWeatherDay) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = DdSpacing.Xxs),
         verticalAlignment = Alignment.Top,
@@ -216,7 +216,7 @@ private fun WeatherHalf(
     modifier: Modifier = Modifier,
     large: Boolean = false,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val weather = if (dayHalf) day.dayWeather else day.nightWeather
     val temperature = if (dayHalf) {
         day.dayTemp ?: day.dayTempFloat?.roundToInt()

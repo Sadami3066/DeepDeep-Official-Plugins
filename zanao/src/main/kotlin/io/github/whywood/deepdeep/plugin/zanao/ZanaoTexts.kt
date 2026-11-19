@@ -1,8 +1,8 @@
-package io.github.whywood.deepdeep.plugin.zanao
+package io.github.whywood.superpi.plugin.zanao
 
-import io.github.whywood.deepdeep.plugin.api.LocalizedText
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.localizedText
+import io.github.whywood.superpi.plugin.api.LocalizedText
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.localizedText
 
 internal fun literal(zh: String, en: String, default: String = zh): LocalizedText =
     localizedText(mapOf("default" to default, "zh" to zh, "en" to en))

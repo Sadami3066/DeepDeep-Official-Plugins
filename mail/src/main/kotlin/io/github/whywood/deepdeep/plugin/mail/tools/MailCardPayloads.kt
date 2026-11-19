@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.tools
+package io.github.whywood.superpi.plugin.mail.tools
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json

@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mcpuidemo
+package io.github.whywood.superpi.plugin.mcpuidemo
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,34 +10,34 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdGroupCard
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
-import io.github.whywood.deepdeep.plugin.api.ToolResultRendererContributor
-import io.github.whywood.deepdeep.plugin.api.ToolResultSource
-import io.github.whywood.deepdeep.plugin.api.available
-import io.github.whywood.deepdeep.plugin.api.localizedText
-import io.github.whywood.deepdeep.plugin.api.pluginPage
-import io.github.whywood.deepdeep.plugin.api.toolResultMatch
-import io.github.whywood.deepdeep.plugin.api.toolResultRenderer
+import io.github.whywood.superpi.design.DdGroupCard
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.SuperPIPlugin
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginUiContributions
+import io.github.whywood.superpi.plugin.api.ToolResultRendererContributor
+import io.github.whywood.superpi.plugin.api.ToolResultSource
+import io.github.whywood.superpi.plugin.api.available
+import io.github.whywood.superpi.plugin.api.localizedText
+import io.github.whywood.superpi.plugin.api.pluginPage
+import io.github.whywood.superpi.plugin.api.toolResultMatch
+import io.github.whywood.superpi.plugin.api.toolResultRenderer
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-class McpUiDemoPlugin : DeepDeepPlugin {
+class McpUiDemoPlugin : SuperPIPlugin {
     override suspend fun availability(host: PluginHost) = available()
 
     override fun ui(host: PluginHost): PluginUiContributions = object :
         PluginUiContributions,
         ToolResultRendererContributor {
-        override val bindings = emptyList<io.github.whywood.deepdeep.plugin.api.SlotBinding>()
+        override val bindings = emptyList<io.github.whywood.superpi.plugin.api.SlotBinding>()
 
         override val pages = listOf(
             pluginPage(
@@ -85,7 +85,7 @@ private fun DemoPage() {
 
 @Composable
 private fun WeatherCard(data: JsonObject?) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val city = data?.get("city")?.jsonPrimitive?.content ?: "杭州"
     val temp = data?.get("temperature")?.jsonPrimitive?.intOrNull ?: 26
     val condition = data?.get("condition")?.jsonPrimitive?.content ?: "晴"

@@ -1,6 +1,6 @@
-package io.github.whywood.deepdeep.plugin.cli.update
+package io.github.whywood.superpi.plugin.cli.update
 
-import io.github.whywood.deepdeep.plugin.api.NetworkService
+import io.github.whywood.superpi.plugin.api.NetworkService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job

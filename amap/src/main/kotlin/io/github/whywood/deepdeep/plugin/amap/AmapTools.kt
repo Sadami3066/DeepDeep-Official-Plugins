@@ -1,12 +1,12 @@
-package io.github.whywood.deepdeep.plugin.amap
+package io.github.whywood.superpi.plugin.amap
 
-import io.github.whywood.deepdeep.plugin.api.Cards
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginTool
-import io.github.whywood.deepdeep.plugin.api.PluginToolCall
-import io.github.whywood.deepdeep.plugin.api.PluginToolResult
-import io.github.whywood.deepdeep.plugin.api.pluginTool
-import io.github.whywood.deepdeep.plugin.api.textResult
+import io.github.whywood.superpi.plugin.api.Cards
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginTool
+import io.github.whywood.superpi.plugin.api.PluginToolCall
+import io.github.whywood.superpi.plugin.api.PluginToolResult
+import io.github.whywood.superpi.plugin.api.pluginTool
+import io.github.whywood.superpi.plugin.api.textResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement

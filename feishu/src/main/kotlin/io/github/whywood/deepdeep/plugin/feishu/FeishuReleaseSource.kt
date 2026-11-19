@@ -1,15 +1,15 @@
-package io.github.whywood.deepdeep.plugin.feishu
+package io.github.whywood.superpi.plugin.feishu
 
-import io.github.whywood.deepdeep.plugin.api.NetworkService
-import io.github.whywood.deepdeep.plugin.cli.update.CliHttp
-import io.github.whywood.deepdeep.plugin.cli.update.CliUpdateCheck
-import io.github.whywood.deepdeep.plugin.cli.update.CliUpdateSource
-import io.github.whywood.deepdeep.plugin.cli.update.CliVersions
+import io.github.whywood.superpi.plugin.api.NetworkService
+import io.github.whywood.superpi.plugin.cli.update.CliHttp
+import io.github.whywood.superpi.plugin.cli.update.CliUpdateCheck
+import io.github.whywood.superpi.plugin.cli.update.CliUpdateSource
+import io.github.whywood.superpi.plugin.cli.update.CliVersions
 
 internal object FeishuReleaseSource : CliUpdateSource {
     private val GITHUB_HEADERS = mapOf(
         "Accept" to "application/vnd.github+json",
-        "User-Agent" to "DeepDeep-Feishu-Plugin",
+        "User-Agent" to "SuperPI-Feishu-Plugin",
     )
 
     override suspend fun discover(network: NetworkService?, installedVersion: String?): CliUpdateCheck {

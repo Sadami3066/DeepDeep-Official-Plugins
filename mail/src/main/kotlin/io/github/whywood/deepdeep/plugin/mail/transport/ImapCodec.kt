@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.transport
+package io.github.whywood.superpi.plugin.mail.transport
 
 import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
@@ -82,11 +82,11 @@ internal object ImapCodec {
 
     fun clientId(version: String): String = buildString {
         append("(\"name\" ")
-        append(quote("DeepDeep Mail"))
+        append(quote("SuperPI Mail"))
         append(" \"version\" ")
         append(quote(version))
         append(" \"vendor\" ")
-        append(quote("DeepDeep"))
+        append(quote("SuperPI"))
         append(')')
     }
 

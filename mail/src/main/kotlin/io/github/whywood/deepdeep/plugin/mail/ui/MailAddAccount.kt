@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -12,11 +12,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.mail.MailAccountInput
-import io.github.whywood.deepdeep.plugin.mail.MailConnectionTest
-import io.github.whywood.deepdeep.plugin.mail.MailProviderPreset
-import io.github.whywood.deepdeep.plugin.mail.MailRepository
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.mail.MailAccountInput
+import io.github.whywood.superpi.plugin.mail.MailConnectionTest
+import io.github.whywood.superpi.plugin.mail.MailProviderPreset
+import io.github.whywood.superpi.plugin.mail.MailRepository
 import kotlinx.coroutines.launch
 
 private enum class AddStep { PROVIDER, HELP, CREDENTIALS, RESULT }

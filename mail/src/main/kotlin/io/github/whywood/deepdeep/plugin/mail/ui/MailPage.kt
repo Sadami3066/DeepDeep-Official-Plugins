@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -31,24 +31,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdAvatar
-import io.github.whywood.deepdeep.design.DdEmptyState
-import io.github.whywood.deepdeep.design.DdIconButton
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdLoadingBlock
-import io.github.whywood.deepdeep.design.DdPrimaryButton
-import io.github.whywood.deepdeep.design.DdSearchField
-import io.github.whywood.deepdeep.design.DdSegmentedControl
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.LocalPluginPageContext
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginPagePresentation
-import io.github.whywood.deepdeep.plugin.mail.MailAccount
-import io.github.whywood.deepdeep.plugin.mail.MailDraft
-import io.github.whywood.deepdeep.plugin.mail.MailFolderRole
-import io.github.whywood.deepdeep.plugin.mail.MailMessageSummary
-import io.github.whywood.deepdeep.plugin.mail.MailRepository
+import io.github.whywood.superpi.design.DdAvatar
+import io.github.whywood.superpi.design.DdEmptyState
+import io.github.whywood.superpi.design.DdIconButton
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdLoadingBlock
+import io.github.whywood.superpi.design.DdPrimaryButton
+import io.github.whywood.superpi.design.DdSearchField
+import io.github.whywood.superpi.design.DdSegmentedControl
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.LocalPluginPageContext
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginPagePresentation
+import io.github.whywood.superpi.plugin.mail.MailAccount
+import io.github.whywood.superpi.plugin.mail.MailDraft
+import io.github.whywood.superpi.plugin.mail.MailFolderRole
+import io.github.whywood.superpi.plugin.mail.MailMessageSummary
+import io.github.whywood.superpi.plugin.mail.MailRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -59,7 +59,7 @@ private const val SearchDebounceMillis = 320L
 @Composable
 internal fun MailPage(host: PluginHost, repository: MailRepository) {
     val state by repository.state.collectAsState()
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val scope = rememberCoroutineScope()
     val chinese = host.chinese
     val now = System.currentTimeMillis()
@@ -590,7 +590,7 @@ private fun MailTopActions(
     onAccounts: () -> Unit,
     onAddAccount: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -686,7 +686,7 @@ private fun MailSearchContent(
     onRetry: () -> Unit,
     onClear: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     when (searchState) {
         is MailSearchState.Idle, is MailSearchState.Loading -> DdLoadingBlock(
             modifier = Modifier.fillMaxSize(),

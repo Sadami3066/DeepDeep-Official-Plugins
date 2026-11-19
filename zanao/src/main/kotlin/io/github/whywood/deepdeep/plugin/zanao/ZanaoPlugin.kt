@@ -1,21 +1,21 @@
-package io.github.whywood.deepdeep.plugin.zanao
+package io.github.whywood.superpi.plugin.zanao
 
-import io.github.whywood.deepdeep.plugin.api.Contributions
-import io.github.whywood.deepdeep.plugin.api.SlotBinding
-import io.github.whywood.deepdeep.plugin.api.contributions
-import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
-import io.github.whywood.deepdeep.plugin.api.HostAccessLevel
-import io.github.whywood.deepdeep.plugin.api.PluginAvailability
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PrivilegeLevel
-import io.github.whywood.deepdeep.plugin.api.PluginPage
-import io.github.whywood.deepdeep.plugin.api.PluginSkill
-import io.github.whywood.deepdeep.plugin.api.pluginSkill
-import io.github.whywood.deepdeep.plugin.api.pluginSkillFile
-import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
-import io.github.whywood.deepdeep.plugin.api.assetIcon
-import io.github.whywood.deepdeep.plugin.api.available
-import io.github.whywood.deepdeep.plugin.api.pluginPage
+import io.github.whywood.superpi.plugin.api.Contributions
+import io.github.whywood.superpi.plugin.api.SlotBinding
+import io.github.whywood.superpi.plugin.api.contributions
+import io.github.whywood.superpi.plugin.api.SuperPIPlugin
+import io.github.whywood.superpi.plugin.api.HostAccessLevel
+import io.github.whywood.superpi.plugin.api.PluginAvailability
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PrivilegeLevel
+import io.github.whywood.superpi.plugin.api.PluginPage
+import io.github.whywood.superpi.plugin.api.PluginSkill
+import io.github.whywood.superpi.plugin.api.pluginSkill
+import io.github.whywood.superpi.plugin.api.pluginSkillFile
+import io.github.whywood.superpi.plugin.api.PluginUiContributions
+import io.github.whywood.superpi.plugin.api.assetIcon
+import io.github.whywood.superpi.plugin.api.available
+import io.github.whywood.superpi.plugin.api.pluginPage
 import org.json.JSONObject
 import kotlinx.coroutines.flow.StateFlow
 import java.io.File
@@ -53,7 +53,7 @@ internal suspend fun clearCliToken(host: PluginHost) {
     if (linux.available) runCatching { linux.exec("rm -f /root/.zanao.json") }
 }
 
-class ZanaoPlugin : DeepDeepPlugin {
+class ZanaoPlugin : SuperPIPlugin {
     @Volatile
     private var capture: ZanaoCapture? = null
 
@@ -73,9 +73,9 @@ class ZanaoPlugin : DeepDeepPlugin {
         capture?.stop()
         capture = null
         runCatching {
-            host.privilege().exec("settings delete global global_http_proxy_host", io.github.whywood.deepdeep.plugin.api.PrivilegeLevel.AUTO)
-            host.privilege().exec("settings delete global global_http_proxy_port", io.github.whywood.deepdeep.plugin.api.PrivilegeLevel.AUTO)
-            host.privilege().exec("settings delete global http_proxy", io.github.whywood.deepdeep.plugin.api.PrivilegeLevel.AUTO)
+            host.privilege().exec("settings delete global global_http_proxy_host", io.github.whywood.superpi.plugin.api.PrivilegeLevel.AUTO)
+            host.privilege().exec("settings delete global global_http_proxy_port", io.github.whywood.superpi.plugin.api.PrivilegeLevel.AUTO)
+            host.privilege().exec("settings delete global http_proxy", io.github.whywood.superpi.plugin.api.PrivilegeLevel.AUTO)
         }
         runCatching { host.secrets().clear() }
         runCatching { host.settings().clear() }

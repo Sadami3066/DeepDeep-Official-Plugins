@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.micloud
+package io.github.whywood.superpi.plugin.micloud
 
 import android.webkit.CookieManager
 import androidx.activity.compose.BackHandler
@@ -38,34 +38,34 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdEmptyState
-import io.github.whywood.deepdeep.design.DdGroupCard
-import io.github.whywood.deepdeep.design.DdHairline
-import io.github.whywood.deepdeep.design.DdIconButton
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdInfoTooltip
-import io.github.whywood.deepdeep.design.DdListRow
-import io.github.whywood.deepdeep.design.DdLoadingBlock
-import io.github.whywood.deepdeep.design.DdMotion
-import io.github.whywood.deepdeep.design.DdNoticeBar
-import io.github.whywood.deepdeep.design.DdNoticeTone
-import io.github.whywood.deepdeep.design.DdPrimaryButton
-import io.github.whywood.deepdeep.design.DdProgressBar
-import io.github.whywood.deepdeep.design.DdSectionLabel
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdStatusRow
-import io.github.whywood.deepdeep.design.DdStatusTone
-import io.github.whywood.deepdeep.design.DdSwitch
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.DdWebView
-import io.github.whywood.deepdeep.design.DdWebViewErrorKind
-import io.github.whywood.deepdeep.design.DdWebViewState
-import io.github.whywood.deepdeep.design.LocalDdMotionEnabled
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.uiConfirmRequest
+import io.github.whywood.superpi.design.DdEmptyState
+import io.github.whywood.superpi.design.DdGroupCard
+import io.github.whywood.superpi.design.DdHairline
+import io.github.whywood.superpi.design.DdIconButton
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdInfoTooltip
+import io.github.whywood.superpi.design.DdListRow
+import io.github.whywood.superpi.design.DdLoadingBlock
+import io.github.whywood.superpi.design.DdMotion
+import io.github.whywood.superpi.design.DdNoticeBar
+import io.github.whywood.superpi.design.DdNoticeTone
+import io.github.whywood.superpi.design.DdPrimaryButton
+import io.github.whywood.superpi.design.DdProgressBar
+import io.github.whywood.superpi.design.DdSectionLabel
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdStatusRow
+import io.github.whywood.superpi.design.DdStatusTone
+import io.github.whywood.superpi.design.DdSwitch
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.DdWebView
+import io.github.whywood.superpi.design.DdWebViewErrorKind
+import io.github.whywood.superpi.design.DdWebViewState
+import io.github.whywood.superpi.design.LocalDdMotionEnabled
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.uiConfirmRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -251,7 +251,7 @@ private fun MiCloudHomeScreen(
     onLogout: () -> Unit,
     onToggle: (MiCloudFeature, Boolean) -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val signedIn = isSignedIn(status)
     val expired = status?.state == MiCloudSessionState.EXPIRED
     Column(
@@ -426,7 +426,7 @@ private fun MiCloudLoginScreen(
     onComplete: () -> Unit,
     onClose: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     var webViewError by remember { mutableStateOf<String?>(null) }
     var webLoading by remember { mutableStateOf(true) }
     var generation by remember { mutableIntStateOf(0) }
@@ -611,10 +611,10 @@ private val VIEWPORT_FIX_SCRIPT = """
       var viewportHeight = probe.getBoundingClientRect().height;
       if (probe.parentNode) probe.parentNode.removeChild(probe);
       if (viewportHeight !== 0 || window.innerHeight <= 0) return;
-      var style = document.getElementById('deepdeep-viewport-fix');
+      var style = document.getElementById('superpi-viewport-fix');
       if (!style) {
         style = document.createElement('style');
-        style.id = 'deepdeep-viewport-fix';
+        style.id = 'superpi-viewport-fix';
         (document.head || document.documentElement).appendChild(style);
       }
       var height = window.innerHeight;

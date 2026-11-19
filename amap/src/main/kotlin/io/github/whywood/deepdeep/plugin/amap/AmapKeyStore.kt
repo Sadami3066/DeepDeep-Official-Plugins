@@ -1,7 +1,7 @@
-package io.github.whywood.deepdeep.plugin.amap
+package io.github.whywood.superpi.plugin.amap
 
-import io.github.whywood.deepdeep.plugin.api.PluginSettingsService
-import io.github.whywood.deepdeep.plugin.api.SecretService
+import io.github.whywood.superpi.plugin.api.PluginSettingsService
+import io.github.whywood.superpi.plugin.api.SecretService
 
 internal class AmapKeyStore(
     private val settings: PluginSettingsService,

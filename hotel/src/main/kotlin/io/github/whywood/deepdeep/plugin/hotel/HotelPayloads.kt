@@ -1,6 +1,6 @@
-package io.github.whywood.deepdeep.plugin.hotel
+package io.github.whywood.superpi.plugin.hotel
 
-import io.github.whywood.deepdeep.plugin.api.Cards
+import io.github.whywood.superpi.plugin.api.Cards
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject

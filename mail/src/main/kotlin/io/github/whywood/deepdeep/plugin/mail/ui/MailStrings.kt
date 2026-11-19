@@ -1,8 +1,8 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.localizedText
-import io.github.whywood.deepdeep.plugin.mail.MailProviderPreset
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.localizedText
+import io.github.whywood.superpi.plugin.mail.MailProviderPreset
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter

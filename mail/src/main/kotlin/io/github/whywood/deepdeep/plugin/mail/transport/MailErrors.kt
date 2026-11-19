@@ -1,7 +1,7 @@
-package io.github.whywood.deepdeep.plugin.mail.transport
+package io.github.whywood.superpi.plugin.mail.transport
 
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.localizedText
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.localizedText
 import java.io.IOException
 
 internal class MailNetworkException(

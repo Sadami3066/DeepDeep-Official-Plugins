@@ -1,6 +1,6 @@
-package io.github.whywood.deepdeep.plugin.amap
+package io.github.whywood.superpi.plugin.amap
 
-import io.github.whywood.deepdeep.plugin.api.NetworkService
+import io.github.whywood.superpi.plugin.api.NetworkService
 import java.io.File
 import java.net.URLEncoder
 import java.security.MessageDigest

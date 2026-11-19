@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.rail
+package io.github.whywood.superpi.plugin.rail
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -36,32 +36,32 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.whywood.deepdeep.design.DdDatePicker
-import io.github.whywood.deepdeep.design.DdExpandToggle
-import io.github.whywood.deepdeep.design.DdSpinner
-import io.github.whywood.deepdeep.design.LocalDdMotionEnabled
-import io.github.whywood.deepdeep.design.DdGroupCard
-import io.github.whywood.deepdeep.design.DdHairline
-import io.github.whywood.deepdeep.design.DdIcon
-import io.github.whywood.deepdeep.design.DdIconButton
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdListRow
-import io.github.whywood.deepdeep.design.DdLoadingBlock
-import io.github.whywood.deepdeep.design.DdNoticeBar
-import io.github.whywood.deepdeep.design.DdNoticeTone
-import io.github.whywood.deepdeep.design.DdPressable
-import io.github.whywood.deepdeep.design.DdPrimaryButton
-import io.github.whywood.deepdeep.design.DdSectionLabel
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.DdTextField
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.LocalPluginPageContext
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginToolResult
-import io.github.whywood.deepdeep.plugin.api.ToolCardSlotState
+import io.github.whywood.superpi.design.DdDatePicker
+import io.github.whywood.superpi.design.DdExpandToggle
+import io.github.whywood.superpi.design.DdSpinner
+import io.github.whywood.superpi.design.LocalDdMotionEnabled
+import io.github.whywood.superpi.design.DdGroupCard
+import io.github.whywood.superpi.design.DdHairline
+import io.github.whywood.superpi.design.DdIcon
+import io.github.whywood.superpi.design.DdIconButton
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdListRow
+import io.github.whywood.superpi.design.DdLoadingBlock
+import io.github.whywood.superpi.design.DdNoticeBar
+import io.github.whywood.superpi.design.DdNoticeTone
+import io.github.whywood.superpi.design.DdPressable
+import io.github.whywood.superpi.design.DdPrimaryButton
+import io.github.whywood.superpi.design.DdSectionLabel
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.DdTextField
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.LocalPluginPageContext
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginToolResult
+import io.github.whywood.superpi.plugin.api.ToolCardSlotState
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -91,7 +91,7 @@ private sealed interface PageState {
 
 @Composable
 internal fun TrainPage(host: PluginHost) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val pageContext = LocalPluginPageContext.current
     val arguments = remember(pageContext) { pageContext?.arguments }
     var from by rememberSaveable { mutableStateOf(arguments.stringArgument("from")) }
@@ -298,7 +298,7 @@ private fun ResultsSection(
     onPickDate: () -> Unit,
     onEditStations: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val bookingUrl = bookingLink(details)
     val groups = remember(details) { groupTrains(details.trains) }
     DdGroupCard {
@@ -368,7 +368,7 @@ private enum class RailTagTone { NEUTRAL, ACCENT, WARNING }
 
 @Composable
 private fun RailSurface(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(modifier.fillMaxWidth().clip(RailCardShape).background(colors.surface)) {
         content()
     }
@@ -389,7 +389,7 @@ private fun rememberTrainAppear(): Float {
 
 @Composable
 private fun RailTag(text: String, tone: RailTagTone = RailTagTone.NEUTRAL) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val color = when (tone) {
         RailTagTone.NEUTRAL -> colors.inkSecondary
         RailTagTone.ACCENT -> colors.accent
@@ -418,7 +418,7 @@ private fun RailTag(text: String, tone: RailTagTone = RailTagTone.NEUTRAL) {
 
 @Composable
 private fun RailSkeleton(width: androidx.compose.ui.unit.Dp, height: androidx.compose.ui.unit.Dp) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Box(Modifier.width(width).height(height).clip(RoundedCornerShape(6.dp)).background(colors.wash))
 }
 
@@ -478,7 +478,7 @@ private fun TrainSearchCard(host: PluginHost, details: TrainSearchDetails) {
 
 @Composable
 private fun TrainTicketHeader(host: PluginHost, details: TrainSearchDetails, groupCount: Int) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 13.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -539,7 +539,7 @@ private fun TrainTicketHeader(host: PluginHost, details: TrainSearchDetails, gro
 
 @Composable
 private fun TrainGroupBlock(host: PluginHost, details: TrainSearchDetails, group: TrainGroup) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val trainTimeStyle = DdType.heading.copy(fontSize = 20.sp, lineHeight = 24.sp)
     val trainStationStyle = DdType.chip.copy(fontSize = 11.sp, lineHeight = 15.sp)
     val trainCodeStyle = DdType.numeric.copy(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
@@ -640,7 +640,7 @@ private fun TrainGroupBlock(host: PluginHost, details: TrainSearchDetails, group
 
 @Composable
 private fun SeatLine(seats: List<SeatAvailability>, translate: RailTranslate) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val trainHintStyle = DdType.chip.copy(fontSize = 10.sp, lineHeight = 14.sp)
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
@@ -752,7 +752,7 @@ private const val MINUTES_PER_DAY = 24 * 60
 
 @Composable
 private fun TrainTicketFooter(host: PluginHost, bookingUrl: String) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     DdHairline()
     Row(
         Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 7.dp, bottom = 7.dp),
@@ -796,7 +796,7 @@ internal fun RailPriceCard(host: PluginHost, state: ToolCardSlotState) {
 
 @Composable
 private fun RailPriceSurface(host: PluginHost, details: TrainPriceDetails) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val translate: RailTranslate = { zh, en -> host.t(zh, en) }
     val appear = rememberTrainAppear()
     RailSurface(Modifier.graphicsLayer { alpha = appear }) {
@@ -887,7 +887,7 @@ private fun RailPriceSurface(host: PluginHost, details: TrainPriceDetails) {
 
 @Composable
 private fun RailPriceLoading(host: PluginHost) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     RailSurface {
         Row(
             Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 10.dp),
@@ -930,7 +930,7 @@ private fun RailPriceLoading(host: PluginHost) {
 
 @Composable
 private fun TrainTicketLoading(host: PluginHost) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     RailSurface {
         Row(
             Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 8.dp),
@@ -975,7 +975,7 @@ private fun TrainTicketLoading(host: PluginHost) {
 
 @Composable
 private fun TrainTicketError(host: PluginHost, message: String?) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     RailSurface {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 15.dp),
@@ -999,7 +999,7 @@ private fun TrainTicketError(host: PluginHost, message: String?) {
 
 @Composable
 private fun TrainTicketEmpty(host: PluginHost, details: TrainSearchDetails) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     RailSurface {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 26.dp),
@@ -1056,7 +1056,7 @@ private fun TrainTicketEmpty(host: PluginHost, details: TrainSearchDetails) {
 
 @Composable
 private fun TrainTicketFallback(host: PluginHost, text: String?) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     RailSurface {
         DdText(
             text = text ?: host.t("没有车次数据", "No train data"),
@@ -1082,7 +1082,7 @@ private fun PluginHost.openRailPage() {
 
 @Composable
 private fun TrainResultRow(host: PluginHost, train: TrainOption) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = DdSpacing.Sm),
         verticalArrangement = Arrangement.spacedBy(DdSpacing.Xs),

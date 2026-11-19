@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.cli.update
+package io.github.whywood.superpi.plugin.cli.update
 
 import java.util.Base64
 

@@ -1,12 +1,12 @@
-package io.github.whywood.deepdeep.plugin.mail
+package io.github.whywood.superpi.plugin.mail
 
-import io.github.whywood.deepdeep.plugin.mail.MailFolderRole
-import io.github.whywood.deepdeep.plugin.mail.MailAttachment
-import io.github.whywood.deepdeep.plugin.mail.MailHeaderField
-import io.github.whywood.deepdeep.plugin.mail.MailMessageDetail
-import io.github.whywood.deepdeep.plugin.mail.MailMessageSummary
-import io.github.whywood.deepdeep.plugin.mail.tools.mailReadResultText
-import io.github.whywood.deepdeep.plugin.mail.tools.mailSearchResultText
+import io.github.whywood.superpi.plugin.mail.MailFolderRole
+import io.github.whywood.superpi.plugin.mail.MailAttachment
+import io.github.whywood.superpi.plugin.mail.MailHeaderField
+import io.github.whywood.superpi.plugin.mail.MailMessageDetail
+import io.github.whywood.superpi.plugin.mail.MailMessageSummary
+import io.github.whywood.superpi.plugin.mail.tools.mailReadResultText
+import io.github.whywood.superpi.plugin.mail.tools.mailSearchResultText
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test

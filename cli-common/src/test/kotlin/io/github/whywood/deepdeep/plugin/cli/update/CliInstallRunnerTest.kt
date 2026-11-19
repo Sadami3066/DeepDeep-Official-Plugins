@@ -1,11 +1,11 @@
-package io.github.whywood.deepdeep.plugin.cli.update
+package io.github.whywood.superpi.plugin.cli.update
 
-import io.github.whywood.deepdeep.plugin.api.DownloadResult
-import io.github.whywood.deepdeep.plugin.api.LinuxChunk
-import io.github.whywood.deepdeep.plugin.api.LinuxResult
-import io.github.whywood.deepdeep.plugin.api.LinuxService
-import io.github.whywood.deepdeep.plugin.api.NetworkResponse
-import io.github.whywood.deepdeep.plugin.api.NetworkService
+import io.github.whywood.superpi.plugin.api.DownloadResult
+import io.github.whywood.superpi.plugin.api.LinuxChunk
+import io.github.whywood.superpi.plugin.api.LinuxResult
+import io.github.whywood.superpi.plugin.api.LinuxService
+import io.github.whywood.superpi.plugin.api.NetworkResponse
+import io.github.whywood.superpi.plugin.api.NetworkService
 import java.io.File
 import java.security.MessageDigest
 import java.util.Base64

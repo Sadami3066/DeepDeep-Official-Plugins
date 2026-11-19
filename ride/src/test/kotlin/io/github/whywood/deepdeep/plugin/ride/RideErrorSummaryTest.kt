@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.ride
+package io.github.whywood.superpi.plugin.ride
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

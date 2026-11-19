@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.micloud
+package io.github.whywood.superpi.plugin.micloud
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject

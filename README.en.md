@@ -6,7 +6,7 @@ The official external-plugin source repository maintained by the Super PI Agent 
 
 ## Overview
 
-Super PI Agent is a personal AI agent on Android ([app repository](https://github.com/Sadami3066/DeepDeep)). Plugins implement the host contract `plugin-api` in Kotlin, load inside the App process, and extend the agent with tools, skills, prompt sections and self-drawn pages. Plugins are installed only from `.ddp` files, and every plugin is a separate Android application module.
+Super PI Agent is a personal AI agent on Android ([app repository](https://github.com/Sadami3066/SuperPI-App)). Plugins implement the host contract `plugin-api` in Kotlin, load inside the App process, and extend the agent with tools, skills, prompt sections and self-drawn pages. Plugins are installed only from `.ddp` files, and every plugin is a separate Android application module.
 
 This repository contains twelve official plugins, published by `milous`:
 
@@ -35,7 +35,7 @@ Versions follow `version` in each module's `src/main/assets/plugin.json`. All tw
 |---|---|
 | `feishu/`, `wecom/`, `sysu/`, `wechat/`, `micloud/`, `mail/`, `themes/`, `amap/`, `rail/`, `hotel/`, `ride/`, `zanao/` | The twelve plugin modules: Kotlin sources, `src/main/assets/plugin.json` manifests, icons and pages |
 | `gradle/plugin-bundle.gradle.kts` | Shared packaging script providing the `assemblePlugin`, `signPlugin` and `verifyPlugin` tasks |
-| `settings.gradle.kts` | Module list and repositories; dependencies come from `io.github.sadami3066.deepdeep:plugin-api` on `https://sadami3066.github.io/deepdeep-maven` (use the latest release there; `api()` brings in the matching `design`), Google and Maven Central |
+| `settings.gradle.kts` | Module list and repositories; dependencies come from `io.github.sadami3066.superpi:plugin-api` on `https://sadami3066.github.io/SuperPI-Maven` (use the latest release there; `api()` brings in the matching `design`), Google and Maven Central |
 | `gradle/wrapper/`, `gradlew` | Gradle 9.8.2 wrapper; no local Gradle installation needed |
 | `scripts/gradlew-locked` | Serialized Gradle wrapper: flock build lock, single worker by default, capped JVM memory to avoid OOM on small machines |
 | `scripts/check.sh` | Builds, signs and verifies all twelve plugins |
@@ -107,7 +107,7 @@ The task chain is `assemblePlugin → signPlugin → verifyPlugin`:
 
 ### Install from the plugin market
 
-Search and install from Super PI Agent's "Plugins → Market". Market entry versions match this repository, and artifacts are published in the GitHub Releases of [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) (releases are named `plugins-YYYYMMDD`, assets look like `feishu-2.1.0.ddp`). Each entry records the official `keyId` as `publisherKeyId`.
+Search and install from Super PI Agent's "Plugins → Market". Market entry versions match this repository, and artifacts are published in the GitHub Releases of [SuperPI-Market](https://github.com/Sadami3066/SuperPI-Market) (releases are named `plugins-YYYYMMDD`, assets look like `feishu-2.1.0.ddp`). Each entry records the official `keyId` as `publisherKeyId`.
 
 ### Import a .ddp manually
 
@@ -144,8 +144,8 @@ The source code and documentation in this repository are licensed under [Apache-
 ## Disclaimer and feedback
 
 - This is a third-party integration maintained by an individual, with no affiliation or endorsement from Feishu, Tencent, Xiaomi, Sun Yat-sen University or their affiliates.
-- Please report problems, suggestions and feedback via [GitHub Issues](https://github.com/Sadami3066/DeepDeep-Official-Plugins/issues). Do not post signing private keys, credentials or security vulnerabilities publicly; contact the maintainer privately on GitHub first.
+- Please report problems, suggestions and feedback via [GitHub Issues](https://github.com/Sadami3066/SuperPI-Official-Plugins/issues). Do not post signing private keys, credentials or security vulnerabilities publicly; contact the maintainer privately on GitHub first.
 - The project is provided as-is and maintained on a best-effort basis, with no guarantee of service availability, response time or continued availability of third-party APIs.
-- Related repositories: [Super PI Agent app](https://github.com/Sadami3066/DeepDeep) · [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) · [DeepDeep-Plugins](https://github.com/Sadami3066/DeepDeep-Plugins)
+- Related repositories: [Super PI Agent app](https://github.com/Sadami3066/SuperPI-App) · [SuperPI-Market](https://github.com/Sadami3066/SuperPI-Market) · [SuperPI-Plugins](https://github.com/Sadami3066/SuperPI-Plugins)
 
 Development sample: [`mcpui-demo/`](mcpui-demo/README.md) renders MCP tool results with a plugin card. It is not in the market and requires `plugin-api 1.3.0` / host 1.1.0+.

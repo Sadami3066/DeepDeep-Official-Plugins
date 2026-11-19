@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.zanao
+package io.github.whywood.superpi.plugin.zanao
 
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream

@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.wechat
+package io.github.whywood.superpi.plugin.wechat
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FiniteAnimationSpec
@@ -28,27 +28,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdDatePicker
-import io.github.whywood.deepdeep.design.DdGroupCard
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdListRow
-import io.github.whywood.deepdeep.design.DdMotion
-import io.github.whywood.deepdeep.design.DdNoticeBar
-import io.github.whywood.deepdeep.design.DdNoticeTone
-import io.github.whywood.deepdeep.design.DdPrimaryButton
-import io.github.whywood.deepdeep.design.DdProgressBar
-import io.github.whywood.deepdeep.design.DdSectionLabel
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdSpinner
-import io.github.whywood.deepdeep.design.DdStatusRow
-import io.github.whywood.deepdeep.design.DdStatusTone
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.LocalDdMotionEnabled
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.shareRequest
+import io.github.whywood.superpi.design.DdDatePicker
+import io.github.whywood.superpi.design.DdGroupCard
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdListRow
+import io.github.whywood.superpi.design.DdMotion
+import io.github.whywood.superpi.design.DdNoticeBar
+import io.github.whywood.superpi.design.DdNoticeTone
+import io.github.whywood.superpi.design.DdPrimaryButton
+import io.github.whywood.superpi.design.DdProgressBar
+import io.github.whywood.superpi.design.DdSectionLabel
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdSpinner
+import io.github.whywood.superpi.design.DdStatusRow
+import io.github.whywood.superpi.design.DdStatusTone
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.LocalDdMotionEnabled
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.shareRequest
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
@@ -80,7 +80,7 @@ private fun today(): LocalDate = LocalDate.now(ZoneId.of("Asia/Shanghai"))
 @Composable
 internal fun WechatPage(plugin: WechatPlugin, host: PluginHost) {
     val state = remember { WechatPageState() }
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val motionEnabled = LocalDdMotionEnabled.current
 
     suspend fun loadStatus() {
@@ -448,7 +448,7 @@ private fun StatusSummary(host: PluginHost, status: WechatStatus?, refreshing: B
 
 @Composable
 private fun OperationCard(host: PluginHost, stage: String?, modifier: Modifier = Modifier) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     DdGroupCard(modifier = modifier) {
         Column(
             modifier = Modifier

@@ -1,6 +1,6 @@
-package io.github.whywood.deepdeep.plugin.mail.mime
+package io.github.whywood.superpi.plugin.mail.mime
 
-import io.github.whywood.deepdeep.plugin.mail.transport.decodeText
+import io.github.whywood.superpi.plugin.mail.transport.decodeText
 import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Locale

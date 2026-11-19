@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "io.github.whywood.deepdeep.plugin.zanao"
+    namespace = "io.github.whywood.superpi.plugin.zanao"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.whywood.deepdeep.plugin.zanao"
+        applicationId = "io.github.whywood.superpi.plugin.zanao"
         minSdk = 29
         targetSdk = 36
         versionCode = 19
@@ -31,8 +31,8 @@ kotlin {
 }
 
 dependencies {
-    compileOnly("io.github.sadami3066.deepdeep:plugin-api:1.2.0")
-    compileOnly("io.github.sadami3066.deepdeep:design:0.9.0")
+    compileOnly("io.github.sadami3066.superpi:plugin-api:2.0.0")
+    compileOnly("io.github.sadami3066.superpi:design:0.9.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     compileOnly(platform("androidx.compose:compose-bom:2026.03.00"))

@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.feishu
+package io.github.whywood.superpi.plugin.feishu
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

@@ -1,11 +1,11 @@
 {
-  "id": "io.github.whywood.deepdeep.plugin.micloud",
+  "id": "io.github.whywood.superpi.plugin.micloud",
   "version": "2.7.4",
   "publisher": {
     "name": "milous"
   },
-  "apiLevel": 6,
-  "minHostVersion": "1.4.3",
+  "apiLevel": 7,
+  "minHostVersion": "2.0.0",
   "capabilities": [
     "notifications",
     "secrets",
@@ -16,7 +16,7 @@
   "permissions": [
     "notifications.post"
   ],
-  "entryClass": "io.github.whywood.deepdeep.plugin.micloud.MiCloudPlugin",
+  "entryClass": "io.github.whywood.superpi.plugin.micloud.MiCloudPlugin",
   "name": {
     "default": "小米云服务",
     "zh": "小米云服务",
@@ -42,7 +42,7 @@
       "mi_cloud_recordings"
     ],
     "skills": [
-      "deepdeep-micloud"
+      "superpi-micloud"
     ],
     "uiSlots": [],
     "pages": [

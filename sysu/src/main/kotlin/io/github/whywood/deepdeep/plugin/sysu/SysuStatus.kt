@@ -1,6 +1,6 @@
-package io.github.whywood.deepdeep.plugin.sysu
+package io.github.whywood.superpi.plugin.sysu
 
-import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginHost
 import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject

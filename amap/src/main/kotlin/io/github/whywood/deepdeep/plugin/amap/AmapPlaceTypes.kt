@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.amap
+package io.github.whywood.superpi.plugin.amap
 
 internal val AmapPlaceTypes: Map<String, String> = """
     01 汽车服务

@@ -1,8 +1,8 @@
 {
-  "id": "io.github.whywood.deepdeep.plugin.mail",
+  "id": "io.github.whywood.superpi.plugin.mail",
   "version": "1.6.2",
-  "apiLevel": 6,
-  "minHostVersion": "1.4.3",
+  "apiLevel": 7,
+  "minHostVersion": "2.0.0",
   "ui": {
     "apiLevel": 2
   },
@@ -18,7 +18,7 @@
     "settings",
     "media"
   ],
-  "entryClass": "io.github.whywood.deepdeep.plugin.mail.MailPlugin",
+  "entryClass": "io.github.whywood.superpi.plugin.mail.MailPlugin",
   "name": {
     "default": "邮箱",
     "zh": "邮箱",

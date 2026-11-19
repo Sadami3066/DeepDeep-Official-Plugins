@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail
+package io.github.whywood.superpi.plugin.mail
 
 data class MailProviderPreset(
     val id: String,

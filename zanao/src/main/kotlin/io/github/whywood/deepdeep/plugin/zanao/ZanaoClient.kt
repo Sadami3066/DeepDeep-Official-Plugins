@@ -1,6 +1,6 @@
-package io.github.whywood.deepdeep.plugin.zanao
+package io.github.whywood.superpi.plugin.zanao
 
-import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginHost
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder

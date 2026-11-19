@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.amap
+package io.github.whywood.superpi.plugin.amap
 
 import kotlinx.serialization.json.JsonObject
 import org.junit.Assert.assertEquals

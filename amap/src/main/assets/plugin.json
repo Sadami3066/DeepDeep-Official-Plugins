@@ -1,8 +1,8 @@
 {
-  "id": "io.github.whywood.deepdeep.plugin.amap",
+  "id": "io.github.whywood.superpi.plugin.amap",
   "version": "1.5.3",
-  "apiLevel": 6,
-  "minHostVersion": "1.4.3",
+  "apiLevel": 7,
+  "minHostVersion": "2.0.0",
   "capabilities": [
     "logs",
     "network",
@@ -11,7 +11,7 @@
     "ui",
     "images"
   ],
-  "entryClass": "io.github.whywood.deepdeep.plugin.amap.AmapPlugin",
+  "entryClass": "io.github.whywood.superpi.plugin.amap.AmapPlugin",
   "name": {
     "default": "高德地图",
     "zh": "高德地图",
@@ -45,7 +45,7 @@
       "amap_weather"
     ],
     "skills": [
-      "deepdeep-amap"
+      "superpi-amap"
     ],
     "uiSlots": [],
     "pages": [

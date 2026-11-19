@@ -1,8 +1,8 @@
-package io.github.whywood.deepdeep.plugin.micloud
+package io.github.whywood.superpi.plugin.micloud
 
-import io.github.whywood.deepdeep.plugin.api.PluginTool
-import io.github.whywood.deepdeep.plugin.api.pluginTool
-import io.github.whywood.deepdeep.plugin.api.textResult
+import io.github.whywood.superpi.plugin.api.PluginTool
+import io.github.whywood.superpi.plugin.api.pluginTool
+import io.github.whywood.superpi.plugin.api.textResult
 import java.io.File
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter

@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.zanao
+package io.github.whywood.superpi.plugin.zanao
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,25 +21,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdGroupCard
-import io.github.whywood.deepdeep.design.DdListRow
-import io.github.whywood.deepdeep.design.DdNoticeBar
-import io.github.whywood.deepdeep.design.DdNoticeTone
-import io.github.whywood.deepdeep.design.DdPrimaryButton
-import io.github.whywood.deepdeep.design.DdProgressBar
-import io.github.whywood.deepdeep.design.DdSectionLabel
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdSpinner
-import io.github.whywood.deepdeep.design.DdStatusRow
-import io.github.whywood.deepdeep.design.DdStatusTone
-import io.github.whywood.deepdeep.design.DdSwitch
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.DdTextField
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.plugin.api.HostAccessLevel
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.uiConfirmRequest
+import io.github.whywood.superpi.design.DdGroupCard
+import io.github.whywood.superpi.design.DdListRow
+import io.github.whywood.superpi.design.DdNoticeBar
+import io.github.whywood.superpi.design.DdNoticeTone
+import io.github.whywood.superpi.design.DdPrimaryButton
+import io.github.whywood.superpi.design.DdProgressBar
+import io.github.whywood.superpi.design.DdSectionLabel
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdSpinner
+import io.github.whywood.superpi.design.DdStatusRow
+import io.github.whywood.superpi.design.DdStatusTone
+import io.github.whywood.superpi.design.DdSwitch
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.DdTextField
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.plugin.api.HostAccessLevel
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.uiConfirmRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -356,7 +356,7 @@ private fun HomeView(
                     DdTextAction(
                         text = host.t("移除账号", "Remove account"),
                         onClick = onClearAccount,
-                        color = io.github.whywood.deepdeep.design.deepDeepColors().danger,
+                        color = io.github.whywood.superpi.design.superPiColors().danger,
                     )
                 }
             }

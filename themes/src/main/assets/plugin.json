@@ -1,10 +1,10 @@
 {
-  "id": "io.github.whywood.deepdeep.plugin.themes",
+  "id": "io.github.whywood.superpi.plugin.themes",
   "version": "1.0.1",
-  "apiLevel": 6,
-  "minHostVersion": "1.0.8",
+  "apiLevel": 7,
+  "minHostVersion": "2.0.0",
   "capabilities": [],
-  "entryClass": "io.github.whywood.deepdeep.plugin.themes.ThemesPlugin",
+  "entryClass": "io.github.whywood.superpi.plugin.themes.ThemesPlugin",
   "name": {
     "default": "主题",
     "zh": "主题",

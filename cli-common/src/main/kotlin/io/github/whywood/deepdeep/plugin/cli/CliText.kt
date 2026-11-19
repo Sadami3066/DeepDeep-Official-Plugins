@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.cli
+package io.github.whywood.superpi.plugin.cli
 
 object CliText {
     const val DEFAULT_FACT_CHARS: Int = 240

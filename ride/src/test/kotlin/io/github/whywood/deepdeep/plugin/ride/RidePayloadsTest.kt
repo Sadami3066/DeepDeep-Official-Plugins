@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.ride
+package io.github.whywood.superpi.plugin.ride
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray

@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.hotel
+package io.github.whywood.superpi.plugin.hotel
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

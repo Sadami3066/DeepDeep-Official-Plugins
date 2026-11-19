@@ -1,6 +1,6 @@
-package io.github.whywood.deepdeep.plugin.amap
+package io.github.whywood.superpi.plugin.amap
 
-import io.github.whywood.deepdeep.plugin.api.textResult
+import io.github.whywood.superpi.plugin.api.textResult
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals

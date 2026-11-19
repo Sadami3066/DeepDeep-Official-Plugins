@@ -1,8 +1,8 @@
-package io.github.whywood.deepdeep.plugin.micloud
+package io.github.whywood.superpi.plugin.micloud
 
-import io.github.whywood.deepdeep.plugin.api.PluginRunSignal
-import io.github.whywood.deepdeep.plugin.api.PluginToolCall
-import io.github.whywood.deepdeep.plugin.api.PluginToolResult
+import io.github.whywood.superpi.plugin.api.PluginRunSignal
+import io.github.whywood.superpi.plugin.api.PluginToolCall
+import io.github.whywood.superpi.plugin.api.PluginToolResult
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -90,5 +90,5 @@ internal fun micloudTools(
     writer: MiCloudWriteApi = FakeWriteApi(),
     downloadDir: File = File("build/micloud-test-downloads"),
     text: MiCloudText = chineseText,
-): Map<String, io.github.whywood.deepdeep.plugin.api.PluginTool> =
+): Map<String, io.github.whywood.superpi.plugin.api.PluginTool> =
     buildMiCloudTools(client, settings, writer, downloadDir, text).associateBy { it.name }

@@ -1,6 +1,6 @@
-package io.github.whywood.deepdeep.plugin.sysu
+package io.github.whywood.superpi.plugin.sysu
 
-import io.github.whywood.deepdeep.plugin.cli.CliJsonEnvelope
+import io.github.whywood.superpi.plugin.cli.CliJsonEnvelope
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -30,7 +30,7 @@ internal enum class SysuSite(val key: String) {
 internal object SysuCli {
     const val VERSION = "3.5.1"
     const val MIN_NODE_MAJOR = 22
-    const val SKILL_ID = "deepdeep-sysu"
+    const val SKILL_ID = "superpi-sysu"
 
     const val SECRET_NET_ID = "netid"
     const val SECRET_PASSWORD = "password"

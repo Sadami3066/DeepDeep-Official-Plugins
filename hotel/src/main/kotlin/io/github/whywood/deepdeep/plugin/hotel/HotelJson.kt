@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.hotel
+package io.github.whywood.superpi.plugin.hotel
 
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit

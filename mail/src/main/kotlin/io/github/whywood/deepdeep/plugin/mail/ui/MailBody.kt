@@ -1,7 +1,7 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
-import io.github.whywood.deepdeep.plugin.mail.MailMessageDetail
-import io.github.whywood.deepdeep.plugin.mail.mime.HtmlText
+import io.github.whywood.superpi.plugin.mail.MailMessageDetail
+import io.github.whywood.superpi.plugin.mail.mime.HtmlText
 
 internal fun mailBodyHtml(detail: MailMessageDetail): String =
     mailBodyHtml(htmlBody = detail.htmlBody, textBody = detail.textBody)

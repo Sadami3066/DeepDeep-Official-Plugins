@@ -1,27 +1,27 @@
-package io.github.whywood.deepdeep.plugin.feishu
+package io.github.whywood.superpi.plugin.feishu
 
-import io.github.whywood.deepdeep.plugin.api.Contributions
-import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
-import io.github.whywood.deepdeep.plugin.api.NotificationActionEvent
-import io.github.whywood.deepdeep.plugin.api.PluginAvailability
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginHooks
-import io.github.whywood.deepdeep.plugin.api.PluginPage
-import io.github.whywood.deepdeep.plugin.api.PluginSkill
-import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
-import io.github.whywood.deepdeep.plugin.api.PromptSection
-import io.github.whywood.deepdeep.plugin.api.SlotBinding
-import io.github.whywood.deepdeep.plugin.api.assetIcon
-import io.github.whywood.deepdeep.plugin.api.available
-import io.github.whywood.deepdeep.plugin.api.contributions
-import io.github.whywood.deepdeep.plugin.api.pluginPage
-import io.github.whywood.deepdeep.plugin.api.pluginSkill
-import io.github.whywood.deepdeep.plugin.api.promptSection
-import io.github.whywood.deepdeep.plugin.api.unavailable
+import io.github.whywood.superpi.plugin.api.Contributions
+import io.github.whywood.superpi.plugin.api.SuperPIPlugin
+import io.github.whywood.superpi.plugin.api.NotificationActionEvent
+import io.github.whywood.superpi.plugin.api.PluginAvailability
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginHooks
+import io.github.whywood.superpi.plugin.api.PluginPage
+import io.github.whywood.superpi.plugin.api.PluginSkill
+import io.github.whywood.superpi.plugin.api.PluginUiContributions
+import io.github.whywood.superpi.plugin.api.PromptSection
+import io.github.whywood.superpi.plugin.api.SlotBinding
+import io.github.whywood.superpi.plugin.api.assetIcon
+import io.github.whywood.superpi.plugin.api.available
+import io.github.whywood.superpi.plugin.api.contributions
+import io.github.whywood.superpi.plugin.api.pluginPage
+import io.github.whywood.superpi.plugin.api.pluginSkill
+import io.github.whywood.superpi.plugin.api.promptSection
+import io.github.whywood.superpi.plugin.api.unavailable
 import java.io.File
 import kotlinx.coroutines.launch
 
-class FeishuPlugin : DeepDeepPlugin {
+class FeishuPlugin : SuperPIPlugin {
     private val runtime = FeishuRuntime()
 
     override suspend fun availability(host: PluginHost): PluginAvailability {
@@ -103,7 +103,7 @@ class FeishuPlugin : DeepDeepPlugin {
             return "飞书 CLI 已安装（v$version），但尚未连接。"
         }
         val account = snapshot.account?.takeIf { it.isNotBlank() } ?: "当前账号"
-        return "飞书插件已连接为 $account。命令用法见 deepdeep-feishu 技能；读取类命令直接执行，" +
+        return "飞书插件已连接为 $account。命令用法见 superpi-feishu 技能；读取类命令直接执行，" +
             "命令输出 JSON，自己读字段回答，不要把原始 JSON 贴给用户；发送、修改、删除前先确认。"
     }
 

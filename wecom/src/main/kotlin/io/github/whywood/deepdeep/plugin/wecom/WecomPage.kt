@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.wecom
+package io.github.whywood.superpi.plugin.wecom
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,34 +22,34 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdGroupCard
-import io.github.whywood.deepdeep.design.DdHairline
-import io.github.whywood.deepdeep.design.DdImage
-import io.github.whywood.deepdeep.design.DdLoadingBlock
-import io.github.whywood.deepdeep.design.DdNoticeBar
-import io.github.whywood.deepdeep.design.DdNoticeTone
-import io.github.whywood.deepdeep.design.DdPrimaryButton
-import io.github.whywood.deepdeep.design.DdProgressBar
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdSpinner
-import io.github.whywood.deepdeep.design.DdStatusRow
-import io.github.whywood.deepdeep.design.DdStatusTone
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.LinuxChunkKind
-import io.github.whywood.deepdeep.plugin.api.LocalizedText
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.notificationAction
-import io.github.whywood.deepdeep.plugin.api.pluginNotificationWithActions
-import io.github.whywood.deepdeep.plugin.api.uiConfirmRequest
-import io.github.whywood.deepdeep.plugin.cli.update.CliInstallEvent
-import io.github.whywood.deepdeep.plugin.cli.update.CliInstallStage
-import io.github.whywood.deepdeep.plugin.cli.update.CliRelease
-import io.github.whywood.deepdeep.plugin.cli.update.CliUpdateCheck
-import io.github.whywood.deepdeep.plugin.cli.update.CliUpdateCheckController
-import io.github.whywood.deepdeep.plugin.cli.update.CliUpdateThrottle
+import io.github.whywood.superpi.design.DdGroupCard
+import io.github.whywood.superpi.design.DdHairline
+import io.github.whywood.superpi.design.DdImage
+import io.github.whywood.superpi.design.DdLoadingBlock
+import io.github.whywood.superpi.design.DdNoticeBar
+import io.github.whywood.superpi.design.DdNoticeTone
+import io.github.whywood.superpi.design.DdPrimaryButton
+import io.github.whywood.superpi.design.DdProgressBar
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdSpinner
+import io.github.whywood.superpi.design.DdStatusRow
+import io.github.whywood.superpi.design.DdStatusTone
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.LinuxChunkKind
+import io.github.whywood.superpi.plugin.api.LocalizedText
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.notificationAction
+import io.github.whywood.superpi.plugin.api.pluginNotificationWithActions
+import io.github.whywood.superpi.plugin.api.uiConfirmRequest
+import io.github.whywood.superpi.plugin.cli.update.CliInstallEvent
+import io.github.whywood.superpi.plugin.cli.update.CliInstallStage
+import io.github.whywood.superpi.plugin.cli.update.CliRelease
+import io.github.whywood.superpi.plugin.cli.update.CliUpdateCheck
+import io.github.whywood.superpi.plugin.cli.update.CliUpdateCheckController
+import io.github.whywood.superpi.plugin.cli.update.CliUpdateThrottle
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
@@ -550,7 +550,7 @@ internal fun WecomPage(plugin: WecomPlugin, host: PluginHost) {
     LaunchedEffect(page.operation) {
         if (page.operation != WecomOperation.NONE) scrollState.scrollTo(0)
     }
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -717,7 +717,7 @@ private fun ActionSection(
     controller: WecomPageController,
     scope: CoroutineScope,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val enabled = !page.busy && !page.checking
     when {
         !page.installed -> DdPrimaryButton(
@@ -781,7 +781,7 @@ private fun ActionSection(
 
 @Composable
 private fun OperationCard(host: PluginHost, page: WecomPageState, controller: WecomPageController) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     DdGroupCard {
         Column(
             modifier = Modifier
@@ -818,7 +818,7 @@ private fun OperationCard(host: PluginHost, page: WecomPageState, controller: We
 
 @Composable
 private fun ConnectCard(host: PluginHost, page: WecomPageState, controller: WecomPageController) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     DdGroupCard {
         Column(
             modifier = Modifier

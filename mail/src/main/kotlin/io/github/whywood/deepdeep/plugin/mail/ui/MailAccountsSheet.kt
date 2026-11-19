@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,30 +30,30 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdAvatar
-import io.github.whywood.deepdeep.design.DdDialog
-import io.github.whywood.deepdeep.design.DdGroupCard
-import io.github.whywood.deepdeep.design.DdIconButton
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdListRow
-import io.github.whywood.deepdeep.design.DdLoadingBlock
-import io.github.whywood.deepdeep.design.DdPrimaryButton
-import io.github.whywood.deepdeep.design.DdRowDivider
-import io.github.whywood.deepdeep.design.DdSectionLabel
-import io.github.whywood.deepdeep.design.DdSheet
-import io.github.whywood.deepdeep.design.DdSwitch
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.DdTextField
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.mail.MailAccount
-import io.github.whywood.deepdeep.plugin.mail.MailAccountUpdate
-import io.github.whywood.deepdeep.plugin.mail.MailConnectionTest
-import io.github.whywood.deepdeep.plugin.mail.MailDraft
-import io.github.whywood.deepdeep.plugin.mail.MailRepository
-import io.github.whywood.deepdeep.plugin.mail.MailState
-import io.github.whywood.deepdeep.plugin.mail.ProviderCatalog
+import io.github.whywood.superpi.design.DdAvatar
+import io.github.whywood.superpi.design.DdDialog
+import io.github.whywood.superpi.design.DdGroupCard
+import io.github.whywood.superpi.design.DdIconButton
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdListRow
+import io.github.whywood.superpi.design.DdLoadingBlock
+import io.github.whywood.superpi.design.DdPrimaryButton
+import io.github.whywood.superpi.design.DdRowDivider
+import io.github.whywood.superpi.design.DdSectionLabel
+import io.github.whywood.superpi.design.DdSheet
+import io.github.whywood.superpi.design.DdSwitch
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.DdTextField
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.mail.MailAccount
+import io.github.whywood.superpi.plugin.mail.MailAccountUpdate
+import io.github.whywood.superpi.plugin.mail.MailConnectionTest
+import io.github.whywood.superpi.plugin.mail.MailDraft
+import io.github.whywood.superpi.plugin.mail.MailRepository
+import io.github.whywood.superpi.plugin.mail.MailState
+import io.github.whywood.superpi.plugin.mail.ProviderCatalog
 import kotlinx.coroutines.launch
 
 @Composable
@@ -65,7 +65,7 @@ internal fun MailAccountsSheet(
     onCompose: (MailComposeRequest) -> Unit,
 ) {
     val state by repository.state.collectAsState()
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val scope = rememberCoroutineScope()
     var adding by rememberSaveable { mutableStateOf(startAdding) }
     var removeTarget by remember { mutableStateOf<MailAccount?>(null) }
@@ -281,7 +281,7 @@ private fun AccountItem(
     onReauthorize: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
@@ -361,7 +361,7 @@ private fun DraftItem(
     onOpen: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val recipients = draft.to.ifEmpty { draft.cc }
     val attachmentLabel = when {
         draft.attachments.isEmpty() -> null
@@ -422,7 +422,7 @@ private fun MailReauthorizeDialog(
     account: MailAccount,
     onDismiss: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val scope = rememberCoroutineScope()
     var password by rememberSaveable(account.id) { mutableStateOf("") }
     var visible by rememberSaveable(account.id) { mutableStateOf(false) }

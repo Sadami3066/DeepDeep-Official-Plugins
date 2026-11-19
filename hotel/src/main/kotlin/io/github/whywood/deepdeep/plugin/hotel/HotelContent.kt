@@ -1,13 +1,13 @@
-package io.github.whywood.deepdeep.plugin.hotel
+package io.github.whywood.superpi.plugin.hotel
 
-internal const val HOTEL_SKILL_ID = "deepdeep-hotel"
+internal const val HOTEL_SKILL_ID = "superpi-hotel"
 internal const val HOTEL_SECTION_ID = "hotel_prompt"
 internal const val HOTEL_PAGE_ID = "main"
 internal const val HOTEL_ICON_ASSET = "icon.png"
 
 internal val HOTEL_SKILL_MARKDOWN = """
     ---
-    name: deepdeep-hotel
+    name: superpi-hotel
     description: RollingGo 酒店全流程：搜索酒店、按预算/距离/标签/品牌筛选、查房型报价、查订单与单笔详情、取消订单；当用户提到酒店、住宿、订房、房价、房型、取消或退订或 RollingGo 时使用。
     ---
 

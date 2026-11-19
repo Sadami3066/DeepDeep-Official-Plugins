@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -25,23 +25,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.whywood.deepdeep.design.DdAlpha
-import io.github.whywood.deepdeep.design.DdIcon
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdPrimaryButton
-import io.github.whywood.deepdeep.design.DdShapes
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdSpinner
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.CustomMessageSlotState
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.mail.MailRepository
-import io.github.whywood.deepdeep.plugin.mail.MailSendResult
-import io.github.whywood.deepdeep.plugin.mail.tools.MailDraftCardAttachment
-import io.github.whywood.deepdeep.plugin.mail.tools.MailDraftCardPayload
+import io.github.whywood.superpi.design.DdAlpha
+import io.github.whywood.superpi.design.DdIcon
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdPrimaryButton
+import io.github.whywood.superpi.design.DdShapes
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdSpinner
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.CustomMessageSlotState
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.mail.MailRepository
+import io.github.whywood.superpi.plugin.mail.MailSendResult
+import io.github.whywood.superpi.plugin.mail.tools.MailDraftCardAttachment
+import io.github.whywood.superpi.plugin.mail.tools.MailDraftCardPayload
 import kotlinx.coroutines.launch
 
 private const val DraftBodyMaxLines = 3
@@ -81,7 +81,7 @@ internal fun MailDraftChatCard(
         )
         return
     }
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val mailState by repository.state.collectAsState()
     val sendState = remember(payload.draftId) { MailCardSends.state(payload.draftId) }
     val current = sendState.value
@@ -192,7 +192,7 @@ internal fun MailDraftChatCard(
 
 @Composable
 private fun ComposeTopBar(host: PluginHost, account: String, sent: Boolean) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -233,7 +233,7 @@ private fun ComposeTopBar(host: PluginHost, account: String, sent: Boolean) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RecipientRow(host: PluginHost, label: String, recipients: List<String>, accent: Boolean) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     if (recipients.isEmpty()) return
     Row(
         modifier = Modifier
@@ -263,7 +263,7 @@ private fun RecipientRow(host: PluginHost, label: String, recipients: List<Strin
 
 @Composable
 private fun DraftBodyPanel(text: String, empty: String) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -290,7 +290,7 @@ private fun DraftActionsRow(
     onEdit: () -> Unit,
     onPrimary: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -322,7 +322,7 @@ private fun DraftActionsRow(
 
 @Composable
 private fun DraftSentRow(host: PluginHost, onOpenMail: () -> Unit) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -344,7 +344,7 @@ private fun DraftSentRow(host: PluginHost, onOpenMail: () -> Unit) {
 
 @Composable
 private fun DraftMissingRow(host: PluginHost, onOpenMail: () -> Unit) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier
             .fillMaxWidth()

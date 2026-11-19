@@ -6,7 +6,7 @@ Super PI Agent 官方维护的外部插件源码仓库：把飞书、企业微�
 
 ## 概览
 
-Super PI Agent 是一个运行在 Android 上的个人智能体（[应用仓库](https://github.com/Sadami3066/DeepDeep)）。插件用 Kotlin 实现宿主契约 `plugin-api`，在 App 进程内加载，通过工具、技能、提示词和自绘页面扩展助手能力；插件只从 `.ddp` 安装，每个插件是一个独立的 Android application 模块。
+Super PI Agent 是一个运行在 Android 上的个人智能体（[应用仓库](https://github.com/Sadami3066/SuperPI-App)）。插件用 Kotlin 实现宿主契约 `plugin-api`，在 App 进程内加载，通过工具、技能、提示词和自绘页面扩展助手能力；插件只从 `.ddp` 安装，每个插件是一个独立的 Android application 模块。
 
 本仓库包含十二个官方插件，发布者为 `milous`：
 
@@ -37,7 +37,7 @@ Super PI Agent 是一个运行在 Android 上的个人智能体（[应用仓库]
 |---|---|
 | `feishu/`、`wecom/`、`sysu/`、`wechat/`、`micloud/`、`mail/`、`themes/`、`amap/`、`rail/`、`hotel/`、`ride/`、`zanao/` | 十二个插件模块：Kotlin 源码、`src/main/assets/plugin.json` 清单、图标与页面 |
 | `gradle/plugin-bundle.gradle.kts` | 共享打包脚本，提供 `assemblePlugin`、`signPlugin`、`verifyPlugin` 三个任务 |
-| `settings.gradle.kts` | 模块列表与仓库配置；依赖来自 `https://sadami3066.github.io/deepdeep-maven` 的 `io.github.sadami3066.deepdeep:plugin-api`（版本以该仓库最新发布为准，`api()` 传递配套的 `design`）、Google 与 Maven Central |
+| `settings.gradle.kts` | 模块列表与仓库配置；依赖来自 `https://sadami3066.github.io/SuperPI-Maven` 的 `io.github.sadami3066.superpi:plugin-api`（版本以该仓库最新发布为准，`api()` 传递配套的 `design`）、Google 与 Maven Central |
 | `gradle/wrapper/`、`gradlew` | Gradle 9.8.2 wrapper，无需本机预装 Gradle |
 | `scripts/gradlew-locked` | 串行 Gradle 包装：flock 构建锁、默认单 worker、限制 JVM 内存，避免小内存机器并发构建 OOM |
 | `scripts/check.sh` | 跑共享层与十二个插件的单测，并构建、签名、验签全部插件 |
@@ -109,7 +109,7 @@ chmod 600 keys/plugin-signing.pem
 
 ### 从插件市场安装
 
-在 PI 的「插件 → 市场」中搜索并安装。市场条目版本与本仓库一致，制品发布在 [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) 的 GitHub Releases 中（Release 名形如 `plugins-YYYYMMDD`，资产名形如 `feishu-2.1.0.ddp`），条目记录的 `publisherKeyId` 为官方 `keyId`。
+在 PI 的「插件 → 市场」中搜索并安装。市场条目版本与本仓库一致，制品发布在 [SuperPI-Market](https://github.com/Sadami3066/SuperPI-Market) 的 GitHub Releases 中（Release 名形如 `plugins-YYYYMMDD`，资产名形如 `feishu-2.1.0.ddp`），条目记录的 `publisherKeyId` 为官方 `keyId`。
 
 ### 手动导入 .ddp
 
@@ -146,6 +146,6 @@ chmod 600 keys/plugin-signing.pem
 ## 声明与反馈
 
 - 本项目为个人维护的第三方集成，与飞书、腾讯、小米、中山大学及其关联公司无隶属或背书关系。
-- 问题、建议与使用反馈请提交到 [GitHub Issues](https://github.com/Sadami3066/DeepDeep-Official-Plugins/issues)。涉及签名私钥、凭据或安全漏洞的内容请不要公开，先通过 GitHub 私下联系维护者。
+- 问题、建议与使用反馈请提交到 [GitHub Issues](https://github.com/Sadami3066/SuperPI-Official-Plugins/issues)。涉及签名私钥、凭据或安全漏洞的内容请不要公开，先通过 GitHub 私下联系维护者。
 - 项目按现状提供，尽力维护，不承诺服务可用性、响应时间或第三方接口的持续可用。
-- 相关仓库：[Super PI Agent 应用](https://github.com/Sadami3066/DeepDeep) · [deepdeep-market](https://github.com/Sadami3066/deepdeep-market) · [DeepDeep-Plugins](https://github.com/Sadami3066/DeepDeep-Plugins)
+- 相关仓库：[Super PI Agent 应用](https://github.com/Sadami3066/SuperPI-App) · [SuperPI-Market](https://github.com/Sadami3066/SuperPI-Market) · [SuperPI-Plugins](https://github.com/Sadami3066/SuperPI-Plugins)

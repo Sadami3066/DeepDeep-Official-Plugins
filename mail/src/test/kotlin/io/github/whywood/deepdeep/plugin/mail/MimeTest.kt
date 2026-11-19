@@ -1,15 +1,15 @@
-package io.github.whywood.deepdeep.plugin.mail
+package io.github.whywood.superpi.plugin.mail
 
-import io.github.whywood.deepdeep.plugin.mail.mime.HtmlText
-import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeException
-import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeFailure
-import io.github.whywood.deepdeep.plugin.mail.mime.MailComposeLimits
-import io.github.whywood.deepdeep.plugin.mail.mime.MailComposer
-import io.github.whywood.deepdeep.plugin.mail.mime.MailLimits
-import io.github.whywood.deepdeep.plugin.mail.mime.MailMimeParser
-import io.github.whywood.deepdeep.plugin.mail.mime.OutgoingAttachment
-import io.github.whywood.deepdeep.plugin.mail.mime.OutgoingMail
-import io.github.whywood.deepdeep.plugin.mail.mime.Rfc2047
+import io.github.whywood.superpi.plugin.mail.mime.HtmlText
+import io.github.whywood.superpi.plugin.mail.mime.MailComposeException
+import io.github.whywood.superpi.plugin.mail.mime.MailComposeFailure
+import io.github.whywood.superpi.plugin.mail.mime.MailComposeLimits
+import io.github.whywood.superpi.plugin.mail.mime.MailComposer
+import io.github.whywood.superpi.plugin.mail.mime.MailLimits
+import io.github.whywood.superpi.plugin.mail.mime.MailMimeParser
+import io.github.whywood.superpi.plugin.mail.mime.OutgoingAttachment
+import io.github.whywood.superpi.plugin.mail.mime.OutgoingMail
+import io.github.whywood.superpi.plugin.mail.mime.Rfc2047
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.RandomAccessFile

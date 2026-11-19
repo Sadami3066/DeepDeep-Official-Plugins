@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.amap
+package io.github.whywood.superpi.plugin.amap
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -40,25 +40,25 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdExpandToggle
-import io.github.whywood.deepdeep.design.DdGroupCard
-import io.github.whywood.deepdeep.design.DdHairline
-import io.github.whywood.deepdeep.design.DdIcon
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdImageViewer
-import io.github.whywood.deepdeep.design.DdMotion
-import io.github.whywood.deepdeep.design.DdPressable
-import io.github.whywood.deepdeep.design.DdRemoteImage
-import io.github.whywood.deepdeep.design.DdShapes
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdSpinner
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.LocalDdMotionEnabled
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginToolResult
-import io.github.whywood.deepdeep.plugin.api.ToolResultState
+import io.github.whywood.superpi.design.DdExpandToggle
+import io.github.whywood.superpi.design.DdGroupCard
+import io.github.whywood.superpi.design.DdHairline
+import io.github.whywood.superpi.design.DdIcon
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdImageViewer
+import io.github.whywood.superpi.design.DdMotion
+import io.github.whywood.superpi.design.DdPressable
+import io.github.whywood.superpi.design.DdRemoteImage
+import io.github.whywood.superpi.design.DdShapes
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdSpinner
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.LocalDdMotionEnabled
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginToolResult
+import io.github.whywood.superpi.plugin.api.ToolResultState
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -166,17 +166,17 @@ internal fun AmapPlacesCard(host: PluginHost, state: ToolResultState, around: Bo
         Column(Modifier.fillMaxWidth().padding(horizontal = DdSpacing.Lg, vertical = DdSpacing.Md)) {
             if (map == null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    DdIcon(icon = DdIcons.Search, tint = deepDeepColors().accent, size = 15.dp)
+                    DdIcon(icon = DdIcons.Search, tint = superPiColors().accent, size = 15.dp)
                     Spacer(Modifier.width(DdSpacing.Sm))
                     DdText(
                         text = title,
                         modifier = Modifier.weight(1f),
                         style = DdType.label,
-                        color = deepDeepColors().ink,
+                        color = superPiColors().ink,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    DdText(text = count, style = DdType.chip, color = deepDeepColors().inkTertiary, maxLines = 1)
+                    DdText(text = count, style = DdType.chip, color = superPiColors().inkTertiary, maxLines = 1)
                 }
                 Spacer(Modifier.height(DdSpacing.Sm))
             }
@@ -199,7 +199,7 @@ internal fun AmapPlacesCard(host: PluginHost, state: ToolResultState, around: Bo
 
 @Composable
 private fun MapLabelPill(icon: DdIcon, title: String, trailing: String) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier
             .clip(DdShapes.Pill)
@@ -224,7 +224,7 @@ private fun MapLabelPill(icon: DdIcon, title: String, trailing: String) {
 
 @Composable
 private fun PlaceRow(host: PluginHost, item: AmapPlaceItem, searchCity: String?) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val type = readablePlaceType(item.typeName)
     val address = item.address?.takeIf { it.isNotBlank() }
     var viewer by remember(item.photos.firstOrNull()) { mutableStateOf<ImageBitmap?>(null) }
@@ -288,7 +288,7 @@ private fun PlacePhoto(
     url: String?,
     onOpen: (ImageBitmap) -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val scope = rememberCoroutineScope()
     val size = 64.dp
     if (url == null) {
@@ -344,7 +344,7 @@ private fun PlacePhoto(
 
 @Composable
 private fun TypeTag(text: String) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Box(
         modifier = Modifier
             .clip(DdShapes.Pill)
@@ -386,7 +386,7 @@ internal fun AmapRegeoCard(host: PluginHost, state: ToolResultState) {
         AmapCardPhase.READY -> Unit
     }
     val details = decodeRegeoDetails(result?.details) ?: return
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val location = details.location
     val openUrl = location?.let { AmapUri.marker(it, details.formattedAddress) }
     val admin = listOfNotNull(
@@ -490,7 +490,7 @@ internal fun AmapRegeoCard(host: PluginHost, state: ToolResultState) {
 
 @Composable
 internal fun AmapOpenMapsAction(host: PluginHost, url: String) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val label = host.t("在高德地图中打开", "Open in Amap Maps")
     DdPressable(
         onClick = { runCatching { host.ui().openUrl(url) } },
@@ -510,7 +510,7 @@ internal fun AmapOpenMapsAction(host: PluginHost, url: String) {
 
 @Composable
 internal fun AmapLoadingCard(host: PluginHost, title: String, hero: Boolean) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     DdGroupCard(modifier = Modifier.amapCardEntrance()) {
         if (hero) {
             Box(
@@ -548,7 +548,7 @@ internal fun AmapMessageCard(
     message: String,
     danger: Boolean,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     DdGroupCard(modifier = Modifier.amapCardEntrance()) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(DdSpacing.Lg),

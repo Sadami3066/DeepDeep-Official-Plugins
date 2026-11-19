@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -32,20 +32,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdAvatar
-import io.github.whywood.deepdeep.design.DdIcon
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdPressable
-import io.github.whywood.deepdeep.design.DdPullToRefresh
-import io.github.whywood.deepdeep.design.DdRadius
-import io.github.whywood.deepdeep.design.DdRowDivider
-import io.github.whywood.deepdeep.design.DdSectionLabel
-import io.github.whywood.deepdeep.design.DdSwipeAction
-import io.github.whywood.deepdeep.design.DdSwipeRow
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.mail.MailAccount
+import io.github.whywood.superpi.design.DdAvatar
+import io.github.whywood.superpi.design.DdIcon
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdPressable
+import io.github.whywood.superpi.design.DdPullToRefresh
+import io.github.whywood.superpi.design.DdRadius
+import io.github.whywood.superpi.design.DdRowDivider
+import io.github.whywood.superpi.design.DdSectionLabel
+import io.github.whywood.superpi.design.DdSwipeAction
+import io.github.whywood.superpi.design.DdSwipeRow
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.mail.MailAccount
 
 private sealed interface MailListEntry {
     val key: String
@@ -74,7 +74,7 @@ internal fun MailThreadList(
     onRefresh: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val chinese = host.chinese
     val todayLabel = host.t("今天", "Today")
     val yesterdayLabel = host.t("昨天", "Yesterday")
@@ -178,7 +178,7 @@ private fun MailThreadItem(
     sent: Boolean,
     onClick: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val latest = row.latest
     val recipients = latest.to.joinToString(", ").trim()
     val sender = if (sent) {
@@ -275,7 +275,7 @@ internal fun MailAccountSwitcher(
     onSelect: (String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -321,7 +321,7 @@ private fun MailAccountSwitchItem(
     contentDescription: String,
     content: @Composable () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Box(
         modifier = Modifier.size(42.dp),
         contentAlignment = Alignment.Center,

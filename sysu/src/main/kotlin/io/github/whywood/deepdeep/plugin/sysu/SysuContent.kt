@@ -1,6 +1,6 @@
-package io.github.whywood.deepdeep.plugin.sysu
+package io.github.whywood.superpi.plugin.sysu
 
-import io.github.whywood.deepdeep.plugin.api.LocalizedText
+import io.github.whywood.superpi.plugin.api.LocalizedText
 
 internal object SysuContent {
     fun skillMarkdown(): String = SKILL_MARKDOWN
@@ -26,7 +26,7 @@ internal object SysuContent {
                 append("中山大学 CLI 已安装并已登录")
                 if (!status.account.isNullOrBlank()) append("（账号 ${status.account}）")
                 appendLine("。$sites")
-                appendLine("命令用法见技能 deepdeep-sysu。")
+                appendLine("命令用法见技能 superpi-sysu。")
                 appendLine("站点：sysu jwxt（教务）、sysu lms（在线教学）、sysu gym（体育场馆）、sysu netpay（网费）、sysu sso（通用换票）。")
                 appendLine("查询用单条命令：默认输出可读文本，加 --json 输出机器 JSON；不要加管道、head 或 cd 前缀。")
                 appendLine("`sysu <站点>` 不带子命令会打印该站点帮助，不会执行查询。")
@@ -47,7 +47,7 @@ internal object SysuContent {
 
     private val SKILL_MARKDOWN = """
         ---
-        name: deepdeep-sysu
+        name: superpi-sysu
         description: 中山大学校园服务 CLI——教务（课表/成绩/考试/请假）、在线教学平台（课程/作业/文件）、体育场馆（空位/预约/取消）、网费（服务状态/订单/续费）与统一认证换票。用户问上课时间、成绩、作业截止、课件、场地、网费或想登进别的中大系统时用；命令是 `sysu`。
         ---
 

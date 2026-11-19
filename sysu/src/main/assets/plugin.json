@@ -1,11 +1,11 @@
 {
-  "id": "io.github.whywood.deepdeep.plugin.sysu",
+  "id": "io.github.whywood.superpi.plugin.sysu",
   "version": "2.7.3",
   "publisher": {
     "name": "milous"
   },
-  "apiLevel": 6,
-  "minHostVersion": "1.4.3",
+  "apiLevel": 7,
+  "minHostVersion": "2.0.0",
   "capabilities": [
     "device",
     "linux",
@@ -18,7 +18,7 @@
   "permissions": [
     "notifications.post"
   ],
-  "entryClass": "io.github.whywood.deepdeep.plugin.sysu.SysuPlugin",
+  "entryClass": "io.github.whywood.superpi.plugin.sysu.SysuPlugin",
   "name": {
     "default": "中山大学 CLI",
     "zh": "中山大学 CLI",
@@ -41,7 +41,7 @@
   "provides": {
     "tools": [],
     "skills": [
-      "deepdeep-sysu"
+      "superpi-sysu"
     ],
     "uiSlots": [],
     "pages": [

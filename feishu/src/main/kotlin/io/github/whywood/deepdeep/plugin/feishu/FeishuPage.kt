@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.feishu
+package io.github.whywood.superpi.plugin.feishu
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,30 +15,30 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import io.github.whywood.deepdeep.design.DdGroupCard
-import io.github.whywood.deepdeep.design.DdHairline
-import io.github.whywood.deepdeep.design.DdListRow
-import io.github.whywood.deepdeep.design.DdLoadingBlock
-import io.github.whywood.deepdeep.design.DdNoticeBar
-import io.github.whywood.deepdeep.design.DdNoticeTone
-import io.github.whywood.deepdeep.design.DdPrimaryButton
-import io.github.whywood.deepdeep.design.DdProgressBar
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdStatusRow
-import io.github.whywood.deepdeep.design.DdStatusTone
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.uiConfirmRequest
+import io.github.whywood.superpi.design.DdGroupCard
+import io.github.whywood.superpi.design.DdHairline
+import io.github.whywood.superpi.design.DdListRow
+import io.github.whywood.superpi.design.DdLoadingBlock
+import io.github.whywood.superpi.design.DdNoticeBar
+import io.github.whywood.superpi.design.DdNoticeTone
+import io.github.whywood.superpi.design.DdPrimaryButton
+import io.github.whywood.superpi.design.DdProgressBar
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdStatusRow
+import io.github.whywood.superpi.design.DdStatusTone
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.uiConfirmRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 @Composable
 internal fun FeishuPage(host: PluginHost, runtime: FeishuRuntime) {
     val state by runtime.pageState.collectAsState()
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val scope = rememberCoroutineScope()
     val linuxAvailable = runCatching { host.linux().available }.getOrDefault(false)
     LaunchedEffect(Unit) {
@@ -294,7 +294,7 @@ private fun StatusCard(host: PluginHost, state: FeishuPageState, linuxAvailable:
 
 @Composable
 private fun OperationCard(host: PluginHost, runtime: FeishuRuntime, state: FeishuPageState) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val cancelling = state.cancelling
     DdGroupCard {
         Column(
@@ -340,7 +340,7 @@ private fun OperationCard(host: PluginHost, runtime: FeishuRuntime, state: Feish
 
 @Composable
 private fun AuthLink(host: PluginHost, runtime: FeishuRuntime, state: FeishuPageState) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     if (state.authUrl == null) return
     val creatingApp = state.stage == STAGE_CREATE_APP
     Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Sm)) {
@@ -380,7 +380,7 @@ private fun AccountActions(
     scope: CoroutineScope,
     enabled: Boolean,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Center,

@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,22 +28,22 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.whywood.deepdeep.design.DdAlpha
-import io.github.whywood.deepdeep.design.DdExpandToggle
-import io.github.whywood.deepdeep.design.DdIcon
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdPressable
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.CustomMessageSlotState
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.mail.MailFolderRole
-import io.github.whywood.deepdeep.plugin.mail.tools.MailReadCardPayload
-import io.github.whywood.deepdeep.plugin.mail.tools.MailSearchCardItem
-import io.github.whywood.deepdeep.plugin.mail.tools.MailSearchCardPayload
-import io.github.whywood.deepdeep.plugin.mail.tools.mailFolderLabel
+import io.github.whywood.superpi.design.DdAlpha
+import io.github.whywood.superpi.design.DdExpandToggle
+import io.github.whywood.superpi.design.DdIcon
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdPressable
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.CustomMessageSlotState
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.mail.MailFolderRole
+import io.github.whywood.superpi.plugin.mail.tools.MailReadCardPayload
+import io.github.whywood.superpi.plugin.mail.tools.MailSearchCardItem
+import io.github.whywood.superpi.plugin.mail.tools.MailSearchCardPayload
+import io.github.whywood.superpi.plugin.mail.tools.mailFolderLabel
 
 private const val SearchCollapsedRows = 5
 private const val ReadBodyCollapsedLines = 4
@@ -105,7 +105,7 @@ internal fun MailSearchChatCard(host: PluginHost, state: CustomMessageSlotState)
 
 @Composable
 private fun SearchHead(host: PluginHost, payload: MailSearchCardPayload) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val query = payload.query.trim()
     Row(
         modifier = Modifier
@@ -159,7 +159,7 @@ private fun SearchEnvelopeRow(
     now: Long,
     onClick: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val subject = displaySubject(item.subject, host.t("（无主题）", "(No subject)"))
     val outgoing = item.sent
     val recipients = item.to.joinToString(", ").trim()
@@ -259,7 +259,7 @@ private fun SearchEnvelopeRow(
 
 @Composable
 private fun SearchEmptyBody(host: PluginHost, payload: MailSearchCardPayload) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val moreMatches = payload.total > 0
     Column(
         modifier = Modifier
@@ -318,7 +318,7 @@ internal fun MailReadChatCard(host: PluginHost, state: CustomMessageSlotState) {
         )
         return
     }
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     var bodyExpanded by remember(payload) { mutableStateOf(false) }
     val subject = displaySubject(payload.subject, host.t("（无主题）", "(No subject)"))
     val outgoing = payload.folderRole.equals("sent", ignoreCase = true)

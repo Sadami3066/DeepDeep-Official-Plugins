@@ -1,13 +1,13 @@
-package io.github.whywood.deepdeep.plugin.hotel
+package io.github.whywood.superpi.plugin.hotel
 
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginToolCall
-import io.github.whywood.deepdeep.plugin.api.PluginToolResult
-import io.github.whywood.deepdeep.plugin.api.pluginTool
-import io.github.whywood.deepdeep.plugin.api.textResult
-import io.github.whywood.deepdeep.plugin.api.uiChoice
-import io.github.whywood.deepdeep.plugin.api.uiChooseRequest
-import io.github.whywood.deepdeep.plugin.api.uiConfirmRequest
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginToolCall
+import io.github.whywood.superpi.plugin.api.PluginToolResult
+import io.github.whywood.superpi.plugin.api.pluginTool
+import io.github.whywood.superpi.plugin.api.textResult
+import io.github.whywood.superpi.plugin.api.uiChoice
+import io.github.whywood.superpi.plugin.api.uiChooseRequest
+import io.github.whywood.superpi.plugin.api.uiConfirmRequest
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
@@ -814,5 +814,5 @@ private fun JsonObject?.strings(name: String): List<String> =
 private fun JsonObject?.objects(name: String): List<JsonObject> =
     (this?.get(name) as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
 
-private suspend fun io.github.whywood.deepdeep.plugin.api.PluginSettingsService.readSetting(key: String): String =
+private suspend fun io.github.whywood.superpi.plugin.api.PluginSettingsService.readSetting(key: String): String =
     runCatching { get(key) }.getOrNull().orEmpty()

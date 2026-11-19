@@ -1,27 +1,27 @@
-package io.github.whywood.deepdeep.plugin.wecom
+package io.github.whywood.superpi.plugin.wecom
 
-import io.github.whywood.deepdeep.plugin.api.Contributions
-import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
-import io.github.whywood.deepdeep.plugin.api.NotificationActionEvent
-import io.github.whywood.deepdeep.plugin.api.PluginAvailability
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginHooks
-import io.github.whywood.deepdeep.plugin.api.PluginPage
-import io.github.whywood.deepdeep.plugin.api.PluginSkill
-import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
-import io.github.whywood.deepdeep.plugin.api.PromptSection
-import io.github.whywood.deepdeep.plugin.api.assetIcon
-import io.github.whywood.deepdeep.plugin.api.available
-import io.github.whywood.deepdeep.plugin.api.contributions
-import io.github.whywood.deepdeep.plugin.api.pluginPage
-import io.github.whywood.deepdeep.plugin.api.pluginSkill
-import io.github.whywood.deepdeep.plugin.api.promptSection
-import io.github.whywood.deepdeep.plugin.api.unavailable
+import io.github.whywood.superpi.plugin.api.Contributions
+import io.github.whywood.superpi.plugin.api.SuperPIPlugin
+import io.github.whywood.superpi.plugin.api.NotificationActionEvent
+import io.github.whywood.superpi.plugin.api.PluginAvailability
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginHooks
+import io.github.whywood.superpi.plugin.api.PluginPage
+import io.github.whywood.superpi.plugin.api.PluginSkill
+import io.github.whywood.superpi.plugin.api.PluginUiContributions
+import io.github.whywood.superpi.plugin.api.PromptSection
+import io.github.whywood.superpi.plugin.api.assetIcon
+import io.github.whywood.superpi.plugin.api.available
+import io.github.whywood.superpi.plugin.api.contributions
+import io.github.whywood.superpi.plugin.api.pluginPage
+import io.github.whywood.superpi.plugin.api.pluginSkill
+import io.github.whywood.superpi.plugin.api.promptSection
+import io.github.whywood.superpi.plugin.api.unavailable
 import java.io.File
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
-class WecomPlugin : DeepDeepPlugin {
+class WecomPlugin : SuperPIPlugin {
     @Volatile
     private var lastStatus: WecomStatus? = null
 
@@ -110,7 +110,7 @@ class WecomPlugin : DeepDeepPlugin {
 
         val SKILL_MARKDOWN = """
             ---
-            name: deepdeep-wecom
+            name: superpi-wecom
             description: 企业微信 CLI 用法速查：消息、邮件、文档、在线表格、智能表格、日程、会议、待办、微盘与通讯录；当用户提到企业微信、WeCom、企微、发消息、文档、日程或待办时使用。
             ---
 
@@ -136,4 +136,4 @@ class WecomPlugin : DeepDeepPlugin {
     }
 }
 
-internal const val WECOM_SKILL_ID = "deepdeep-wecom"
+internal const val WECOM_SKILL_ID = "superpi-wecom"

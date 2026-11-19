@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.mime
+package io.github.whywood.superpi.plugin.mail.mime
 
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -82,7 +82,7 @@ internal object MailComposer {
 
     fun newMessageId(fromAddress: String, now: Long = System.currentTimeMillis()): String {
         val domain = fromAddress.substringAfter('@', "").substringBefore('>').trim()
-            .ifBlank { "deepdeep.local" }
+            .ifBlank { "superpi.local" }
         return "<$now.${UUID.randomUUID().toString().replace("-", "")}@$domain>"
     }
 
@@ -268,7 +268,7 @@ internal object MailComposer {
         return format.format(Date(millis))
     }
 
-    private fun nextBoundary(): String = "deepdeep-" + UUID.randomUUID().toString().replace("-", "")
+    private fun nextBoundary(): String = "superpi-" + UUID.randomUUID().toString().replace("-", "")
 
     private fun writeLine(output: OutputStream, line: String) {
         output.write(line.toByteArray(Charsets.UTF_8))

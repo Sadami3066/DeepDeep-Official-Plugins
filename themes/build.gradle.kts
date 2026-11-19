@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "io.github.whywood.deepdeep.plugin.themes"
+    namespace = "io.github.whywood.superpi.plugin.themes"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.whywood.deepdeep.plugin.themes"
+        applicationId = "io.github.whywood.superpi.plugin.themes"
         minSdk = 29
         targetSdk = 36
         versionCode = 2
@@ -38,7 +38,7 @@ kotlin {
 }
 
 dependencies {
-    compileOnly("io.github.sadami3066.deepdeep:plugin-api:1.3.1")
+    compileOnly("io.github.sadami3066.superpi:plugin-api:2.0.0")
 }
 
 apply(from = rootProject.file("gradle/plugin-bundle.gradle.kts"))

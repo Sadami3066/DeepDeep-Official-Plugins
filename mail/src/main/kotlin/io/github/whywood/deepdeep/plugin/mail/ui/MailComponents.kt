@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -24,24 +24,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdDialog
-import io.github.whywood.deepdeep.design.DdElevation
-import io.github.whywood.deepdeep.design.DdIcon
-import io.github.whywood.deepdeep.design.DdIconButton
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdPressable
-import io.github.whywood.deepdeep.design.DdRadius
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdSpinner
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.superpi.design.DdDialog
+import io.github.whywood.superpi.design.DdElevation
+import io.github.whywood.superpi.design.DdIcon
+import io.github.whywood.superpi.design.DdIconButton
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdPressable
+import io.github.whywood.superpi.design.DdRadius
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdSpinner
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.PluginHost
 
 @Composable
 internal fun MailUnreadDot(
     modifier: Modifier = Modifier,
-    color: Color = deepDeepColors().accent,
+    color: Color = superPiColors().accent,
     size: Dp = 7.dp,
 ) {
     Box(modifier.size(size).clip(CircleShape).background(color))
@@ -54,7 +54,7 @@ internal fun MailSheetHeader(
     onClose: () -> Unit,
     onBack: (() -> Unit)? = null,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -94,13 +94,13 @@ internal fun MailSheetHeader(
 internal fun MailNoticeBar(
     text: String,
     modifier: Modifier = Modifier,
-    tone: Color = deepDeepColors().inkSecondary,
+    tone: Color = superPiColors().inkSecondary,
     loading: Boolean = false,
     actionLabel: String? = null,
     actionDescription: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val clickable = actionLabel != null && onAction != null
     val bar: @Composable () -> Unit = {
         Row(
@@ -158,7 +158,7 @@ internal fun MailUndoBar(
     onAction: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -191,7 +191,7 @@ internal fun MailConfirmDialog(
     onDismiss: () -> Unit,
     destructive: Boolean = false,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     DdDialog(
         onDismissRequest = onDismiss,
         title = title,

@@ -21,7 +21,7 @@ Search and room types are read-only. Booking shows a native confirmation first a
 
 ## Skill
 
-`deepdeep-hotel` tells the agent to prefer the tools above. It calls `hotel_book` to lock the price and create a pending order only after the user has explicitly confirmed the hotel, room type, rate plan, dates and total and provided contact details. When one room type has several rate plans, it asks the user to choose and passes the plan ID to `hotel_book`. For a confirmation number, hotel phone number, guest name or payment deadline it uses `hotel_order_detail`. The plugin never pays on the user's behalf.
+`superpi-hotel` tells the agent to prefer the tools above. It calls `hotel_book` to lock the price and create a pending order only after the user has explicitly confirmed the hotel, room type, rate plan, dates and total and provided contact details. When one room type has several rate plans, it asks the user to choose and passes the plan ID to `hotel_book`. For a confirmation number, hotel phone number, guest name or payment deadline it uses `hotel_order_detail`. The plugin never pays on the user's behalf.
 
 ## Build
 

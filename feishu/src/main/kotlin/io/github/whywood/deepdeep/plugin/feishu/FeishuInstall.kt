@@ -1,13 +1,13 @@
-package io.github.whywood.deepdeep.plugin.feishu
+package io.github.whywood.superpi.plugin.feishu
 
-import io.github.whywood.deepdeep.plugin.api.LinuxService
-import io.github.whywood.deepdeep.plugin.api.NetworkService
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.cli.update.CliInstallEvent
-import io.github.whywood.deepdeep.plugin.cli.update.CliInstallMessages
-import io.github.whywood.deepdeep.plugin.cli.update.CliInstallPlan
-import io.github.whywood.deepdeep.plugin.cli.update.CliInstallRunner
-import io.github.whywood.deepdeep.plugin.cli.update.CliInstallTimeouts
+import io.github.whywood.superpi.plugin.api.LinuxService
+import io.github.whywood.superpi.plugin.api.NetworkService
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.cli.update.CliInstallEvent
+import io.github.whywood.superpi.plugin.cli.update.CliInstallMessages
+import io.github.whywood.superpi.plugin.cli.update.CliInstallPlan
+import io.github.whywood.superpi.plugin.cli.update.CliInstallRunner
+import io.github.whywood.superpi.plugin.cli.update.CliInstallTimeouts
 import java.io.File
 
 internal const val LARK_CLI_BACKUP_PATH = "/usr/local/bin/.lark-cli.old"

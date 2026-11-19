@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.wechat
+package io.github.whywood.superpi.plugin.wechat
 
 internal object WechatContent {
     fun skillMarkdown(): String = SKILL_MARKDOWN
@@ -28,7 +28,7 @@ internal object WechatContent {
 
     private val SKILL_MARKDOWN = """
         ---
-        name: deepdeep-wechat
+        name: superpi-wechat
         description: 导出指定日期范围的完整微信聊天记录（个人、群聊、公众号、文件传输助手、服务通知、支付），交给 Agent 阅读和总结；CLI 只做数据清洗和全量导出，不做筛选或摘要。
         ---
 

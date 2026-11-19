@@ -1,7 +1,7 @@
-package io.github.whywood.deepdeep.plugin.micloud
+package io.github.whywood.superpi.plugin.micloud
 
-import io.github.whywood.deepdeep.plugin.api.PluginTool
-import io.github.whywood.deepdeep.plugin.api.PluginToolResult
+import io.github.whywood.superpi.plugin.api.PluginTool
+import io.github.whywood.superpi.plugin.api.PluginToolResult
 import java.net.SocketTimeoutException
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json

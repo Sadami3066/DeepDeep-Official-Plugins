@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -23,20 +23,20 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdIcon
-import io.github.whywood.deepdeep.design.DdIconButton
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdLoadingBlock
-import io.github.whywood.deepdeep.design.DdPressable
-import io.github.whywood.deepdeep.design.DdPrimaryButton
-import io.github.whywood.deepdeep.design.DdRadius
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.DdTextField
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.mail.MailConnectionTest
-import io.github.whywood.deepdeep.plugin.mail.MailProviderPreset
+import io.github.whywood.superpi.design.DdIcon
+import io.github.whywood.superpi.design.DdIconButton
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdLoadingBlock
+import io.github.whywood.superpi.design.DdPressable
+import io.github.whywood.superpi.design.DdPrimaryButton
+import io.github.whywood.superpi.design.DdRadius
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.DdTextField
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.mail.MailConnectionTest
+import io.github.whywood.superpi.plugin.mail.MailProviderPreset
 
 @Composable
 internal fun ProviderStep(
@@ -45,7 +45,7 @@ internal fun ProviderStep(
     onSelect: (MailProviderPreset) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val regular = providers.filter { !it.custom }
     val custom = providers.firstOrNull { it.custom }
     Column(
@@ -102,7 +102,7 @@ private fun ProviderTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val name = host.providerName(preset)
     DdPressable(
         onClick = onClick,
@@ -129,7 +129,7 @@ internal fun HelpStep(
     onContinue: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(
         modifier = modifier
             .verticalScroll(rememberScrollState())
@@ -206,7 +206,7 @@ internal fun CredentialsStep(
     onTest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(
         modifier = modifier
             .verticalScroll(rememberScrollState())
@@ -335,7 +335,7 @@ internal fun ResultStep(
     onStart: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(
         modifier = modifier
             .verticalScroll(rememberScrollState())
@@ -414,7 +414,7 @@ private fun ResultRow(
     ok: Boolean,
     error: String?,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

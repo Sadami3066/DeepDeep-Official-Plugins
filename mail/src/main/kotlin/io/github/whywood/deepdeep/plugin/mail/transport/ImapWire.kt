@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.transport
+package io.github.whywood.superpi.plugin.mail.transport
 
 import java.io.ByteArrayOutputStream
 import java.io.InputStream

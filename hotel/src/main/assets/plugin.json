@@ -1,8 +1,8 @@
 {
-  "id": "io.github.whywood.deepdeep.plugin.hotel",
+  "id": "io.github.whywood.superpi.plugin.hotel",
   "version": "1.4.1",
-  "apiLevel": 6,
-  "minHostVersion": "1.4.3",
+  "apiLevel": 7,
+  "minHostVersion": "2.0.0",
   "capabilities": [
     "clipboard",
     "files",
@@ -12,7 +12,7 @@
     "settings",
     "ui"
   ],
-  "entryClass": "io.github.whywood.deepdeep.plugin.hotel.HotelPlugin",
+  "entryClass": "io.github.whywood.superpi.plugin.hotel.HotelPlugin",
   "name": {
     "default": "RollingGo酒店",
     "zh": "RollingGo酒店",
@@ -45,7 +45,7 @@
       "hotel_tags"
     ],
     "skills": [
-      "deepdeep-hotel"
+      "superpi-hotel"
     ],
     "uiSlots": [
       "tool.card.content:hotel_search",

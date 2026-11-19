@@ -1,13 +1,13 @@
-package io.github.whywood.deepdeep.plugin.mail.tools
+package io.github.whywood.superpi.plugin.mail.tools
 
-import io.github.whywood.deepdeep.plugin.api.BackgroundTaskEvent
-import io.github.whywood.deepdeep.plugin.api.NotificationActionEvent
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginHooks
-import io.github.whywood.deepdeep.plugin.api.PluginNotificationAction
-import io.github.whywood.deepdeep.plugin.api.localizedText
-import io.github.whywood.deepdeep.plugin.api.notificationAction
-import io.github.whywood.deepdeep.plugin.mail.MailRuntime
+import io.github.whywood.superpi.plugin.api.BackgroundTaskEvent
+import io.github.whywood.superpi.plugin.api.NotificationActionEvent
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginHooks
+import io.github.whywood.superpi.plugin.api.PluginNotificationAction
+import io.github.whywood.superpi.plugin.api.localizedText
+import io.github.whywood.superpi.plugin.api.notificationAction
+import io.github.whywood.superpi.plugin.mail.MailRuntime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject

@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "io.github.whywood.deepdeep.plugin.mail"
+    namespace = "io.github.whywood.superpi.plugin.mail"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.whywood.deepdeep.plugin.mail"
+        applicationId = "io.github.whywood.superpi.plugin.mail"
         minSdk = 29
         targetSdk = 36
         versionCode = 12
@@ -39,8 +39,8 @@ kotlin {
 }
 
 dependencies {
-    compileOnly("io.github.sadami3066.deepdeep:plugin-api:1.4.0")
-    compileOnly("io.github.sadami3066.deepdeep:design:0.11.0")
+    compileOnly("io.github.sadami3066.superpi:plugin-api:2.0.0")
+    compileOnly("io.github.sadami3066.superpi:design:1.0.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     compileOnly("androidx.activity:activity:1.12.4")
@@ -55,7 +55,7 @@ dependencies {
     testImplementation("androidx.compose.ui:ui")
     testImplementation("androidx.compose.foundation:foundation")
     testImplementation("androidx.compose.material3:material3")
-    testImplementation("io.github.sadami3066.deepdeep:plugin-api:1.4.0")
+    testImplementation("io.github.sadami3066.superpi:plugin-api:2.0.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")

@@ -1,16 +1,16 @@
-package io.github.whywood.deepdeep.plugin.mail.sync
+package io.github.whywood.superpi.plugin.mail.sync
 
-import io.github.whywood.deepdeep.plugin.mail.MailFolderRole
-import io.github.whywood.deepdeep.plugin.mail.MailMessageSummary
-import io.github.whywood.deepdeep.plugin.mail.mime.MailAddress
-import io.github.whywood.deepdeep.plugin.mail.mime.MailDates
-import io.github.whywood.deepdeep.plugin.mail.mime.MailHeaders
-import io.github.whywood.deepdeep.plugin.mail.mime.ParsedMail
-import io.github.whywood.deepdeep.plugin.mail.mime.Rfc2047
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapAddress
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapCodec
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapFetchResult
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapFolder
+import io.github.whywood.superpi.plugin.mail.MailFolderRole
+import io.github.whywood.superpi.plugin.mail.MailMessageSummary
+import io.github.whywood.superpi.plugin.mail.mime.MailAddress
+import io.github.whywood.superpi.plugin.mail.mime.MailDates
+import io.github.whywood.superpi.plugin.mail.mime.MailHeaders
+import io.github.whywood.superpi.plugin.mail.mime.ParsedMail
+import io.github.whywood.superpi.plugin.mail.mime.Rfc2047
+import io.github.whywood.superpi.plugin.mail.transport.ImapAddress
+import io.github.whywood.superpi.plugin.mail.transport.ImapCodec
+import io.github.whywood.superpi.plugin.mail.transport.ImapFetchResult
+import io.github.whywood.superpi.plugin.mail.transport.ImapFolder
 
 internal object FolderMapping {
     fun resolve(folders: List<ImapFolder>): Map<MailFolderRole, String> {

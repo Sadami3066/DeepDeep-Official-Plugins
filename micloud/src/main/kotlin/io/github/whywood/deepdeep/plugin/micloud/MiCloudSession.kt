@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.micloud
+package io.github.whywood.superpi.plugin.micloud
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex

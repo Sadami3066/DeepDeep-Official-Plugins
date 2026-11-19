@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.hotel
+package io.github.whywood.superpi.plugin.hotel
 
 internal data class HotelSnapshot(
     val installedVersion: String? = null,

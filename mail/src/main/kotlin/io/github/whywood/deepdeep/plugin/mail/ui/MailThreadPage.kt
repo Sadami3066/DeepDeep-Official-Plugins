@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
@@ -40,33 +40,33 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdAvatar
-import io.github.whywood.deepdeep.design.DdFileRow
-import io.github.whywood.deepdeep.design.DdGroupCard
-import io.github.whywood.deepdeep.design.DdHairline
-import io.github.whywood.deepdeep.design.DdHtmlBlocks
-import io.github.whywood.deepdeep.design.DdIcon
-import io.github.whywood.deepdeep.design.DdIconButton
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdImageViewer
-import io.github.whywood.deepdeep.design.DdLoadingBlock
-import io.github.whywood.deepdeep.design.DdMenu
-import io.github.whywood.deepdeep.design.DdMenuItem
-import io.github.whywood.deepdeep.design.DdPressable
-import io.github.whywood.deepdeep.design.DdRowDivider
-import io.github.whywood.deepdeep.design.DdShapes
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdSpinner
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.shareRequest
-import io.github.whywood.deepdeep.plugin.mail.MailAttachment
-import io.github.whywood.deepdeep.plugin.mail.MailFolderRole
-import io.github.whywood.deepdeep.plugin.mail.MailMessageDetail
-import io.github.whywood.deepdeep.plugin.mail.MailMessageSummary
-import io.github.whywood.deepdeep.plugin.mail.MailRepository
+import io.github.whywood.superpi.design.DdAvatar
+import io.github.whywood.superpi.design.DdFileRow
+import io.github.whywood.superpi.design.DdGroupCard
+import io.github.whywood.superpi.design.DdHairline
+import io.github.whywood.superpi.design.DdHtmlBlocks
+import io.github.whywood.superpi.design.DdIcon
+import io.github.whywood.superpi.design.DdIconButton
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdImageViewer
+import io.github.whywood.superpi.design.DdLoadingBlock
+import io.github.whywood.superpi.design.DdMenu
+import io.github.whywood.superpi.design.DdMenuItem
+import io.github.whywood.superpi.design.DdPressable
+import io.github.whywood.superpi.design.DdRowDivider
+import io.github.whywood.superpi.design.DdShapes
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdSpinner
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.shareRequest
+import io.github.whywood.superpi.plugin.mail.MailAttachment
+import io.github.whywood.superpi.plugin.mail.MailFolderRole
+import io.github.whywood.superpi.plugin.mail.MailMessageDetail
+import io.github.whywood.superpi.plugin.mail.MailMessageSummary
+import io.github.whywood.superpi.plugin.mail.MailRepository
 import kotlinx.coroutines.launch
 
 internal sealed interface MailDetailState {
@@ -97,7 +97,7 @@ internal fun MailThreadPage(
 ) {
     BackHandler(onBack = onBack)
     val state by repository.state.collectAsState()
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val scope = rememberCoroutineScope()
     val chinese = host.chinese
     val account = remember(state.accounts, request.accountId) {
@@ -432,7 +432,7 @@ private fun MailThreadTopBar(
     onMarkUnread: () -> Unit,
     onToggleExpandAll: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier.fillMaxWidth().height(56.dp).padding(start = 6.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -516,7 +516,7 @@ private fun MailThreadComposerBar(
     onReplyAll: () -> Unit,
     onForward: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = DdSpacing.Xs, vertical = DdSpacing.Xxs),
         verticalAlignment = Alignment.CenterVertically,
@@ -558,7 +558,7 @@ private fun FallbackThreadContent(
     onAttachment: (MailAttachment) -> Unit,
     onViewer: (MailThreadViewer) -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     when (state) {
         null, is MailDetailState.Loading -> Box(
             Modifier.fillMaxWidth().padding(vertical = 40.dp),
@@ -607,7 +607,7 @@ private fun MailThreadMessageCard(
     onAttachment: (MailAttachment) -> Unit,
     onViewer: (MailThreadViewer) -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val outgoing = message.folderRole == MailFolderRole.SENT
     val recipients = message.to.joinToString(", ").trim()
     val partyName = if (outgoing) {
@@ -740,7 +740,7 @@ private fun MailMessageContent(
     onAttachment: (MailAttachment) -> Unit,
     onViewer: (MailThreadViewer) -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val scope = rememberCoroutineScope()
     val html = remember(detail) { mailBodyHtml(detail) }
     val loader = remember(detail.summary.accountId, detail.summary.id) {

@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.sysu
+package io.github.whywood.superpi.plugin.sysu
 
 internal object SysuFixtures {
     fun text(name: String): String =

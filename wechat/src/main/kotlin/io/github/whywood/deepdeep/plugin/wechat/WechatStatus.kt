@@ -1,6 +1,6 @@
-package io.github.whywood.deepdeep.plugin.wechat
+package io.github.whywood.superpi.plugin.wechat
 
-import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginHost
 
 internal data class WechatStatus(
     val linuxAvailable: Boolean = false,

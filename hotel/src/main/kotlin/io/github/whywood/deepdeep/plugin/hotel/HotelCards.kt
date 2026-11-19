@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.hotel
+package io.github.whywood.superpi.plugin.hotel
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -42,24 +42,24 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.whywood.deepdeep.design.DdAlpha
-import io.github.whywood.deepdeep.design.DdExpandToggle
-import io.github.whywood.deepdeep.design.DdHairline
-import io.github.whywood.deepdeep.design.DdIcon
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdPressable
-import io.github.whywood.deepdeep.design.DdPrimaryButton
-import io.github.whywood.deepdeep.design.DdRemoteImage
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdSpinner
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.DeepDeepColors
-import io.github.whywood.deepdeep.design.LocalDdMotionEnabled
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.ToolCardSlotState
+import io.github.whywood.superpi.design.DdAlpha
+import io.github.whywood.superpi.design.DdExpandToggle
+import io.github.whywood.superpi.design.DdHairline
+import io.github.whywood.superpi.design.DdIcon
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdPressable
+import io.github.whywood.superpi.design.DdPrimaryButton
+import io.github.whywood.superpi.design.DdRemoteImage
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdSpinner
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.SuperPIColors
+import io.github.whywood.superpi.design.LocalDdMotionEnabled
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.ToolCardSlotState
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlinx.serialization.json.JsonObject
@@ -78,7 +78,7 @@ private enum class HotelTone { NEUTRAL, ACCENT, SUCCESS, WARNING, DANGER }
 
 @Composable
 private fun HotelCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(modifier.fillMaxWidth().clip(HotelCardShape).background(colors.surface)) {
         content()
     }
@@ -127,7 +127,7 @@ private fun rememberHotelAppear(): Float {
 
 @Composable
 private fun HotelTag(text: String, tone: HotelTone = HotelTone.NEUTRAL, modifier: Modifier = Modifier) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val color = tone.color(colors)
     val background = when (tone) {
         HotelTone.NEUTRAL -> colors.wash
@@ -150,7 +150,7 @@ private fun HotelTag(text: String, tone: HotelTone = HotelTone.NEUTRAL, modifier
     }
 }
 
-private fun HotelTone.color(colors: DeepDeepColors) = when (this) {
+private fun HotelTone.color(colors: SuperPIColors) = when (this) {
     HotelTone.NEUTRAL -> colors.inkSecondary
     HotelTone.ACCENT -> colors.accent
     HotelTone.SUCCESS -> colors.success
@@ -164,7 +164,7 @@ private fun SkeletonBar(
     height: Dp = 12.dp,
     modifier: Modifier = Modifier,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val size = if (width == null) Modifier.fillMaxWidth() else Modifier.width(width)
     Box(
         modifier
@@ -177,7 +177,7 @@ private fun SkeletonBar(
 
 @Composable
 private fun HotelEmptyState(title: String, hint: String, icon: DdIcon = DdIcons.Search, note: String? = null) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     HotelCard {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = DdSpacing.Card, vertical = 28.dp),
@@ -207,7 +207,7 @@ private fun HotelEmptyState(title: String, hint: String, icon: DdIcon = DdIcons.
 
 @Composable
 private fun HotelErrorState(host: PluginHost, message: String) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     HotelCard {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = DdSpacing.Card, vertical = 16.dp),
@@ -230,7 +230,7 @@ private fun HotelErrorState(host: PluginHost, message: String) {
 
 @Composable
 private fun HotelFallbackCard(host: PluginHost, text: String?) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     HotelCard {
         DdText(
             text = text ?: host.t("没有酒店数据。", "No hotel data."),
@@ -320,7 +320,7 @@ internal fun HotelSearchCard(host: PluginHost, state: ToolCardSlotState) {
 
 @Composable
 private fun HotelLabelChips(host: PluginHost, labels: List<String>, hiddenCount: Int = 0) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         labels.chunked(3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -342,7 +342,7 @@ private fun HotelLabelChips(host: PluginHost, labels: List<String>, hiddenCount:
 
 @Composable
 private fun SearchBudgetStrip(host: PluginHost, details: HotelSearchDetails) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val budget = details.maxPrice ?: return
     val budgetText = hotelMoneyText(budget, null).orEmpty()
     val unpriced = details.hotels.count { it.lowestPrice == null }
@@ -382,7 +382,7 @@ private fun SearchBudgetStrip(host: PluginHost, details: HotelSearchDetails) {
 
 @Composable
 private fun SearchHero(host: PluginHost, hotel: HotelSummary, details: HotelSearchDetails, expanded: Boolean) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val star = hotel.starRating?.takeIf { it.isNotBlank() }?.let { "$it★" }
     val distance = hotelDistanceText(hotel.distanceMeters) ?: hotel.distance
     val meta = listOfNotNull(star, distance).joinToString(" · ")
@@ -502,7 +502,7 @@ private fun CompactHotelRow(
     expanded: Boolean,
     maxPrice: Double?,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val star = hotel.starRating?.takeIf { it.isNotBlank() }?.let { "$it★" }
     val meta = listOfNotNull(
         star,
@@ -622,7 +622,7 @@ private fun CompactHotelRow(
 
 @Composable
 private fun SearchFooter(host: PluginHost, details: HotelSearchDetails) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     DdHairline()
     Row(
         Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
@@ -702,7 +702,7 @@ internal fun HotelDetailCard(host: PluginHost, state: ToolCardSlotState) {
         HotelFallbackCard(host, host.t("没有可展示的房型。", "No rooms to show."))
         return
     }
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val groups = details.roomGroups.ifEmpty { groupHotelRooms(details.rooms) }
     if (groups.isEmpty()) {
         val note = details.errorMessage?.takeIf { it.isNotBlank() }
@@ -823,7 +823,7 @@ private fun RoomGroupBlock(
     expanded: Boolean,
     onToggle: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val cheapest = group.plans.firstOrNull()
     val nightly = cheapest?.avgPriceText
     val total = cheapest?.priceText
@@ -958,7 +958,7 @@ private fun cancellationToneOf(cancellation: String?): HotelTone = when {
 
 @Composable
 private fun PlanDetailRow(host: PluginHost, variant: HotelPlanVariant, nights: Int) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val plan = variant.plan
     val meal = plan.meal?.takeIf { it.isNotBlank() }
     val mealText = when {
@@ -1063,7 +1063,7 @@ private fun PlanDetailRow(host: PluginHost, variant: HotelPlanVariant, nights: I
 
 @Composable
 private fun DetailFooter(host: PluginHost, details: HotelDetailDetails, nights: Int) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     DdHairline()
     Row(
         Modifier.fillMaxWidth().padding(start = DdSpacing.Card, end = 10.dp, top = 10.dp, bottom = 10.dp),
@@ -1114,7 +1114,7 @@ internal fun HotelOrdersCard(host: PluginHost, state: ToolCardSlotState) {
         )
         return
     }
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val appear = rememberHotelAppear()
     val translate: HotelTranslate = { zh, en -> host.t(zh, en) }
     var expanded by remember(details) { mutableStateOf(false) }
@@ -1176,7 +1176,7 @@ private fun OrderTimelineRow(
     translate: HotelTranslate,
     drawLine: Boolean,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val tone = hotelOrderTone(order.status, order.paymentStatus)
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
         OrderRail(tone = tone.color(colors), drawLine = drawLine)
@@ -1313,7 +1313,7 @@ private fun OrderTimelineRow(
 
 @Composable
 private fun OrderRail(tone: androidx.compose.ui.graphics.Color, drawLine: Boolean) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Canvas(Modifier.fillMaxHeight().width(26.dp)) {
         val centerX = size.width / 2f
         val dotY = 22.dp.toPx()
@@ -1350,7 +1350,7 @@ internal fun HotelOrderDetailCard(host: PluginHost, state: ToolCardSlotState) {
         HotelFallbackCard(host, host.t("没有可展示的订单详情。", "No order details to show."))
         return
     }
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val appear = rememberHotelAppear()
     val nights = details.nights ?: hotelNights(details.checkIn, details.checkOut)
     var expanded by remember(details) { mutableStateOf(false) }
@@ -1490,7 +1490,7 @@ internal fun HotelOrderDetailCard(host: PluginHost, state: ToolCardSlotState) {
 @Composable
 private fun OrderDetailLine(label: String, value: String?, numeric: Boolean = false) {
     if (value.isNullOrBlank()) return
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.Top) {
         DdText(
             text = label,
@@ -1513,7 +1513,7 @@ private fun OrderDetailLine(label: String, value: String?, numeric: Boolean = fa
 
 @Composable
 private fun HotelOrderDetailLoading(host: PluginHost) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val appear = rememberHotelAppear()
     HotelCard(Modifier.graphicsLayer { alpha = appear }) {
         Column(Modifier.fillMaxWidth().padding(horizontal = DdSpacing.Card, vertical = 14.dp)) {
@@ -1562,7 +1562,7 @@ internal fun HotelBookCard(host: PluginHost, state: ToolCardSlotState) {
         HotelFallbackCard(host, host.t("没有可展示的预订结果。", "No booking result to show."))
         return
     }
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val appear = rememberHotelAppear()
     val nights = hotelNights(details.checkIn, details.checkOut)
     HotelCard(Modifier.graphicsLayer { alpha = appear }) {
@@ -1750,7 +1750,7 @@ internal fun HotelBookCard(host: PluginHost, state: ToolCardSlotState) {
 
 @Composable
 private fun DateAnchor(label: String, value: String?) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         DdText(
             text = value?.let(::shortDate) ?: "--",
@@ -1765,7 +1765,7 @@ private fun DateAnchor(label: String, value: String?) {
 
 @Composable
 private fun DashedDivider() {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Canvas(Modifier.fillMaxWidth().height(1.dp)) {
         drawLine(
             color = colors.hairline.copy(alpha = DdAlpha.Hairline),
@@ -1779,7 +1779,7 @@ private fun DashedDivider() {
 
 @Composable
 private fun HotelSearchLoading(host: PluginHost) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val appear = rememberHotelAppear()
     HotelCard(Modifier.graphicsLayer { alpha = appear }) {
         Box(
@@ -1822,7 +1822,7 @@ private fun HotelSearchLoading(host: PluginHost) {
 
 @Composable
 private fun HotelDetailLoading(host: PluginHost) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val appear = rememberHotelAppear()
     HotelCard(Modifier.graphicsLayer { alpha = appear }) {
         Column(Modifier.fillMaxWidth().padding(horizontal = DdSpacing.Card, vertical = 14.dp)) {
@@ -1864,7 +1864,7 @@ private fun HotelDetailLoading(host: PluginHost) {
 
 @Composable
 private fun HotelOrdersLoading(host: PluginHost) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val appear = rememberHotelAppear()
     HotelCard(Modifier.graphicsLayer { alpha = appear }) {
         Row(
@@ -1904,7 +1904,7 @@ private fun HotelOrdersLoading(host: PluginHost) {
 
 @Composable
 private fun HotelBookLoading(host: PluginHost) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val appear = rememberHotelAppear()
     HotelCard(Modifier.graphicsLayer { alpha = appear }) {
         Column(
@@ -2029,7 +2029,7 @@ internal fun HotelCancelCard(host: PluginHost, state: ToolCardSlotState) {
 
 @Composable
 private fun CancelQuoteCard(host: PluginHost, quote: HotelCancelQuote) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     HotelCard {
         Column(Modifier.fillMaxWidth().padding(horizontal = DdSpacing.Card, vertical = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2097,7 +2097,7 @@ private fun CancelQuoteCard(host: PluginHost, quote: HotelCancelQuote) {
 
 @Composable
 private fun CancelResultCard(host: PluginHost, result: HotelCancelResult) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     HotelCard {
         Column(Modifier.fillMaxWidth().padding(horizontal = DdSpacing.Card, vertical = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2147,7 +2147,7 @@ private fun CancelResultCard(host: PluginHost, result: HotelCancelResult) {
 
 @Composable
 private fun CancelLine(label: String, value: String) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.Top) {
         DdText(
             text = label,
@@ -2204,7 +2204,7 @@ internal fun HotelTagsCard(host: PluginHost, state: ToolCardSlotState) {
         )
         return
     }
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     var expanded by remember(details) { mutableStateOf(false) }
     val categories = if (expanded) details.categories else details.categories.take(TAG_CATEGORY_PREVIEW)
     HotelCard {

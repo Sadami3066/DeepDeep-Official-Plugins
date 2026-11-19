@@ -1,14 +1,14 @@
-package io.github.whywood.deepdeep.plugin.mail
+package io.github.whywood.superpi.plugin.mail
 
-import io.github.whywood.deepdeep.plugin.mail.sync.FolderMapping
-import io.github.whywood.deepdeep.plugin.mail.sync.MailMessageMapper
-import io.github.whywood.deepdeep.plugin.mail.sync.MailThreading
-import io.github.whywood.deepdeep.plugin.mail.sync.MessageKeys
-import io.github.whywood.deepdeep.plugin.mail.sync.SyncPolicy
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapAddress
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapEnvelope
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapFetchResult
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapFolder
+import io.github.whywood.superpi.plugin.mail.sync.FolderMapping
+import io.github.whywood.superpi.plugin.mail.sync.MailMessageMapper
+import io.github.whywood.superpi.plugin.mail.sync.MailThreading
+import io.github.whywood.superpi.plugin.mail.sync.MessageKeys
+import io.github.whywood.superpi.plugin.mail.sync.SyncPolicy
+import io.github.whywood.superpi.plugin.mail.transport.ImapAddress
+import io.github.whywood.superpi.plugin.mail.transport.ImapEnvelope
+import io.github.whywood.superpi.plugin.mail.transport.ImapFetchResult
+import io.github.whywood.superpi.plugin.mail.transport.ImapFolder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals

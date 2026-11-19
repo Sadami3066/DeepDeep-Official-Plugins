@@ -1,8 +1,8 @@
-package io.github.whywood.deepdeep.plugin.feishu
+package io.github.whywood.superpi.plugin.feishu
 
-import io.github.whywood.deepdeep.plugin.api.LocalizedText
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.localizedText
+import io.github.whywood.superpi.plugin.api.LocalizedText
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.localizedText
 
 internal fun literal(zh: String, en: String, default: String = zh): LocalizedText =
     localizedText(mapOf("default" to default, "zh" to zh, "en" to en))
@@ -14,7 +14,7 @@ internal fun PluginHost.tf(zh: String, en: String, vararg args: Any): String = t
 internal fun PluginHost.isChinese(): Boolean = t("中文", "English") == "中文"
 
 internal const val FEISHU_VERSION = "1.0.100"
-internal const val FEISHU_SKILL_ID = "deepdeep-feishu"
+internal const val FEISHU_SKILL_ID = "superpi-feishu"
 internal const val FEISHU_PAGE_ID = "main"
 internal const val FEISHU_ICON_ASSET = "icon.png"
 internal const val FEISHU_SECTION_ID = "feishu_prompt"
@@ -106,7 +106,7 @@ internal val ERROR_COPY = literal("复制失败，请重试。", "Couldn't copy 
 
 internal val SKILL_MARKDOWN = """
     ---
-    name: deepdeep-feishu
+    name: superpi-feishu
     description: 飞书 CLI 用法速查：读取会话、消息、日程、云文档、云空间、邮箱与任务，并执行发消息、建任务、建日程、建文档和写邮件；当用户提到飞书、lark、消息、日程、云文档或邮箱时使用。
     ---
 

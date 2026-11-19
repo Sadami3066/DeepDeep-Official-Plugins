@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -40,18 +40,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.whywood.deepdeep.design.DdAlpha
-import io.github.whywood.deepdeep.design.DdIcon
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdShapes
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.LocalDdMotionEnabled
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.CustomMessageSlotState
-import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.superpi.design.DdAlpha
+import io.github.whywood.superpi.design.DdIcon
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdShapes
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.LocalDdMotionEnabled
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.CustomMessageSlotState
+import io.github.whywood.superpi.plugin.api.PluginHost
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -63,7 +63,7 @@ internal fun MailCardSurface(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val motion = LocalDdMotionEnabled.current
     var shown by remember { mutableStateOf(!motion) }
     LaunchedEffect(Unit) { shown = true }
@@ -92,7 +92,7 @@ internal fun MailCardSurface(
 
 @Composable
 internal fun MailDashedDivider(modifier: Modifier = Modifier) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Canvas(modifier.fillMaxWidth().height(1.dp)) {
         drawLine(
             color = colors.hairline,
@@ -106,7 +106,7 @@ internal fun MailDashedDivider(modifier: Modifier = Modifier) {
 
 @Composable
 internal fun MailCardChip(text: String, accent: Boolean = false) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Box(
         modifier = Modifier
             .clip(CircleShape)
@@ -153,7 +153,7 @@ internal fun MailEnvelopeGlyph(tint: Color, modifier: Modifier = Modifier) {
 
 @Composable
 internal fun MailEmptyEnvelopeGlyph(modifier: Modifier = Modifier) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Canvas(modifier.size(52.dp)) {
         val stroke = 1.6.dp
         val left = size.width * 0.19f
@@ -193,7 +193,7 @@ internal fun MailEmptyEnvelopeGlyph(modifier: Modifier = Modifier) {
 
 @Composable
 internal fun MailAttachmentPill(name: String, sizeText: String?) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier
             .clip(CircleShape)
@@ -225,7 +225,7 @@ internal fun MailAttachmentPill(name: String, sizeText: String?) {
 
 @Composable
 internal fun MailRecipientChip(recipient: String, accent: Boolean, modifier: Modifier = Modifier) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val background = if (accent) colors.accentSoft else colors.wash
     val foreground = if (accent) colors.accent else colors.inkSecondary
     Row(
@@ -263,7 +263,7 @@ internal fun MailRecipientChip(recipient: String, accent: Boolean, modifier: Mod
 
 @Composable
 internal fun MailLetterRules(modifier: Modifier = Modifier) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(modifier.fillMaxWidth()) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(colors.hairline))
         Spacer(Modifier.height(3.dp))
@@ -278,7 +278,7 @@ internal fun MailUnavailableCard(
     hint: String,
     onOpenMail: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     MailCardSurface {
         Row(
             modifier = Modifier
@@ -317,7 +317,7 @@ internal fun MailCardActionRow(
     onAction: () -> Unit,
     note: String? = null,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier
             .fillMaxWidth()

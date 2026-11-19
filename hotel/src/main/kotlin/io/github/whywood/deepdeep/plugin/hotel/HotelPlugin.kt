@@ -1,32 +1,32 @@
-package io.github.whywood.deepdeep.plugin.hotel
+package io.github.whywood.superpi.plugin.hotel
 
-import io.github.whywood.deepdeep.plugin.api.Contributions
-import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
-import io.github.whywood.deepdeep.plugin.api.NotificationActionEvent
-import io.github.whywood.deepdeep.plugin.api.PluginAvailability
-import io.github.whywood.deepdeep.plugin.api.PluginHooks
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginPage
-import io.github.whywood.deepdeep.plugin.api.PluginSkill
-import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
-import io.github.whywood.deepdeep.plugin.api.PromptSection
-import io.github.whywood.deepdeep.plugin.api.SlotBinding
-import io.github.whywood.deepdeep.plugin.api.SlotIds
-import io.github.whywood.deepdeep.plugin.api.ToolCardSlotState
-import io.github.whywood.deepdeep.plugin.api.assetIcon
-import io.github.whywood.deepdeep.plugin.api.available
-import io.github.whywood.deepdeep.plugin.api.composeSlot
-import io.github.whywood.deepdeep.plugin.api.contributions
-import io.github.whywood.deepdeep.plugin.api.pluginPage
-import io.github.whywood.deepdeep.plugin.api.pluginSkill
-import io.github.whywood.deepdeep.plugin.api.promptSection
-import io.github.whywood.deepdeep.plugin.api.slotBinding
-import io.github.whywood.deepdeep.plugin.api.unavailable
+import io.github.whywood.superpi.plugin.api.Contributions
+import io.github.whywood.superpi.plugin.api.SuperPIPlugin
+import io.github.whywood.superpi.plugin.api.NotificationActionEvent
+import io.github.whywood.superpi.plugin.api.PluginAvailability
+import io.github.whywood.superpi.plugin.api.PluginHooks
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginPage
+import io.github.whywood.superpi.plugin.api.PluginSkill
+import io.github.whywood.superpi.plugin.api.PluginUiContributions
+import io.github.whywood.superpi.plugin.api.PromptSection
+import io.github.whywood.superpi.plugin.api.SlotBinding
+import io.github.whywood.superpi.plugin.api.SlotIds
+import io.github.whywood.superpi.plugin.api.ToolCardSlotState
+import io.github.whywood.superpi.plugin.api.assetIcon
+import io.github.whywood.superpi.plugin.api.available
+import io.github.whywood.superpi.plugin.api.composeSlot
+import io.github.whywood.superpi.plugin.api.contributions
+import io.github.whywood.superpi.plugin.api.pluginPage
+import io.github.whywood.superpi.plugin.api.pluginSkill
+import io.github.whywood.superpi.plugin.api.promptSection
+import io.github.whywood.superpi.plugin.api.slotBinding
+import io.github.whywood.superpi.plugin.api.unavailable
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class HotelPlugin : DeepDeepPlugin {
+class HotelPlugin : SuperPIPlugin {
     private val runtime = HotelRuntime()
     private val toolState = HotelToolState()
 

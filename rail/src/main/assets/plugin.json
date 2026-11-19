@@ -1,15 +1,15 @@
 {
-  "id": "io.github.whywood.deepdeep.plugin.rail",
+  "id": "io.github.whywood.superpi.plugin.rail",
   "version": "1.4.0",
-  "apiLevel": 6,
-  "minHostVersion": "1.4.3",
+  "apiLevel": 7,
+  "minHostVersion": "2.0.0",
   "capabilities": [
     "logs",
     "network",
     "settings",
     "ui"
   ],
-  "entryClass": "io.github.whywood.deepdeep.plugin.rail.RailPlugin",
+  "entryClass": "io.github.whywood.superpi.plugin.rail.RailPlugin",
   "name": {
     "default": "12306铁路",
     "zh": "12306铁路",

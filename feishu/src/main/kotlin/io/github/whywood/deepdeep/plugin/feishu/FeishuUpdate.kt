@@ -1,10 +1,10 @@
-package io.github.whywood.deepdeep.plugin.feishu
+package io.github.whywood.superpi.plugin.feishu
 
-import io.github.whywood.deepdeep.plugin.cli.update.CliChecksums
-import io.github.whywood.deepdeep.plugin.cli.update.CliRelease
-import io.github.whywood.deepdeep.plugin.cli.update.CliReleasePolicy
-import io.github.whywood.deepdeep.plugin.cli.update.CliUpdateThrottle
-import io.github.whywood.deepdeep.plugin.cli.update.CliVersions
+import io.github.whywood.superpi.plugin.cli.update.CliChecksums
+import io.github.whywood.superpi.plugin.cli.update.CliRelease
+import io.github.whywood.superpi.plugin.cli.update.CliReleasePolicy
+import io.github.whywood.superpi.plugin.cli.update.CliUpdateThrottle
+import io.github.whywood.superpi.plugin.cli.update.CliVersions
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull

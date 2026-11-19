@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.cli.update
+package io.github.whywood.superpi.plugin.cli.update
 
 object CliVersions {
     private val VERSION_PATTERN = Regex("""^(\d{1,4})\.(\d{1,4})\.(\d{1,4})$""")

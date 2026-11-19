@@ -1,32 +1,32 @@
-package io.github.whywood.deepdeep.plugin.micloud
+package io.github.whywood.superpi.plugin.micloud
 
 import android.webkit.CookieManager
-import io.github.whywood.deepdeep.plugin.api.Contributions
-import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
-import io.github.whywood.deepdeep.plugin.api.NotificationActionEvent
-import io.github.whywood.deepdeep.plugin.api.PluginAvailability
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginHooks
-import io.github.whywood.deepdeep.plugin.api.PluginPage
-import io.github.whywood.deepdeep.plugin.api.PluginSkill
-import io.github.whywood.deepdeep.plugin.api.PluginTool
-import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
-import io.github.whywood.deepdeep.plugin.api.PromptSection
-import io.github.whywood.deepdeep.plugin.api.SlotBinding
-import io.github.whywood.deepdeep.plugin.api.ToolResultRenderer
-import io.github.whywood.deepdeep.plugin.api.ToolResultRendererContributor
-import io.github.whywood.deepdeep.plugin.api.ToolResultSource
-import io.github.whywood.deepdeep.plugin.api.assetIcon
-import io.github.whywood.deepdeep.plugin.api.available
-import io.github.whywood.deepdeep.plugin.api.contributions
-import io.github.whywood.deepdeep.plugin.api.localizedText
-import io.github.whywood.deepdeep.plugin.api.notificationAction
-import io.github.whywood.deepdeep.plugin.api.pluginNotificationWithActions
-import io.github.whywood.deepdeep.plugin.api.pluginPage
-import io.github.whywood.deepdeep.plugin.api.pluginSkill
-import io.github.whywood.deepdeep.plugin.api.promptSection
-import io.github.whywood.deepdeep.plugin.api.toolResultMatch
-import io.github.whywood.deepdeep.plugin.api.toolResultRenderer
+import io.github.whywood.superpi.plugin.api.Contributions
+import io.github.whywood.superpi.plugin.api.SuperPIPlugin
+import io.github.whywood.superpi.plugin.api.NotificationActionEvent
+import io.github.whywood.superpi.plugin.api.PluginAvailability
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginHooks
+import io.github.whywood.superpi.plugin.api.PluginPage
+import io.github.whywood.superpi.plugin.api.PluginSkill
+import io.github.whywood.superpi.plugin.api.PluginTool
+import io.github.whywood.superpi.plugin.api.PluginUiContributions
+import io.github.whywood.superpi.plugin.api.PromptSection
+import io.github.whywood.superpi.plugin.api.SlotBinding
+import io.github.whywood.superpi.plugin.api.ToolResultRenderer
+import io.github.whywood.superpi.plugin.api.ToolResultRendererContributor
+import io.github.whywood.superpi.plugin.api.ToolResultSource
+import io.github.whywood.superpi.plugin.api.assetIcon
+import io.github.whywood.superpi.plugin.api.available
+import io.github.whywood.superpi.plugin.api.contributions
+import io.github.whywood.superpi.plugin.api.localizedText
+import io.github.whywood.superpi.plugin.api.notificationAction
+import io.github.whywood.superpi.plugin.api.pluginNotificationWithActions
+import io.github.whywood.superpi.plugin.api.pluginPage
+import io.github.whywood.superpi.plugin.api.pluginSkill
+import io.github.whywood.superpi.plugin.api.promptSection
+import io.github.whywood.superpi.plugin.api.toolResultMatch
+import io.github.whywood.superpi.plugin.api.toolResultRenderer
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
@@ -186,7 +186,7 @@ internal class MiCloudContent(private val host: PluginHost) {
     }
 }
 
-class MiCloudPlugin : DeepDeepPlugin {
+class MiCloudPlugin : SuperPIPlugin {
     @Volatile
     private var content: MiCloudContent? = null
 
@@ -298,12 +298,12 @@ class MiCloudPlugin : DeepDeepPlugin {
     private companion object {
         const val PAGE_ID = "main"
         const val ICON_ASSET = "icon.png"
-        const val SKILL_ID = "deepdeep-micloud"
+        const val SKILL_ID = "superpi-micloud"
         const val PROMPT_ID = "micloud"
 
         val SKILL_MARKDOWN = """
             ---
-            name: deepdeep-micloud
+            name: superpi-micloud
             description: 小米云数据读写：账号与空间、笔记、待办、相册、短信、联系人、录音；当用户提到小米云、小米便签或待办、i.mi.com，或要读取小米账号下的个人数据时使用。
             ---
 

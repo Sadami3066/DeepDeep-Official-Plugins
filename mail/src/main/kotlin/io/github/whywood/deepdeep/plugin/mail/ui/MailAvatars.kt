@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
 import android.graphics.BitmapFactory
 import androidx.compose.runtime.Composable
@@ -11,8 +11,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdAvatar
-import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.superpi.design.DdAvatar
+import io.github.whywood.superpi.plugin.api.PluginHost
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap

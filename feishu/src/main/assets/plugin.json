@@ -1,11 +1,11 @@
 {
-  "id": "io.github.whywood.deepdeep.plugin.feishu",
+  "id": "io.github.whywood.superpi.plugin.feishu",
   "version": "2.7.1",
   "publisher": {
     "name": "milous"
   },
-  "apiLevel": 6,
-  "minHostVersion": "1.4.3",
+  "apiLevel": 7,
+  "minHostVersion": "2.0.0",
   "ui": {
     "apiLevel": 2
   },
@@ -22,7 +22,7 @@
   "permissions": [
     "notifications.post"
   ],
-  "entryClass": "io.github.whywood.deepdeep.plugin.feishu.FeishuPlugin",
+  "entryClass": "io.github.whywood.superpi.plugin.feishu.FeishuPlugin",
   "name": {
     "default": "飞书",
     "zh": "飞书",
@@ -42,7 +42,7 @@
   "provides": {
     "tools": [],
     "skills": [
-      "deepdeep-feishu"
+      "superpi-feishu"
     ],
     "uiSlots": [],
     "pages": [

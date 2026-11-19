@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
 import android.content.Context
 import android.graphics.Color
@@ -20,8 +20,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import io.github.whywood.deepdeep.plugin.mail.MailMessageDetail
-import io.github.whywood.deepdeep.plugin.mail.MailRepository
+import io.github.whywood.superpi.plugin.mail.MailMessageDetail
+import io.github.whywood.superpi.plugin.mail.MailRepository
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay

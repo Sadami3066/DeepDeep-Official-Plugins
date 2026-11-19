@@ -1,12 +1,12 @@
-package io.github.whywood.deepdeep.plugin.mail
+package io.github.whywood.superpi.plugin.mail
 
-import io.github.whywood.deepdeep.plugin.mail.sync.MailMessageMapper
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapCodec
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapLiteralHandler
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapParse
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapResponse
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapResponseReader
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapFolder
+import io.github.whywood.superpi.plugin.mail.sync.MailMessageMapper
+import io.github.whywood.superpi.plugin.mail.transport.ImapCodec
+import io.github.whywood.superpi.plugin.mail.transport.ImapLiteralHandler
+import io.github.whywood.superpi.plugin.mail.transport.ImapParse
+import io.github.whywood.superpi.plugin.mail.transport.ImapResponse
+import io.github.whywood.superpi.plugin.mail.transport.ImapResponseReader
+import io.github.whywood.superpi.plugin.mail.transport.ImapFolder
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -196,7 +196,7 @@ class ImapProtocolTest {
         try {
             ImapResponseReader(script.inputStream()).readResponse()
             throw AssertionError("expected literal limit rejection")
-        } catch (error: io.github.whywood.deepdeep.plugin.mail.transport.MailProtocolException) {
+        } catch (error: io.github.whywood.superpi.plugin.mail.transport.MailProtocolException) {
             assertNotNull(error.message)
         }
     }

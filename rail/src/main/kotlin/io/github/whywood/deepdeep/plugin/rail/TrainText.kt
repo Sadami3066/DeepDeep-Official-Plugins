@@ -1,7 +1,7 @@
-package io.github.whywood.deepdeep.plugin.rail
+package io.github.whywood.superpi.plugin.rail
 
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.localizedText
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.localizedText
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter

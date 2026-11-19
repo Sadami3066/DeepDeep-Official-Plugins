@@ -1,10 +1,10 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
-import io.github.whywood.deepdeep.plugin.mail.MailDraft
-import io.github.whywood.deepdeep.plugin.mail.MailMessageSummary
-import io.github.whywood.deepdeep.plugin.mail.tools.MAIL_ARG_ACCOUNT_ID
-import io.github.whywood.deepdeep.plugin.mail.tools.MAIL_ARG_MESSAGE_ID
-import io.github.whywood.deepdeep.plugin.mail.tools.MAIL_ARG_THREAD_ID
+import io.github.whywood.superpi.plugin.mail.MailDraft
+import io.github.whywood.superpi.plugin.mail.MailMessageSummary
+import io.github.whywood.superpi.plugin.mail.tools.MAIL_ARG_ACCOUNT_ID
+import io.github.whywood.superpi.plugin.mail.tools.MAIL_ARG_MESSAGE_ID
+import io.github.whywood.superpi.plugin.mail.tools.MAIL_ARG_THREAD_ID
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull

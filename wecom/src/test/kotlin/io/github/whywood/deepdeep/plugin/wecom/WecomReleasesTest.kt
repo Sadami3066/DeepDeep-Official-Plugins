@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.wecom
+package io.github.whywood.superpi.plugin.wecom
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

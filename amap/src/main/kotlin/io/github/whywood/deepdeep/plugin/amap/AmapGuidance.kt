@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.amap
+package io.github.whywood.superpi.plugin.amap
 
 internal fun placeSearchGuidance(localizer: AmapLocalizer, returned: Int): String = if (returned == 0) {
     localizer.t(

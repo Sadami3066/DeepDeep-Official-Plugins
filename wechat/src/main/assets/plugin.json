@@ -1,11 +1,11 @@
 {
-  "id": "io.github.whywood.deepdeep.plugin.wechat",
+  "id": "io.github.whywood.superpi.plugin.wechat",
   "version": "0.5.2",
   "publisher": {
     "name": "milous"
   },
-  "apiLevel": 6,
-  "minHostVersion": "1.0.8",
+  "apiLevel": 7,
+  "minHostVersion": "2.0.0",
   "capabilities": [
     "device",
     "linux",
@@ -17,7 +17,7 @@
   "permissions": [
     "notifications.post"
   ],
-  "entryClass": "io.github.whywood.deepdeep.plugin.wechat.WechatPlugin",
+  "entryClass": "io.github.whywood.superpi.plugin.wechat.WechatPlugin",
   "name": {
     "default": "微信导出",
     "zh": "微信导出",
@@ -40,7 +40,7 @@
   "provides": {
     "tools": [],
     "skills": [
-      "deepdeep-wechat"
+      "superpi-wechat"
     ],
     "uiSlots": [],
     "pages": [

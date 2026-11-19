@@ -1,15 +1,15 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
-import io.github.whywood.deepdeep.plugin.api.CustomMessageSlotState
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
-import io.github.whywood.deepdeep.plugin.api.SlotIds
-import io.github.whywood.deepdeep.plugin.api.composeSlot
-import io.github.whywood.deepdeep.plugin.api.localizedText
-import io.github.whywood.deepdeep.plugin.api.pluginPage
-import io.github.whywood.deepdeep.plugin.api.slotBinding
-import io.github.whywood.deepdeep.plugin.mail.MailRepository
-import io.github.whywood.deepdeep.plugin.mail.tools.MailChatCardTypes
+import io.github.whywood.superpi.plugin.api.CustomMessageSlotState
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginUiContributions
+import io.github.whywood.superpi.plugin.api.SlotIds
+import io.github.whywood.superpi.plugin.api.composeSlot
+import io.github.whywood.superpi.plugin.api.localizedText
+import io.github.whywood.superpi.plugin.api.pluginPage
+import io.github.whywood.superpi.plugin.api.slotBinding
+import io.github.whywood.superpi.plugin.mail.MailRepository
+import io.github.whywood.superpi.plugin.mail.tools.MailChatCardTypes
 
 internal fun mailUi(host: PluginHost, repository: MailRepository): PluginUiContributions =
     object : PluginUiContributions {

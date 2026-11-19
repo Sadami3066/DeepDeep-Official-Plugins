@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.ride
+package io.github.whywood.superpi.plugin.ride
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -22,21 +22,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdExpandToggle
-import io.github.whywood.deepdeep.design.DdGroupCard
-import io.github.whywood.deepdeep.design.DdHairline
-import io.github.whywood.deepdeep.design.DdNoticeBar
-import io.github.whywood.deepdeep.design.DdNoticeTone
-import io.github.whywood.deepdeep.design.DdSpinner
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdStatusRow
-import io.github.whywood.deepdeep.design.DdStatusTone
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.ToolResultState
+import io.github.whywood.superpi.design.DdExpandToggle
+import io.github.whywood.superpi.design.DdGroupCard
+import io.github.whywood.superpi.design.DdHairline
+import io.github.whywood.superpi.design.DdNoticeBar
+import io.github.whywood.superpi.design.DdNoticeTone
+import io.github.whywood.superpi.design.DdSpinner
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdStatusRow
+import io.github.whywood.superpi.design.DdStatusTone
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.ToolResultState
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -81,7 +81,7 @@ private fun RideCardShell(
     footer: String? = null,
     content: @Composable () -> Unit = {},
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     RideCardEntrance {
         DdGroupCard {
             Column(
@@ -116,7 +116,7 @@ private fun RideCardShell(
 
 @Composable
 private fun RideLoadingCard(host: PluginHost, title: String) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     RideCardShell(title = title) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             DdSpinner(color = colors.inkTertiary, size = 14.dp)
@@ -145,13 +145,13 @@ private fun RideEmptyCard(host: PluginHost, title: String, reason: String) {
 @Composable
 private fun RideMapCaption(host: PluginHost, text: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        DdText(text, style = DdType.micro, color = deepDeepColors().inkTertiary, maxLines = 1)
+        DdText(text, style = DdType.micro, color = superPiColors().inkTertiary, maxLines = 1)
     }
 }
 
 @Composable
 private fun RideEstimateRow(host: PluginHost, item: RideEstimateItem) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -216,7 +216,7 @@ internal fun RideEstimateCard(host: PluginHost, state: ToolResultState) {
         return
     }
     var expanded by remember(estimate.traceId, estimate.route, estimate.items.size) { mutableStateOf(false) }
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val translate: RideTranslate = { zh, en -> host.t(zh, en) }
     val facts = listOfNotNull(
         estimate.distanceKm?.let { rideDistanceLabel(host, it) }?.let { host.t("全程 $it", "distance $it") },
@@ -314,7 +314,7 @@ internal fun RideLinkCard(host: PluginHost, state: ToolResultState) {
         )
         return
     }
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     RideCardShell(
         title = title,
         subtitle = host.t("确认车型和价格后，在滴滴里继续下单。", "Review the ride and fare, then book in Didi."),
@@ -362,7 +362,7 @@ internal fun RideOrderCard(host: PluginHost, state: ToolResultState) {
         )
         return
     }
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val translate: RideTranslate = { zh, en -> host.t(zh, en) }
     val status = rideStatusLabel(order.statusCode ?: order.status, order.statusText, translate, includeCode = false)
     val headline = status ?: defaultTitle
@@ -479,7 +479,7 @@ internal fun RideDriverLocationCard(host: PluginHost, state: ToolResultState) {
         )
         return
     }
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     RideCardShell(title = title) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             RideRadar()
@@ -585,7 +585,7 @@ internal fun RideSearchCard(host: PluginHost, state: ToolResultState) {
         RideEmptyCard(host, title, host.t("没有找到匹配的地点。", "No matching places found."))
         return
     }
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val groups = ridePlaceGroups(places)
     val cities = groups.mapNotNull { it.first }
     val subtitle = if (cities.size == 1) {

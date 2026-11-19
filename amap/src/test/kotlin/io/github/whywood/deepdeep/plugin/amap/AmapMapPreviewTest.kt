@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.amap
+package io.github.whywood.superpi.plugin.amap
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

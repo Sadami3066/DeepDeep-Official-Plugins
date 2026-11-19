@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.mime
+package io.github.whywood.superpi.plugin.mail.mime
 
 import java.nio.charset.StandardCharsets
 import java.util.Base64

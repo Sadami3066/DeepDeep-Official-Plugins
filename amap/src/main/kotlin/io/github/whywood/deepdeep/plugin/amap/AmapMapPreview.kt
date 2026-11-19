@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.amap
+package io.github.whywood.superpi.plugin.amap
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -29,19 +29,19 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdIcon
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdImage
-import io.github.whywood.deepdeep.design.DdImageViewer
-import io.github.whywood.deepdeep.design.DdPressable
-import io.github.whywood.deepdeep.design.DdShapes
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdSpinner
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdTextAction
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.superpi.design.DdIcon
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdImage
+import io.github.whywood.superpi.design.DdImageViewer
+import io.github.whywood.superpi.design.DdPressable
+import io.github.whywood.superpi.design.DdShapes
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdSpinner
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdTextAction
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.PluginHost
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -90,7 +90,7 @@ internal fun AmapMapPreview(
     modifier: Modifier = Modifier,
     shape: Shape = DdShapes.Medium,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val loader = remember(host) {
         AmapMapLoader(
             dataDir = host.dataDir,
@@ -195,12 +195,12 @@ private fun MapLoading(host: PluginHost) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        DdSpinner(color = deepDeepColors().inkTertiary, size = 16.dp, strokeWidth = 1.5.dp)
+        DdSpinner(color = superPiColors().inkTertiary, size = 16.dp, strokeWidth = 1.5.dp)
         Spacer(Modifier.height(DdSpacing.Sm))
         DdText(
             text = host.t("正在加载地图…", "Loading the map…"),
             style = DdType.micro,
-            color = deepDeepColors().inkTertiary,
+            color = superPiColors().inkTertiary,
         )
     }
 }
@@ -214,7 +214,7 @@ private fun MapStatus(
     openLabel: String?,
     onOpen: () -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(
         modifier = Modifier.fillMaxSize().padding(DdSpacing.Md),
         horizontalAlignment = Alignment.CenterHorizontally,

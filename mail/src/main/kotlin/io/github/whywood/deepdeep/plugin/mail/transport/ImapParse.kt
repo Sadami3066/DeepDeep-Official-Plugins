@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.transport
+package io.github.whywood.superpi.plugin.mail.transport
 
 internal data class ImapFolder(
     val name: String,

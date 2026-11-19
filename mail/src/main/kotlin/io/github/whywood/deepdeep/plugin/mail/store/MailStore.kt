@@ -1,10 +1,10 @@
-package io.github.whywood.deepdeep.plugin.mail.store
+package io.github.whywood.superpi.plugin.mail.store
 
-import io.github.whywood.deepdeep.plugin.mail.DraftAttachment
-import io.github.whywood.deepdeep.plugin.mail.MailAccount
-import io.github.whywood.deepdeep.plugin.mail.MailDraft
-import io.github.whywood.deepdeep.plugin.mail.MailFolderRole
-import io.github.whywood.deepdeep.plugin.mail.MailMessageSummary
+import io.github.whywood.superpi.plugin.mail.DraftAttachment
+import io.github.whywood.superpi.plugin.mail.MailAccount
+import io.github.whywood.superpi.plugin.mail.MailDraft
+import io.github.whywood.superpi.plugin.mail.MailFolderRole
+import io.github.whywood.superpi.plugin.mail.MailMessageSummary
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException

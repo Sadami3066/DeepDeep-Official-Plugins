@@ -1,8 +1,8 @@
-package io.github.whywood.deepdeep.plugin.micloud
+package io.github.whywood.superpi.plugin.micloud
 
-import io.github.whywood.deepdeep.plugin.api.Cards
-import io.github.whywood.deepdeep.plugin.api.PluginToolResult
-import io.github.whywood.deepdeep.plugin.api.textResult
+import io.github.whywood.superpi.plugin.api.Cards
+import io.github.whywood.superpi.plugin.api.PluginToolResult
+import io.github.whywood.superpi.plugin.api.textResult
 import java.io.File
 import java.io.IOException
 import java.net.URLEncoder

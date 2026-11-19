@@ -1,6 +1,6 @@
-package io.github.whywood.deepdeep.plugin.amap
+package io.github.whywood.superpi.plugin.amap
 
-import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginHost
 import java.net.URLEncoder
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
@@ -480,7 +480,7 @@ internal class AmapClient(private val host: PluginHost) {
     private companion object {
         const val ENDPOINT = "https://mcp.amap.com/mcp"
         const val PROTOCOL_VERSION = "2025-03-26"
-        const val CLIENT_NAME = "deepdeep-amap"
+        const val CLIENT_NAME = "superpi-amap"
         const val CLIENT_VERSION = "1.4.0"
         const val INIT_TIMEOUT_MS = 20_000L
         const val LIST_TIMEOUT_MS = 20_000L

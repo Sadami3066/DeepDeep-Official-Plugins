@@ -1,23 +1,23 @@
-package io.github.whywood.deepdeep.plugin.ride
+package io.github.whywood.superpi.plugin.ride
 
 import androidx.compose.runtime.Composable
-import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
-import io.github.whywood.deepdeep.plugin.api.PluginAvailability
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginSkill
-import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
-import io.github.whywood.deepdeep.plugin.api.SlotBinding
-import io.github.whywood.deepdeep.plugin.api.ToolResultRendererContributor
-import io.github.whywood.deepdeep.plugin.api.ToolResultSource
-import io.github.whywood.deepdeep.plugin.api.ToolResultState
-import io.github.whywood.deepdeep.plugin.api.available
-import io.github.whywood.deepdeep.plugin.api.localizedText
-import io.github.whywood.deepdeep.plugin.api.pluginPage
-import io.github.whywood.deepdeep.plugin.api.pluginSkill
-import io.github.whywood.deepdeep.plugin.api.toolResultMatch
-import io.github.whywood.deepdeep.plugin.api.toolResultRenderer
+import io.github.whywood.superpi.plugin.api.SuperPIPlugin
+import io.github.whywood.superpi.plugin.api.PluginAvailability
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginSkill
+import io.github.whywood.superpi.plugin.api.PluginUiContributions
+import io.github.whywood.superpi.plugin.api.SlotBinding
+import io.github.whywood.superpi.plugin.api.ToolResultRendererContributor
+import io.github.whywood.superpi.plugin.api.ToolResultSource
+import io.github.whywood.superpi.plugin.api.ToolResultState
+import io.github.whywood.superpi.plugin.api.available
+import io.github.whywood.superpi.plugin.api.localizedText
+import io.github.whywood.superpi.plugin.api.pluginPage
+import io.github.whywood.superpi.plugin.api.pluginSkill
+import io.github.whywood.superpi.plugin.api.toolResultMatch
+import io.github.whywood.superpi.plugin.api.toolResultRenderer
 
-class RidePlugin : DeepDeepPlugin {
+class RidePlugin : SuperPIPlugin {
     private val toolState = RideToolState()
 
     override suspend fun availability(host: PluginHost): PluginAvailability = available()
@@ -28,7 +28,7 @@ class RidePlugin : DeepDeepPlugin {
     }
 
     override fun contributions(host: PluginHost) =
-        io.github.whywood.deepdeep.plugin.api.contributions(tools = rideTools(host, toolState))
+        io.github.whywood.superpi.plugin.api.contributions(tools = rideTools(host, toolState))
 
     override fun skills(host: PluginHost): List<PluginSkill> = listOf(
         pluginSkill(id = SKILL_ID, markdown = SKILL_MARKDOWN),
@@ -89,11 +89,11 @@ class RidePlugin : DeepDeepPlugin {
     )
 }
 
-private const val SKILL_ID = "deepdeep-ride"
+private const val SKILL_ID = "superpi-ride"
 
 private val SKILL_MARKDOWN = """
     ---
-    name: deepdeep-ride
+    name: superpi-ride
     description: 滴滴出行打车用法：地点搜索、车型与价格预估、生成滴滴 App/小程序发单链接、订单状态、司机位置；当用户提到打车、网约车、滴滴、快车、专车、叫车或司机时使用。
     ---
 

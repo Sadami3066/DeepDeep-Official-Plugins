@@ -1,11 +1,11 @@
 {
-  "id": "io.github.whywood.deepdeep.plugin.zanao",
+  "id": "io.github.whywood.superpi.plugin.zanao",
   "version": "1.0.18",
   "publisher": {
     "name": "milous"
   },
-  "apiLevel": 6,
-  "minHostVersion": "1.0.8",
+  "apiLevel": 7,
+  "minHostVersion": "2.0.0",
   "capabilities": [
     "background",
     "device",
@@ -23,7 +23,7 @@
   "components": {
     "foregroundService": true
   },
-  "entryClass": "io.github.whywood.deepdeep.plugin.zanao.ZanaoPlugin",
+  "entryClass": "io.github.whywood.superpi.plugin.zanao.ZanaoPlugin",
   "name": {
     "default": "校园集市",
     "zh": "校园集市",

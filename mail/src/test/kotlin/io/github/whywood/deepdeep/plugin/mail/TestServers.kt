@@ -1,6 +1,6 @@
-package io.github.whywood.deepdeep.plugin.mail
+package io.github.whywood.superpi.plugin.mail
 
-import io.github.whywood.deepdeep.plugin.mail.transport.ImapCodec
+import io.github.whywood.superpi.plugin.mail.transport.ImapCodec
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream

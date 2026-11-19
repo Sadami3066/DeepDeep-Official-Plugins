@@ -1,8 +1,8 @@
-package io.github.whywood.deepdeep.plugin.hotel
+package io.github.whywood.superpi.plugin.hotel
 
-import io.github.whywood.deepdeep.plugin.api.LinuxChunkKind
-import io.github.whywood.deepdeep.plugin.api.LinuxService
-import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.LinuxChunkKind
+import io.github.whywood.superpi.plugin.api.LinuxService
+import io.github.whywood.superpi.plugin.api.PluginHost
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -295,7 +295,7 @@ internal class HotelRuntime {
 
     private suspend fun checkLatest(
         host: PluginHost,
-        settings: io.github.whywood.deepdeep.plugin.api.PluginSettingsService,
+        settings: io.github.whywood.superpi.plugin.api.PluginSettingsService,
         notifyFailure: Boolean,
     ) {
         pageState.update { it.copy(updateChecking = true) }

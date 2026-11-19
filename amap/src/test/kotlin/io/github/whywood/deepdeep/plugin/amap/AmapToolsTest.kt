@@ -1,8 +1,8 @@
-package io.github.whywood.deepdeep.plugin.amap
+package io.github.whywood.superpi.plugin.amap
 
-import io.github.whywood.deepdeep.plugin.api.NetworkResponse
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginToolResult
+import io.github.whywood.superpi.plugin.api.NetworkResponse
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginToolResult
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -56,7 +56,7 @@ class AmapToolsTest {
     }
 
     private fun card(result: PluginToolResult): JsonObject =
-        result.details?.get("deepdeep.card") as JsonObject
+        result.details?.get("superpi.card") as JsonObject
 
     private fun items(result: PluginToolResult): JsonArray =
         result.details?.get("items") as JsonArray
@@ -181,7 +181,7 @@ class AmapToolsTest {
         assertFalse(raw(result).contains("secret-key"))
         assertTrue(raw(result).contains("***"))
         assertTrue(guidance(result).contains("Key"))
-        assertNull(result.details?.get("deepdeep.card"))
+        assertNull(result.details?.get("superpi.card"))
         assertNull(result.details?.get("kind"))
     }
 
@@ -219,7 +219,7 @@ class AmapToolsTest {
         assertTrue(result.isError)
         assertTrue(raw(result).contains("Invalid params"))
         assertTrue(guidance(result).contains("参数"))
-        assertNull(result.details?.get("deepdeep.card"))
+        assertNull(result.details?.get("superpi.card"))
     }
 
     @Test
@@ -362,8 +362,8 @@ class AmapToolsTest {
 
         assertTrue(result.isError)
         assertTrue(guidance(result).contains("关键词"))
-        assertNull(result.details?.get("deepdeep.raw"))
-        assertNull(result.details?.get("deepdeep.card"))
+        assertNull(result.details?.get("superpi.raw"))
+        assertNull(result.details?.get("superpi.card"))
     }
 
 

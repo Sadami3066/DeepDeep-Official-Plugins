@@ -1,9 +1,9 @@
-package io.github.whywood.deepdeep.plugin.zanao
+package io.github.whywood.superpi.plugin.zanao
 
-import io.github.whywood.deepdeep.plugin.api.HostAccessLevel
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PrivilegeLevel
-import io.github.whywood.deepdeep.plugin.api.foregroundServiceOptions
+import io.github.whywood.superpi.plugin.api.HostAccessLevel
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PrivilegeLevel
+import io.github.whywood.superpi.plugin.api.foregroundServiceOptions
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

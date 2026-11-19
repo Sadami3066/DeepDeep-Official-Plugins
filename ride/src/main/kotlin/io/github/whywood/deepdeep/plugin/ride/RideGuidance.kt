@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.ride
+package io.github.whywood.superpi.plugin.ride
 
 internal fun ridePlaceGuidance(translate: RideTranslate): String = translate(
     "坐标分别作为 from_lng/to_lng、from_lat/to_lat 传给 ride_estimate；要更多结果换更具体的关键词或加上城市。",

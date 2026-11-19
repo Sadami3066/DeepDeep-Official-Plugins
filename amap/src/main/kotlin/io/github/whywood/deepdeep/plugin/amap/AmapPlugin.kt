@@ -1,30 +1,30 @@
-package io.github.whywood.deepdeep.plugin.amap
+package io.github.whywood.superpi.plugin.amap
 
 import androidx.compose.runtime.Composable
-import io.github.whywood.deepdeep.plugin.api.Contributions
-import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
-import io.github.whywood.deepdeep.plugin.api.PluginAvailability
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginPage
-import io.github.whywood.deepdeep.plugin.api.PluginSkill
-import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
-import io.github.whywood.deepdeep.plugin.api.SlotBinding
-import io.github.whywood.deepdeep.plugin.api.ToolResultRenderer
-import io.github.whywood.deepdeep.plugin.api.ToolResultRendererContributor
-import io.github.whywood.deepdeep.plugin.api.ToolResultSource
-import io.github.whywood.deepdeep.plugin.api.ToolResultState
-import io.github.whywood.deepdeep.plugin.api.assetIcon
-import io.github.whywood.deepdeep.plugin.api.available
-import io.github.whywood.deepdeep.plugin.api.contributions
-import io.github.whywood.deepdeep.plugin.api.localizedText
-import io.github.whywood.deepdeep.plugin.api.pluginPage
-import io.github.whywood.deepdeep.plugin.api.pluginSkill
-import io.github.whywood.deepdeep.plugin.api.toolResultMatch
-import io.github.whywood.deepdeep.plugin.api.toolResultRenderer
+import io.github.whywood.superpi.plugin.api.Contributions
+import io.github.whywood.superpi.plugin.api.SuperPIPlugin
+import io.github.whywood.superpi.plugin.api.PluginAvailability
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginPage
+import io.github.whywood.superpi.plugin.api.PluginSkill
+import io.github.whywood.superpi.plugin.api.PluginUiContributions
+import io.github.whywood.superpi.plugin.api.SlotBinding
+import io.github.whywood.superpi.plugin.api.ToolResultRenderer
+import io.github.whywood.superpi.plugin.api.ToolResultRendererContributor
+import io.github.whywood.superpi.plugin.api.ToolResultSource
+import io.github.whywood.superpi.plugin.api.ToolResultState
+import io.github.whywood.superpi.plugin.api.assetIcon
+import io.github.whywood.superpi.plugin.api.available
+import io.github.whywood.superpi.plugin.api.contributions
+import io.github.whywood.superpi.plugin.api.localizedText
+import io.github.whywood.superpi.plugin.api.pluginPage
+import io.github.whywood.superpi.plugin.api.pluginSkill
+import io.github.whywood.superpi.plugin.api.toolResultMatch
+import io.github.whywood.superpi.plugin.api.toolResultRenderer
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
-class AmapPlugin : DeepDeepPlugin {
+class AmapPlugin : SuperPIPlugin {
     override suspend fun availability(host: PluginHost): PluginAvailability = available()
 
     override suspend fun onEnable(host: PluginHost) {
@@ -85,7 +85,7 @@ class AmapPlugin : DeepDeepPlugin {
     )
 
     private companion object {
-        const val SKILL_ID = "deepdeep-amap"
+        const val SKILL_ID = "superpi-amap"
         const val PAGE_ID = "main"
         const val ICON_ASSET = "icon.png"
     }
@@ -93,7 +93,7 @@ class AmapPlugin : DeepDeepPlugin {
 
 private val SKILL_MARKDOWN = """
     ---
-    name: deepdeep-amap
+    name: superpi-amap
     description: 高德地图用法：地点搜索、周边搜索、坐标转地址、驾车/公交/步行/骑行路线和天气；当用户提到地图、地点、周边、路线、导航、距离、天气或高德时使用。
     ---
 

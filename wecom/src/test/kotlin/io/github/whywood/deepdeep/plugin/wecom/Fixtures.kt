@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.wecom
+package io.github.whywood.superpi.plugin.wecom
 
 internal fun wecomFixture(name: String): String =
     Thread.currentThread().contextClassLoader?.getResourceAsStream("fixtures/cli/$name")

@@ -1,7 +1,7 @@
-package io.github.whywood.deepdeep.plugin.ride
+package io.github.whywood.superpi.plugin.ride
 
-import io.github.whywood.deepdeep.plugin.api.PluginSettingsService
-import io.github.whywood.deepdeep.plugin.api.SecretService
+import io.github.whywood.superpi.plugin.api.PluginSettingsService
+import io.github.whywood.superpi.plugin.api.SecretService
 
 internal class RideKeyStore(
     private val settings: PluginSettingsService,

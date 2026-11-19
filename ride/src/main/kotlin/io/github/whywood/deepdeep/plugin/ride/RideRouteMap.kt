@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.ride
+package io.github.whywood.superpi.plugin.ride
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -22,10 +22,10 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import io.github.whywood.deepdeep.design.DdShapes
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.DeepDeepColors
-import io.github.whywood.deepdeep.design.deepDeepColors
+import io.github.whywood.superpi.design.DdShapes
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.SuperPIColors
+import io.github.whywood.superpi.design.superPiColors
 
 @Composable
 internal fun RideRouteMap(
@@ -36,7 +36,7 @@ internal fun RideRouteMap(
     toLabel: String,
     modifier: Modifier = Modifier,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val measurer = rememberTextMeasurer()
     val labelStyle = DdType.chip.copy(color = colors.inkSecondary)
     Box(
@@ -101,7 +101,7 @@ internal fun RidePlaceMap(
     labels: List<String>,
     modifier: Modifier = Modifier,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val measurer = rememberTextMeasurer()
     val labelStyle = DdType.chip.copy(color = colors.inkSecondary)
     Box(
@@ -129,7 +129,7 @@ internal fun RidePlaceMap(
     }
 }
 
-private fun DrawScope.drawMapGrid(colors: DeepDeepColors) {
+private fun DrawScope.drawMapGrid(colors: SuperPIColors) {
     val color = colors.hairline.copy(alpha = 0.55f)
     val width = 1.dp.toPx()
     for (index in 1..3) {

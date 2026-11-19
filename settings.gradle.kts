@@ -11,13 +11,13 @@ dependencyResolutionManagement {
     repositories {
         mavenLocal {
             content {
-                includeGroup("io.github.sadami3066.deepdeep")
+                includeGroup("io.github.sadami3066.superpi")
             }
         }
         maven {
-            url = uri("https://sadami3066.github.io/deepdeep-maven")
+            url = uri("https://sadami3066.github.io/SuperPI-Maven")
             content {
-                includeGroup("io.github.sadami3066.deepdeep")
+                includeGroup("io.github.sadami3066.superpi")
             }
         }
         google()
@@ -25,7 +25,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "deepdeep-official-plugins"
+rootProject.name = "superpi-official-plugins"
 include(
     ":feishu", ":mail", ":mcpui-demo", ":micloud", ":sysu", ":themes", ":wechat", ":wecom",
     ":rail", ":hotel", ":ride", ":amap", ":zanao",

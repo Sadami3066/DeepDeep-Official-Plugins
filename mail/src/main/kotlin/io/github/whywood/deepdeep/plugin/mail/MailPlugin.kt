@@ -1,20 +1,20 @@
-package io.github.whywood.deepdeep.plugin.mail
+package io.github.whywood.superpi.plugin.mail
 
-import io.github.whywood.deepdeep.plugin.api.Contributions
-import io.github.whywood.deepdeep.plugin.api.DeepDeepPlugin
-import io.github.whywood.deepdeep.plugin.api.PluginAvailability
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
-import io.github.whywood.deepdeep.plugin.api.PromptSection
-import io.github.whywood.deepdeep.plugin.api.available
-import io.github.whywood.deepdeep.plugin.api.contributions
-import io.github.whywood.deepdeep.plugin.api.promptSection
-import io.github.whywood.deepdeep.plugin.mail.tools.mailHooks
-import io.github.whywood.deepdeep.plugin.mail.tools.mailTools
-import io.github.whywood.deepdeep.plugin.mail.ui.mailUi
+import io.github.whywood.superpi.plugin.api.Contributions
+import io.github.whywood.superpi.plugin.api.SuperPIPlugin
+import io.github.whywood.superpi.plugin.api.PluginAvailability
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginUiContributions
+import io.github.whywood.superpi.plugin.api.PromptSection
+import io.github.whywood.superpi.plugin.api.available
+import io.github.whywood.superpi.plugin.api.contributions
+import io.github.whywood.superpi.plugin.api.promptSection
+import io.github.whywood.superpi.plugin.mail.tools.mailHooks
+import io.github.whywood.superpi.plugin.mail.tools.mailTools
+import io.github.whywood.superpi.plugin.mail.ui.mailUi
 import kotlinx.coroutines.CancellationException
 
-class MailPlugin : DeepDeepPlugin {
+class MailPlugin : SuperPIPlugin {
     @Volatile
     private var runtime: MailRuntime? = null
 

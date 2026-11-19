@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.rail
+package io.github.whywood.superpi.plugin.rail
 
 import kotlinx.serialization.Serializable
 

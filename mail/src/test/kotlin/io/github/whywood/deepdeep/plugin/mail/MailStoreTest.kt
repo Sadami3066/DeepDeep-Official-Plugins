@@ -1,11 +1,11 @@
-package io.github.whywood.deepdeep.plugin.mail
+package io.github.whywood.superpi.plugin.mail
 
-import io.github.whywood.deepdeep.plugin.mail.store.DraftAttachmentException
-import io.github.whywood.deepdeep.plugin.mail.store.DraftAttachmentFailure
-import io.github.whywood.deepdeep.plugin.mail.store.MailAccountIndex
-import io.github.whywood.deepdeep.plugin.mail.store.MailFolderIndex
-import io.github.whywood.deepdeep.plugin.mail.store.MailServerSettings
-import io.github.whywood.deepdeep.plugin.mail.store.MailStore
+import io.github.whywood.superpi.plugin.mail.store.DraftAttachmentException
+import io.github.whywood.superpi.plugin.mail.store.DraftAttachmentFailure
+import io.github.whywood.superpi.plugin.mail.store.MailAccountIndex
+import io.github.whywood.superpi.plugin.mail.store.MailFolderIndex
+import io.github.whywood.superpi.plugin.mail.store.MailServerSettings
+import io.github.whywood.superpi.plugin.mail.store.MailStore
 import java.io.File
 import java.io.RandomAccessFile
 import org.junit.Assert.assertEquals

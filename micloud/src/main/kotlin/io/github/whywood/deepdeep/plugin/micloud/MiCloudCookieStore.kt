@@ -1,6 +1,6 @@
-package io.github.whywood.deepdeep.plugin.micloud
+package io.github.whywood.superpi.plugin.micloud
 
-import io.github.whywood.deepdeep.plugin.api.SecretService
+import io.github.whywood.superpi.plugin.api.SecretService
 
 internal class MiCloudCookieStore(private val secrets: SecretService) {
     suspend fun read(): String? = secrets.get(COOKIE_KEY)?.takeIf { it.isNotBlank() }

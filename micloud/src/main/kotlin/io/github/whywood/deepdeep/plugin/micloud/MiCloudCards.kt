@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.micloud
+package io.github.whywood.superpi.plugin.micloud
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -40,22 +40,22 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.whywood.deepdeep.design.DdAvatar
-import io.github.whywood.deepdeep.design.DdAlpha
-import io.github.whywood.deepdeep.design.DdExpandToggle
-import io.github.whywood.deepdeep.design.DdIcon
-import io.github.whywood.deepdeep.design.DdIcons
-import io.github.whywood.deepdeep.design.DdMotion
-import io.github.whywood.deepdeep.design.DdRemoteImage
-import io.github.whywood.deepdeep.design.DdShapes
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.LocalDdMotionEnabled
-import io.github.whywood.deepdeep.design.deepDeepColors
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.api.PluginToolResult
-import io.github.whywood.deepdeep.plugin.api.ToolResultState
+import io.github.whywood.superpi.design.DdAvatar
+import io.github.whywood.superpi.design.DdAlpha
+import io.github.whywood.superpi.design.DdExpandToggle
+import io.github.whywood.superpi.design.DdIcon
+import io.github.whywood.superpi.design.DdIcons
+import io.github.whywood.superpi.design.DdMotion
+import io.github.whywood.superpi.design.DdRemoteImage
+import io.github.whywood.superpi.design.DdShapes
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.LocalDdMotionEnabled
+import io.github.whywood.superpi.design.superPiColors
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.PluginToolResult
+import io.github.whywood.superpi.plugin.api.ToolResultState
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -322,7 +322,7 @@ private fun MiCloudAnswerSurface(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -340,7 +340,7 @@ private fun CardLabel(text: String, modifier: Modifier = Modifier) {
         text = text,
         modifier = modifier,
         style = DdType.label.copy(fontWeight = FontWeight.SemiBold),
-        color = deepDeepColors().ink,
+        color = superPiColors().ink,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
@@ -352,7 +352,7 @@ private fun MetaText(text: String, modifier: Modifier = Modifier) {
         text = text,
         modifier = modifier,
         style = DdType.chip,
-        color = deepDeepColors().inkTertiary,
+        color = superPiColors().inkTertiary,
         maxLines = 1,
     )
 }
@@ -393,7 +393,7 @@ private fun ProgressBar(
     modifier: Modifier = Modifier,
     height: Dp = 4.dp,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -417,7 +417,7 @@ private fun SkeletonBar(
     widthFraction: Float? = null,
     height: Dp = 10.dp,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val base = when {
         width != null -> Modifier.width(width)
         widthFraction != null -> Modifier.fillMaxWidth(widthFraction)
@@ -437,13 +437,13 @@ private fun SkeletonCircle(size: Dp) {
         modifier = Modifier
             .size(size)
             .clip(DdShapes.Pill)
-            .background(deepDeepColors().hairline.copy(alpha = DdAlpha.TrackLight)),
+            .background(superPiColors().hairline.copy(alpha = DdAlpha.TrackLight)),
     )
 }
 
 @Composable
 private fun RingGauge(percent: Int?, modifier: Modifier = Modifier) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Box(modifier = modifier.size(78.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxWidth().height(78.dp)) {
             val stroke = 8.dp.toPx()
@@ -479,7 +479,7 @@ private fun CheckCircle(
     modifier: Modifier = Modifier,
     diameter: Dp = 20.dp,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Canvas(modifier.size(diameter)) {
         val stroke = 1.5.dp.toPx()
         if (done) {
@@ -512,7 +512,7 @@ private fun CheckCircle(
 
 @Composable
 private fun AccountQuotaCard(host: PluginHost, data: MiCloudAccountCardData) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val summary = quotaSummary(data.entries)
     var expanded by remember { mutableStateOf(false) }
     MiCloudAnswerSurface {
@@ -604,7 +604,7 @@ private fun quotaHeroCaption(host: PluginHost, summary: MiCloudQuotaSummary): St
 
 @Composable
 private fun QuotaEntryRow(host: PluginHost, entry: MiCloudQuotaEntry) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val total = entry.totalBytes
     val used = entry.usedBytes
     val fraction = if (total != null && total > 0L && used != null) {
@@ -647,7 +647,7 @@ private fun quotaEntryUsage(host: PluginHost, entry: MiCloudQuotaEntry): String 
 
 @Composable
 private fun AccountQuotaEmptyBody(host: PluginHost) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(verticalAlignment = Alignment.CenterVertically) {
         DdIcon(icon = DdIcons.Cloud, tint = colors.inkTertiary, size = 22.dp)
         Spacer(Modifier.width(DdSpacing.Md))
@@ -668,7 +668,7 @@ private fun AccountQuotaEmptyBody(host: PluginHost) {
 
 @Composable
 private fun AccountProfileCard(host: PluginHost, data: MiCloudAccountCardData) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val rows = buildList {
         if (data.email.isNotBlank()) add(host.t("邮箱", "Email") to data.email)
         if (data.phone.isNotBlank()) add(host.t("手机", "Phone") to data.phone)
@@ -762,7 +762,7 @@ private fun StickySheet(
 
 @Composable
 private fun stickyTint(): Color {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     return colors.warning.copy(alpha = if (colors.dark) 0.12f else 0.09f)
 }
 
@@ -798,7 +798,7 @@ private fun NotesListCard(host: PluginHost, data: MiCloudNotesCardData) {
 
 @Composable
 private fun NoteSheetRow(host: PluginHost, item: MiCloudNoteItem, expanded: Boolean) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     StickySheet(tint = stickyTint(), foldColor = colors.surface) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             DdText(
@@ -830,7 +830,7 @@ private fun NoteSheetRow(host: PluginHost, item: MiCloudNoteItem, expanded: Bool
 
 @Composable
 private fun NotesEmptySheet(host: PluginHost) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -856,7 +856,7 @@ private fun NotesEmptySheet(host: PluginHost) {
 
 @Composable
 private fun NotesReadCard(host: PluginHost, data: MiCloudNotesCardData) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     StickySheet(
         modifier = Modifier.border(1.dp, colors.hairline.copy(alpha = DdAlpha.Divider), DdShapes.Large),
         tint = stickyTint(),
@@ -905,7 +905,7 @@ private fun NotesReadCard(host: PluginHost, data: MiCloudNotesCardData) {
 
 @Composable
 private fun NotesWriteCard(host: PluginHost, data: MiCloudNotesCardData) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val (label, tint) = when (data.action) {
         NOTES_ACTION_CREATE -> host.t("已新建", "Created") to colors.success
         NOTES_ACTION_UPDATE -> host.t("已修改", "Updated") to colors.success
@@ -953,7 +953,7 @@ private fun ActionBadge(text: String, tint: Color) {
         text = text,
         modifier = Modifier
             .clip(DdShapes.Pill)
-            .background(tint.copy(alpha = if (deepDeepColors().dark) 0.2f else 0.12f))
+            .background(tint.copy(alpha = if (superPiColors().dark) 0.2f else 0.12f))
             .padding(horizontal = 8.dp, vertical = 3.dp),
         style = DdType.micro.copy(fontWeight = FontWeight.SemiBold),
         color = tint,
@@ -963,7 +963,7 @@ private fun ActionBadge(text: String, tint: Color) {
 
 @Composable
 private fun TodoListCard(host: PluginHost, data: MiCloudTodoCardData) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     var expanded by remember { mutableStateOf(false) }
     val total = data.total.coerceAtLeast(data.rows.size)
     val done = data.doneCount.coerceAtMost(total)
@@ -1015,7 +1015,7 @@ private fun TodoListCard(host: PluginHost, data: MiCloudTodoCardData) {
 
 @Composable
 private fun TodoCheckRow(host: PluginHost, item: MiCloudTodoItem, expanded: Boolean, repeatCount: Int = 1) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(verticalAlignment = Alignment.Top) {
         CheckCircle(done = item.done, modifier = Modifier.padding(top = 1.dp))
         Spacer(Modifier.width(DdSpacing.Md))
@@ -1041,7 +1041,7 @@ private fun TodoCheckRow(host: PluginHost, item: MiCloudTodoItem, expanded: Bool
 
 @Composable
 private fun TodoTrailing(host: PluginHost, item: MiCloudTodoItem) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     if (item.done) {
         val modified = formatShortTime(item.modifyTime)
         if (modified.isNotBlank()) {
@@ -1076,7 +1076,7 @@ private fun todoDueLabel(host: PluginHost, millis: Long): Pair<String, Boolean>?
 
 @Composable
 private fun TodoEmptyBody(host: PluginHost) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1108,7 +1108,7 @@ private fun TodoEmptyBody(host: PluginHost) {
 
 @Composable
 private fun TodoWriteCard(host: PluginHost, data: MiCloudTodoCardData) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val (label, tint) = when (data.action) {
         TODO_ACTION_CREATE -> host.t("已新建", "Created") to colors.success
         TODO_ACTION_UPDATE -> host.t("已修改", "Updated") to colors.success
@@ -1162,7 +1162,7 @@ private fun TodoWriteCard(host: PluginHost, data: MiCloudTodoCardData) {
 
 @Composable
 private fun FilesListCard(host: PluginHost, data: MiCloudFileCardData) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     var expanded by remember { mutableStateOf(false) }
     val shown = if (expanded) data.files else data.files.take(FILE_PREVIEW_ROWS)
     MiCloudAnswerSurface {
@@ -1193,7 +1193,7 @@ private fun FilesListCard(host: PluginHost, data: MiCloudFileCardData) {
 
 @Composable
 private fun FilesDownloadCard(host: PluginHost, data: MiCloudFileCardData) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val file = data.files.firstOrNull()
     MiCloudAnswerSurface {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1219,7 +1219,7 @@ private fun FilesDownloadCard(host: PluginHost, data: MiCloudFileCardData) {
 
 @Composable
 private fun FileRow(host: PluginHost, item: MiCloudFileItem, tint: Color, expanded: Boolean) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(verticalAlignment = Alignment.CenterVertically) {
         DdIcon(
             icon = DdIcons.Mic,
@@ -1268,7 +1268,7 @@ private fun formatDuration(seconds: Long): String {
 
 @Composable
 private fun FilesEmptyBody(host: PluginHost) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1328,7 +1328,7 @@ private fun SmsListCard(host: PluginHost, data: MiCloudSmsCardData) {
 
 @Composable
 private fun SmsRow(host: PluginHost, item: MiCloudSmsItem, expanded: Boolean) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(verticalAlignment = Alignment.Top) {
         Box(
             modifier = Modifier
@@ -1382,7 +1382,7 @@ private fun SmsRow(host: PluginHost, item: MiCloudSmsItem, expanded: Boolean) {
 
 @Composable
 private fun SmsEmptyBody(host: PluginHost) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1443,7 +1443,7 @@ private fun ContactsListCard(host: PluginHost, data: MiCloudContactsCardData) {
 
 @Composable
 private fun ContactRow(host: PluginHost, item: MiCloudContactItem, expanded: Boolean) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val displayName = item.name.ifBlank { item.phones.firstOrNull().orEmpty() }
     Row(verticalAlignment = Alignment.CenterVertically) {
         DdAvatar(
@@ -1484,7 +1484,7 @@ private fun ContactRow(host: PluginHost, item: MiCloudContactItem, expanded: Boo
 
 @Composable
 private fun ContactsEmptyBody(host: PluginHost) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1557,7 +1557,7 @@ private fun GalleryGridCard(host: PluginHost, data: MiCloudGalleryCardData, titl
 
 @Composable
 private fun GalleryCell(host: PluginHost, item: MiCloudGalleryItem, modifier: Modifier) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(modifier) {
         if (item.thumbUrl.isNotBlank()) {
             DdRemoteImage(
@@ -1611,7 +1611,7 @@ private fun galleryMeta(host: PluginHost, item: MiCloudGalleryItem): String = bu
 
 @Composable
 private fun GalleryEmptyBody(host: PluginHost) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1672,7 +1672,7 @@ private fun SkeletonGalleryCell(modifier: Modifier) {
                 .fillMaxWidth()
                 .height(92.dp)
                 .clip(DdShapes.Medium)
-                .background(deepDeepColors().hairline.copy(alpha = DdAlpha.TrackLight)),
+                .background(superPiColors().hairline.copy(alpha = DdAlpha.TrackLight)),
         )
         Spacer(Modifier.height(DdSpacing.Xs))
         SkeletonBar(widthFraction = 0.72f, height = 9.dp)
@@ -1747,7 +1747,7 @@ private fun NotesLoadingCard(host: PluginHost) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(DdShapes.Large)
-                        .background(deepDeepColors().hairline.copy(alpha = DdAlpha.TrackLight))
+                        .background(superPiColors().hairline.copy(alpha = DdAlpha.TrackLight))
                         .padding(horizontal = 14.dp, vertical = 13.dp),
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(DdSpacing.Sm)) {
@@ -1814,7 +1814,7 @@ private fun MiCloudErrorCard(
     title: String,
     icon: DdIcon,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     MiCloudAnswerSurface {
         Row(verticalAlignment = Alignment.CenterVertically) {
             DdIcon(icon = icon, tint = colors.inkTertiary, size = 15.dp)
@@ -1848,7 +1848,7 @@ private fun MiCloudPlainTextCard(
     title: String,
     icon: DdIcon,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     MiCloudAnswerSurface {
         Row(verticalAlignment = Alignment.CenterVertically) {
             DdIcon(icon = icon, tint = colors.inkTertiary, size = 15.dp)

@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.rail
+package io.github.whywood.superpi.plugin.rail
 
 import java.net.URLEncoder
 import java.time.LocalDate

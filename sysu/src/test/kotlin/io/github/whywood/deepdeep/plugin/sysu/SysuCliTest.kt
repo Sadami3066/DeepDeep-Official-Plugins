@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.sysu
+package io.github.whywood.superpi.plugin.sysu
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

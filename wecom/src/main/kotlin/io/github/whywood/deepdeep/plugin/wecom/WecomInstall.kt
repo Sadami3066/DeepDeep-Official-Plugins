@@ -1,14 +1,14 @@
-package io.github.whywood.deepdeep.plugin.wecom
+package io.github.whywood.superpi.plugin.wecom
 
-import io.github.whywood.deepdeep.plugin.api.LinuxService
-import io.github.whywood.deepdeep.plugin.api.NetworkService
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.cli.update.CliInstallEvent
-import io.github.whywood.deepdeep.plugin.cli.update.CliInstallMessages
-import io.github.whywood.deepdeep.plugin.cli.update.CliInstallPlan
-import io.github.whywood.deepdeep.plugin.cli.update.CliInstallRunner
-import io.github.whywood.deepdeep.plugin.cli.update.CliInstallTimeouts
-import io.github.whywood.deepdeep.plugin.cli.update.CliRelease
+import io.github.whywood.superpi.plugin.api.LinuxService
+import io.github.whywood.superpi.plugin.api.NetworkService
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.cli.update.CliInstallEvent
+import io.github.whywood.superpi.plugin.cli.update.CliInstallMessages
+import io.github.whywood.superpi.plugin.cli.update.CliInstallPlan
+import io.github.whywood.superpi.plugin.cli.update.CliInstallRunner
+import io.github.whywood.superpi.plugin.cli.update.CliInstallTimeouts
+import io.github.whywood.superpi.plugin.cli.update.CliRelease
 import java.io.File
 
 internal object WecomInstall {

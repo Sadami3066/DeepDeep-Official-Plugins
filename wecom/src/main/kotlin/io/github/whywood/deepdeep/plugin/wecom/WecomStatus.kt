@@ -1,9 +1,9 @@
-package io.github.whywood.deepdeep.plugin.wecom
+package io.github.whywood.superpi.plugin.wecom
 
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.cli.boolValue
-import io.github.whywood.deepdeep.plugin.cli.longValue
-import io.github.whywood.deepdeep.plugin.cli.stringValue
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.cli.boolValue
+import io.github.whywood.superpi.plugin.cli.longValue
+import io.github.whywood.superpi.plugin.cli.stringValue
 import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject

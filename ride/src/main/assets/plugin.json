@@ -1,8 +1,8 @@
 {
-  "id": "io.github.whywood.deepdeep.plugin.ride",
+  "id": "io.github.whywood.superpi.plugin.ride",
   "version": "1.3.1",
-  "apiLevel": 6,
-  "minHostVersion": "1.4.3",
+  "apiLevel": 7,
+  "minHostVersion": "2.0.0",
   "capabilities": [
     "logs",
     "network",
@@ -10,7 +10,7 @@
     "ui",
     "secrets"
   ],
-  "entryClass": "io.github.whywood.deepdeep.plugin.ride.RidePlugin",
+  "entryClass": "io.github.whywood.superpi.plugin.ride.RidePlugin",
   "name": {
     "default": "滴滴打车",
     "zh": "滴滴打车",
@@ -43,7 +43,7 @@
       "ride_driver_location"
     ],
     "skills": [
-      "deepdeep-ride"
+      "superpi-ride"
     ],
     "uiSlots": [],
     "pages": [

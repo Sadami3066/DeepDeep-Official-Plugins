@@ -1,12 +1,12 @@
 {
-  "id": "io.github.whywood.deepdeep.plugin.mcpuidemo",
+  "id": "io.github.whywood.superpi.plugin.mcpuidemo",
   "version": "0.1.0",
-  "apiLevel": 6,
-  "minHostVersion": "1.1.0",
+  "apiLevel": 7,
+  "minHostVersion": "2.0.0",
   "capabilities": [
     "ui"
   ],
-  "entryClass": "io.github.whywood.deepdeep.plugin.mcpuidemo.McpUiDemoPlugin",
+  "entryClass": "io.github.whywood.superpi.plugin.mcpuidemo.McpUiDemoPlugin",
   "name": {
     "default": "MCP UI Demo",
     "zh": "MCP UI 示例",

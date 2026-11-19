@@ -46,7 +46,7 @@
         "en": "Tundra"
       },
       "dark": false,
-      "base": "deepdeep",
+      "base": "superpi",
       "tokens": {
         "paper": "#F4F7F0",
         "surface": "#FFFFFF",
@@ -120,7 +120,7 @@
         "en": "Sakura"
       },
       "dark": false,
-      "base": "deepdeep",
+      "base": "superpi",
       "tokens": {
         "paper": "#FDF6F7",
         "surface": "#FFFFFF",

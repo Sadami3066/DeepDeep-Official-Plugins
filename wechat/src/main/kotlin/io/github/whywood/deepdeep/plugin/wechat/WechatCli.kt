@@ -1,12 +1,12 @@
-package io.github.whywood.deepdeep.plugin.wechat
+package io.github.whywood.superpi.plugin.wechat
 
-import io.github.whywood.deepdeep.plugin.api.LocalizedText
-import io.github.whywood.deepdeep.plugin.api.localizedText
+import io.github.whywood.superpi.plugin.api.LocalizedText
+import io.github.whywood.superpi.plugin.api.localizedText
 
 internal object WechatCli {
     const val VERSION = "0.2.0"
     const val MIN_NODE_MAJOR = 24
-    const val SKILL_ID = "deepdeep-wechat"
+    const val SKILL_ID = "superpi-wechat"
 
     const val ASSET_ROOT = "wechat-cli"
     const val ENTRY_RELATIVE = "bin/wechat.mjs"

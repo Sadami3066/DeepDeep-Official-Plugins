@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.amap
+package io.github.whywood.superpi.plugin.amap
 
 import java.io.File
 import kotlinx.coroutines.test.runTest
@@ -25,7 +25,7 @@ class AmapMapTest {
 
     private fun loader(
         dataDir: File,
-        network: io.github.whywood.deepdeep.plugin.api.NetworkService?,
+        network: io.github.whywood.superpi.plugin.api.NetworkService?,
         key: String? = "test-key",
     ): AmapMapLoader = AmapMapLoader(
         dataDir = dataDir,

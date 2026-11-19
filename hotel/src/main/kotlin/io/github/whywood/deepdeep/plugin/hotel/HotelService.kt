@@ -1,7 +1,7 @@
-package io.github.whywood.deepdeep.plugin.hotel
+package io.github.whywood.superpi.plugin.hotel
 
-import io.github.whywood.deepdeep.plugin.api.LinuxService
-import io.github.whywood.deepdeep.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.api.LinuxService
+import io.github.whywood.superpi.plugin.api.PluginHost
 
 internal open class HotelToolException(message: String, val raw: String? = null) : Exception(message)
 

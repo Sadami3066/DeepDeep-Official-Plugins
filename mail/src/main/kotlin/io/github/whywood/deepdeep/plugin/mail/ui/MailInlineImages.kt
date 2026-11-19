@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.mail.ui
+package io.github.whywood.superpi.plugin.mail.ui
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -6,9 +6,9 @@ import android.util.Base64
 import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import io.github.whywood.deepdeep.design.DdHtmlImageLoader
-import io.github.whywood.deepdeep.plugin.api.PluginHost
-import io.github.whywood.deepdeep.plugin.mail.MailRepository
+import io.github.whywood.superpi.design.DdHtmlImageLoader
+import io.github.whywood.superpi.plugin.api.PluginHost
+import io.github.whywood.superpi.plugin.mail.MailRepository
 import java.io.File
 import java.net.URLDecoder
 import java.security.MessageDigest

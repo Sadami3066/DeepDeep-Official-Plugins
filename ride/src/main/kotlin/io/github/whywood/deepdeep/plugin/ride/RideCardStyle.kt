@@ -1,4 +1,4 @@
-package io.github.whywood.deepdeep.plugin.ride
+package io.github.whywood.superpi.plugin.ride
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
@@ -38,19 +38,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.whywood.deepdeep.design.DdAlpha
-import io.github.whywood.deepdeep.design.DdHairline
-import io.github.whywood.deepdeep.design.DdIcon
-import io.github.whywood.deepdeep.design.DdIcon as RideCardIcon
-import io.github.whywood.deepdeep.design.DdMotion
-import io.github.whywood.deepdeep.design.DdShapes
-import io.github.whywood.deepdeep.design.DdSpacing
-import io.github.whywood.deepdeep.design.DdSpinner
-import io.github.whywood.deepdeep.design.DdText
-import io.github.whywood.deepdeep.design.DdType
-import io.github.whywood.deepdeep.design.DeepDeepColors
-import io.github.whywood.deepdeep.design.LocalDdMotionEnabled
-import io.github.whywood.deepdeep.design.deepDeepColors
+import io.github.whywood.superpi.design.DdAlpha
+import io.github.whywood.superpi.design.DdHairline
+import io.github.whywood.superpi.design.DdIcon
+import io.github.whywood.superpi.design.DdIcon as RideCardIcon
+import io.github.whywood.superpi.design.DdMotion
+import io.github.whywood.superpi.design.DdShapes
+import io.github.whywood.superpi.design.DdSpacing
+import io.github.whywood.superpi.design.DdSpinner
+import io.github.whywood.superpi.design.DdText
+import io.github.whywood.superpi.design.DdType
+import io.github.whywood.superpi.design.SuperPIColors
+import io.github.whywood.superpi.design.LocalDdMotionEnabled
+import io.github.whywood.superpi.design.superPiColors
 
 @Composable
 internal fun RideCardEntrance(content: @Composable () -> Unit) {
@@ -77,7 +77,7 @@ internal fun RideSurface(
     spacing: Dp = DdSpacing.Md,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -98,7 +98,7 @@ internal fun RideRouteStrip(
     fromLabel: String? = null,
     toLabel: String? = null,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val fromName = from?.takeIf { it.isNotBlank() } ?: translate("出发地", "Pickup")
     val toName = to?.takeIf { it.isNotBlank() } ?: translate("目的地", "Destination")
     val labelHeight = 18.dp
@@ -147,7 +147,7 @@ internal fun RideRouteStrip(
 
 @Composable
 private fun RouteStop(label: String, name: String, nameStyle: TextStyle) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column {
         DdText(label, style = DdType.chip, color = colors.inkTertiary, maxLines = 1)
         DdText(name, style = nameStyle, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -157,7 +157,7 @@ private fun RouteStop(label: String, name: String, nameStyle: TextStyle) {
 @Composable
 internal fun RideFactStrip(facts: List<String>) {
     if (facts.isEmpty()) return
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     DdText(
         text = facts.joinToString(" · "),
         style = DdType.chip,
@@ -169,12 +169,12 @@ internal fun RideFactStrip(facts: List<String>) {
 
 @Composable
 internal fun RideFieldLabel(text: String) {
-    DdText(text, style = DdType.chip, color = deepDeepColors().inkTertiary, maxLines = 1)
+    DdText(text, style = DdType.chip, color = superPiColors().inkTertiary, maxLines = 1)
 }
 
 @Composable
 internal fun RideTag(text: String, accent: Boolean = true) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     val tint = if (accent) colors.accent else colors.inkSecondary
     val shape = CircleShape
     Box(
@@ -190,7 +190,7 @@ internal fun RideTag(text: String, accent: Boolean = true) {
 
 @Composable
 internal fun RidePlate(text: String) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Box(
         Modifier
             .clip(DdShapes.Medium)
@@ -210,7 +210,7 @@ internal fun RidePriceBlock(
     priceLabel: String? = null,
     listLabel: String? = null,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Column(horizontalAlignment = Alignment.End) {
         listPrice?.let {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -255,7 +255,7 @@ internal fun RideStateBody(
     tone: Color? = null,
     skeleton: Boolean = false,
 ) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -286,7 +286,7 @@ internal fun RideStateBody(
 
 @Composable
 internal fun RideSkeletonBar(widthFraction: Float) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Box(
         Modifier
             .fillMaxWidth(widthFraction)
@@ -298,7 +298,7 @@ internal fun RideSkeletonBar(widthFraction: Float) {
 
 @Composable
 internal fun RideRadar(modifier: Modifier = Modifier) {
-    val colors = deepDeepColors()
+    val colors = superPiColors()
     Canvas(modifier.size(52.dp)) {
         val center = Offset(size.width / 2f, size.height / 2f)
         val outer = size.minDimension / 2f - 0.5.dp.toPx()
@@ -330,13 +330,13 @@ internal fun RideRadar(modifier: Modifier = Modifier) {
 
 @Composable
 internal fun RideDivider() {
-    DdHairline(color = deepDeepColors().hairline.copy(alpha = DdAlpha.Divider))
+    DdHairline(color = superPiColors().hairline.copy(alpha = DdAlpha.Divider))
 }
 
-internal fun rideTrackColor(colors: DeepDeepColors): Color =
+internal fun rideTrackColor(colors: SuperPIColors): Color =
     colors.ink.copy(alpha = if (colors.dark) DdAlpha.TrackDark else DdAlpha.TrackLight)
 
-internal fun rideStatusToneColor(colors: DeepDeepColors, code: String?): Color = when (code) {
+internal fun rideStatusToneColor(colors: SuperPIColors, code: String?): Color = when (code) {
     "0" -> colors.accent
     "1", "2", "4", "5" -> colors.success
     "6", "7", "11", "12" -> colors.danger
