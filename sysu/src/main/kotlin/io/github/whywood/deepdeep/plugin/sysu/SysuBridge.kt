@@ -138,7 +138,7 @@ internal class SysuToolBridge {
                 val safe = SysuFailures.redactSensitive(text, strings)
                 val hint = if (safe == null) SysuFailures.legacyHint(text, strings) else null
                 if (safe == null && hint == null) return decision
-                return resultReplace(textResult(safe ?: hint ?: text, isError = request.result.isError))
+                return resultReplace(textResult(safe ?: hint ?: text, details = request.result.details, isError = request.result.isError))
             }
         }
     }

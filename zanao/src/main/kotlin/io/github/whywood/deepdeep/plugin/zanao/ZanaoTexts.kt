@@ -110,5 +110,5 @@ python3 ./zanao.py comment <thread_id> --images "..." --yes   # 纯图片评论
 python3 ./zanao.py post --title "标题" --content "正文" --cate 校园趣事 --yes
 ```
 
-Token 由捕捉器自动写到 `/sdcard/Download/Zanao/zanao-token.json`，CLI 会自动读取最新文件；也可以手动 `import-token` 写入 `~/.zanao.json`。不要把 token 发给别人或写进日志。
+Token 由捕捉器导入后保存到宿主凭据并同步到 `~/.zanao.json`（权限 600），共享存储里的明文副本会被删除；不要把 token 发给别人或写进日志。
 """

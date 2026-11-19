@@ -105,6 +105,7 @@ internal class ZanaoProxy(
             }
 
             if (method.equals("CONNECT", ignoreCase = true)) {
+                if (!isZanaoHost(target)) return
                 handleConnect(client, host ?: target, input)
                 return
             }
@@ -114,6 +115,7 @@ internal class ZanaoProxy(
                 else URI("http://${host ?: ""}$target")
             }.getOrNull() ?: return
             host = uri.host ?: host ?: return
+            if (!isZanaoHost(host)) return
             if (uri.port > 0) port = uri.port
             val path = buildString {
                 append(uri.rawPath?.takeIf { it.isNotEmpty() } ?: "/")

@@ -7,6 +7,7 @@ import io.github.whywood.deepdeep.plugin.api.ToolResultDecision
 import io.github.whywood.deepdeep.plugin.api.resultReplace
 import io.github.whywood.deepdeep.plugin.api.textResult
 import io.github.whywood.deepdeep.plugin.cli.CliJsonEnvelope
+import io.github.whywood.deepdeep.plugin.cli.CliText
 import io.github.whywood.deepdeep.plugin.cli.bridge.CliBridgeConfig
 import io.github.whywood.deepdeep.plugin.cli.bridge.CliCommandParser
 import io.github.whywood.deepdeep.plugin.cli.bridge.CliErrorMapper
@@ -43,8 +44,11 @@ internal class WecomToolBridge {
     fun hooks(host: PluginHost): PluginHooks {
         val base = bridge.hooks(host)
         return object : PluginHooks by base {
-            override suspend fun afterToolExecution(request: ToolExecutionResult): ToolResultDecision =
-                base.afterToolExecution(inlineContentFile(host, request))
+            override suspend fun afterToolExecution(request: ToolExecutionResult): ToolResultDecision {
+                val prepared = inlineContentFile(host, request)
+                val decision = base.afterToolExecution(prepared)
+                return if (prepared !== request) restoreRaw(decision, request, prepared) else decision
+            }
         }
     }
 
@@ -80,6 +84,19 @@ private suspend fun mapWecomError(request: ToolExecutionResult): ToolResultDecis
             isError = true,
         ),
     )
+}
+
+private fun restoreRaw(
+    decision: ToolResultDecision,
+    request: ToolExecutionResult,
+    prepared: ToolExecutionResult,
+): ToolResultDecision {
+    val result = decision.result ?: return decision
+    val text = result.text ?: return decision
+    val originalRaw = CliText.stripHostNotices(CliText.stripAnsi(request.result.text.orEmpty())).trimEnd()
+    val enrichedRaw = CliText.stripHostNotices(CliText.stripAnsi(prepared.result.text.orEmpty())).trimEnd()
+    if (originalRaw.isBlank() || enrichedRaw.isBlank() || !text.contains(enrichedRaw)) return decision
+    return resultReplace(textResult(text.replace(enrichedRaw, originalRaw), result.details, result.isError))
 }
 
 private suspend fun inlineContentFile(host: PluginHost, request: ToolExecutionResult): ToolExecutionResult {

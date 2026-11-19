@@ -467,6 +467,7 @@ private suspend fun book(host: PluginHost, toolState: HotelToolState, call: Plug
             customerRequest = customerRequest,
             expectedTotal = plan.totalPrice,
             expectedCurrency = plan.currency,
+            expectedTotalDerived = plan.totalDerived,
         )
         val booking = output.details
         runCatching {
@@ -511,6 +512,16 @@ private suspend fun book(host: PluginHost, toolState: HotelToolState, call: Plug
         )
     } catch (cancelled: CancellationException) {
         throw cancelled
+    } catch (changed: HotelPriceChangedException) {
+        val confirmed = money(changed.confirmed, changed.currency).orEmpty()
+        val current = money(changed.current, changed.currency).orEmpty()
+        textResult(
+            host.t(
+                "价格已变化：确认时 $confirmed，现在 $current。请重新确认后再预订。",
+                "The price changed: $confirmed at confirmation, now $current. Confirm again before booking.",
+            ),
+            isError = true,
+        )
     } catch (error: Throwable) {
         host.logs().warn("hotel book failed", error)
         val message = error.message?.takeIf { it.isNotBlank() }

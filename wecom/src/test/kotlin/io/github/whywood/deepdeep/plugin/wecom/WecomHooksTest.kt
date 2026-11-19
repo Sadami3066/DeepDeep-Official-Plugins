@@ -236,7 +236,7 @@ class WecomHooksTest {
         assertFalse(text.contains("未能读取文件内容"))
         assertTrue(cardOf(decision)!!.summary!!.contains("第二段正文"))
         assertTrue(rawOf(decision)!!.contains("file_path"))
-        assertTrue(rawOf(decision)!!.contains("第二段正文"))
+        assertFalse(rawOf(decision)!!.contains("第二段正文"))
     }
 
     @Test

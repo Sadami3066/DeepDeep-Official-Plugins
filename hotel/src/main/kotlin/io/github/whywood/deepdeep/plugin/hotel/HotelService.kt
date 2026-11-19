@@ -111,6 +111,7 @@ internal class HotelService(private val host: PluginHost) {
         customerRequest: String? = null,
         expectedTotal: Double? = null,
         expectedCurrency: String? = null,
+        expectedTotalDerived: Boolean = false,
     ): HotelOutput<HotelBookingDetails> {
         ensureReady()
         val priceOutput = exec(
@@ -131,10 +132,14 @@ internal class HotelService(private val host: PluginHost) {
                 priceOutput,
             )
         val lockedTotal = price.totalPrice
-        if (expectedTotal != null && lockedTotal != null && kotlin.math.abs(expectedTotal - lockedTotal) > 0.01) {
+        val currencyChanged = expectedCurrency != null && price.currency != null &&
+            !expectedCurrency.equals(price.currency, ignoreCase = true)
+        val priceChanged = !expectedTotalDerived && expectedTotal != null && lockedTotal != null &&
+            kotlin.math.abs(expectedTotal - lockedTotal) > 0.01
+        if (priceChanged || currencyChanged) {
             throw HotelPriceChangedException(
-                confirmed = expectedTotal,
-                current = lockedTotal,
+                confirmed = expectedTotal ?: lockedTotal ?: 0.0,
+                current = lockedTotal ?: expectedTotal ?: 0.0,
                 currency = price.currency ?: expectedCurrency,
             )
         }
