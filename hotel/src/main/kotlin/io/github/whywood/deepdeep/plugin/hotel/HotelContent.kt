@@ -13,7 +13,7 @@ internal val HOTEL_SKILL_MARKDOWN = """
 
     # 酒店
 
-    DeepDeep 酒店插件连接 RollingGo，搜索、房型、订单、取消都用工具；结果正文是上游完整返回另附使用说明，按说明回答，不要复述原始 JSON；
+    PI 酒店插件连接 RollingGo，搜索、房型、订单、取消都用工具；结果正文是上游完整返回另附使用说明，按说明回答，不要复述原始 JSON；
 
     - 搜索：`hotel_search`，传 `query`（用户原话）、`place`，可选 `place_type`、`check_in`、`nights`、`adults`、`size`（1–10）、`star_ratings`。预算用 `max_price` 交给上游筛选（未传时也会从 query 识别「100 元以内」这类预算）；距离上限用 `distance_in_meter`（米）；必须满足的设施/位置特征用 `required_tags`；品牌偏好用 `preferred_brands`。结果卡可能按起价或距离排序，以卡片和 guidance 为准。
     - 标签：用户明确要某类设施或标签（如「带泳池」「可停车」「亲子」）时，先 `hotel_tags` 查合法标签名，再传 `required_tags`；不要自己发明标签。

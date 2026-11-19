@@ -27,7 +27,7 @@ Super PI Agent 是一个运行在 Android 上的个人智能体（[应用仓库]
 
 `cli-common/` 是仓库内部共享模块（CLI 更新/安装核心与文本、JSON 工具），不是插件、不进插件清单、不随市场发布。
 
-版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。十二个插件的清单均为 `apiLevel` 6，使用 `plugin-api` 1.4.0 与 `design` 0.11.0 构建，多数插件要求 PI 1.4.3+，具体最低宿主版本以各模块清单为准。运行时依赖：飞书使用 `lark-cli` 1.0.100，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.6.0；微信导出插件自带 `wechat` CLI，需要 Root 和微信本地数据；高德地图插件通过高德 MCP 提供地点与路线，需要高德 Key；火车票插件直接查询 12306；酒店插件通过官方 `rgh` CLI 与 OAuth 登录（需要 Node.js/npm）；打车插件直接访问滴滴 MCP HTTP API（需要滴滴 Key，插件页配置）；小米云服务没有 CLI，通过插件页内 WebView 登录；邮箱插件不依赖 CLI，用 JVM 网络栈直连 IMAP/SMTP（QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义服务器）；校园集市插件内置离线 Token 捕捉器和 Python CLI，不需要外部 CLI。
+版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。十二个插件的清单均为 `apiLevel` 6，使用 `plugin-api` 1.2.0–1.4.0 与 `design` 0.11.0 构建，多数插件要求 PI 1.4.3+，具体最低宿主版本以各模块清单为准。运行时依赖：飞书使用 `lark-cli` 1.0.100，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.6.0；微信导出插件自带 `wechat` CLI，需要 Root 和微信本地数据；高德地图插件通过高德 MCP 提供地点与路线，需要高德 Key；火车票插件直接查询 12306；酒店插件通过官方 `rgh` CLI 与 OAuth 登录（需要 Node.js/npm）；打车插件直接访问滴滴 MCP HTTP API（需要滴滴 Key，插件页配置）；小米云服务没有 CLI，通过插件页内 WebView 登录；邮箱插件不依赖 CLI，用 JVM 网络栈直连 IMAP/SMTP（QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义服务器）；校园集市插件内置离线 Token 捕捉器和 Python CLI，不需要外部 CLI。
 
 开发示例：[`mcpui-demo/`](mcpui-demo/README.md) 演示把 MCP 工具结果渲染成插件卡片，不上市场，需要 `plugin-api 1.3.0` / 宿主 1.1.0+。
 

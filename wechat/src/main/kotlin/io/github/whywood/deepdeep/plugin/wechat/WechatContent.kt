@@ -5,7 +5,7 @@ internal object WechatContent {
 
     fun promptBody(status: WechatStatus?): String {
         if (status == null) {
-            return "微信导出插件状态未知。同步、导出与 root 权限状态都在 DeepDeep 的「微信导出」插件页处理；不要向用户索要微信密码或数据库密钥。"
+            return "微信导出插件状态未知。同步、导出与 root 权限状态都在 PI 的「微信导出」插件页处理；不要向用户索要微信密码或数据库密钥。"
         }
         if (!status.linuxAvailable) {
             return "微信导出当前不可用：缺少 Linux 运行环境。让用户到 设置 → 运行环境 安装或启用后，再打开「微信导出」插件页。"

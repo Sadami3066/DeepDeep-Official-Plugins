@@ -116,7 +116,7 @@ class WecomPlugin : DeepDeepPlugin {
 
             # 企业微信 CLI
 
-            DeepDeep 已安装官方 `wecom-cli`，在 bash 中直接运行。每次执行一条普通 CLI 调用，stdout 是 JSON；自己读取字段作答，先给结论与下一步，不要贴原始 JSON。
+            PI 已安装官方 `wecom-cli`，在 bash 中直接运行。每次执行一条普通 CLI 调用，stdout 是 JSON；自己读取字段作答，先给结论与下一步，不要贴原始 JSON。
 
             高频读取：`wecom-cli chat groups list`、`wecom-cli chat messages list`、`wecom-cli doc search`、`wecom-cli doc contents get`、`wecom-cli calendar schedules list`、`wecom-cli todo list`、`wecom-cli contact users search`。
 

@@ -99,7 +99,7 @@ private val SKILL_MARKDOWN = """
 
     # 滴滴打车
 
-    DeepDeep 打车插件提供从估价到下单、取消、订单跟踪的完整流程。
+    PI 打车插件提供从估价到下单、取消、订单跟踪的完整流程。
 
     - 地点坐标：用 `ride_place_search`（keywords + city）拿名称、完整地址、城市和经纬度，不要把地址猜成坐标；经度对应 *_lng、纬度对应 *_lat。
     - 预估：用 `ride_estimate`，传出发/目的地的名称与经纬度；结果里的 from/to 是滴滴实际吸附后的上/下车点，和用户给的地点不一致时先把实际点位告诉用户；distanceKm 单位公里，eta 与 duration 单位分钟；车型给出参考价、券后价和品类，把选择交给用户。

@@ -99,7 +99,7 @@ private val SKILL_MARKDOWN = """
 
     # 高德地图
 
-    DeepDeep 高德地图插件提供八个只读工具，导航和打车在高德地图 App 内由用户完成。
+    PI 高德地图插件提供八个只读工具，导航和打车在高德地图 App 内由用户完成。
 
     - 找地点：`amap_place_search`（keywords + city），返回名称、地址、类型和图片；单次结果数量有限且不支持翻页，结果里没有坐标、距离、评分或电话。
     - 找附近：`amap_around_search`（中心点经纬度 + 可选 keywords/radius），结果同样没有坐标和距离，关键词由高德匹配。

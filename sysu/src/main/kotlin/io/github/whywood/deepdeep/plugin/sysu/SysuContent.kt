@@ -7,7 +7,7 @@ internal object SysuContent {
 
     fun promptBody(status: SysuStatus?): String {
         if (status == null) {
-            return "中山大学 CLI 插件状态未知。账号密码、登录与重新登录都在 DeepDeep 的「中山大学 CLI」插件页完成；不要向用户索要账号密码或验证码。"
+            return "中山大学 CLI 插件状态未知。账号密码、登录与重新登录都在 PI 的「中山大学 CLI」插件页完成；不要向用户索要账号密码或验证码。"
         }
         if (!status.linuxAvailable || status.nodeVersion == null || status.nodeTooOld) {
             val reason = when {
@@ -115,7 +115,7 @@ internal object SysuContent {
         - 场馆：`sysu gym login`
         - 网费：`sysu netpay login`
 
-        只有命令要求企业微信验证码或 login 本身失败时，才让用户打开 DeepDeep 的「中山大学 CLI」插件页：页面会向企业微信发送 4 位验证码并提示输入，也会显示四个站点的状态。账号密码也只在插件页填写，不要在对话里索要。
+        只有命令要求企业微信验证码或 login 本身失败时，才让用户打开 PI 的「中山大学 CLI」插件页：页面会向企业微信发送 4 位验证码并提示输入，也会显示四个站点的状态。账号密码也只在插件页填写，不要在对话里索要。
         验证码错误时 CAS 可能写「NetID 或验证码错误」，但账号密码已通过；`--send-code` 会发新码。
 
         ## 要记住的

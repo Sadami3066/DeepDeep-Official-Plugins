@@ -112,7 +112,7 @@ internal val SKILL_MARKDOWN = """
 
     # 飞书 CLI
 
-    DeepDeep 飞书插件把官方 `lark-cli` 安装在 `/usr/local/bin/lark-cli`，在 bash 中直接运行；命令默认输出 JSON，成功用退出码或 `ok` 字段判断。
+    PI 飞书插件把官方 `lark-cli` 安装在 `/usr/local/bin/lark-cli`，在 bash 中直接运行；命令默认输出 JSON，成功用退出码或 `ok` 字段判断。
 
     ## 通用规则
 
