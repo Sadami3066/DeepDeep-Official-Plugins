@@ -1,7 +1,7 @@
 # sysu — 中山大学校园服务 CLI
 
 一个入口，多个站点：`sysu <站点> <命令>`。纯 Node 实现，零第三方依赖，只用内置模块。
-站点数据命令默认输出 JSON；`--json` 只为兼容旧命令保留，不改变输出。`--help` 与 `--version` 仍是文本。
+命令默认输出可读文本，加 `--json` 输出 JSON（给脚本用）；`sysu <站点>` 不带命令会打印该站点帮助。
 
 ```sh
 sysu login             # 一次登录，所有站点共用
@@ -87,7 +87,7 @@ sysu jwxt ta                   # 助教信息
 sysu jwxt leave                # 请假记录与审批状态
 ```
 
-`sysu jwxt --help` 看全部选项；输出统一是 JSON。
+`sysu jwxt --help` 看全部选项；默认输出可读文本，`--json` 输出 JSON。
 
 ## 在线教学平台（`sysu lms`）
 

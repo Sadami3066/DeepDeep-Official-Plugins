@@ -3,7 +3,7 @@
   "identity": "user",
   "data": {
     "document": {
-      "content": "<title>Q3 产品方案</title><h1>目标</h1><p>本季度完成 1.1.2 插件体验升级，覆盖飞书、企业微信与中大三个插件。</p><h1>里程碑</h1><p>11 月完成卡片桥接与更新检查，12 月完成真机验收。</p>",
+      "content": "<title>Q3 产品方案</title><h1>目标</h1><p>本季度完成 1.1.2 插件体验升级，覆盖飞书、企业微信与中大三个插件。</p><h1>里程碑</h1><p>11 月完成插件联调与更新检查，12 月完成真机验收。</p>",
       "document_id": "doccnAbc123",
       "reference_map": {},
       "revision_id": 12,

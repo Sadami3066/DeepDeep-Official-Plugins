@@ -1,7 +1,0 @@
-{
-  "error": {
-    "type": "UnknownError",
-    "code": 893999,
-    "message": "AuthError: 该请求需要授权，请先运行 `wecom-cli auth init` 登录 [code=893201]"
-  }
-}

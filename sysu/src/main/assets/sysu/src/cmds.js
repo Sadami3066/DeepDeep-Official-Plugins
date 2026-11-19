@@ -1,4 +1,6 @@
 const client = require('./client');
+const output = require('./output');
+const format = require('./format');
 
 // 不用 toLocaleDateString：精简版 Node 没有 sv-SE 数据，会退化成 m/d/yyyy
 const today = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
@@ -20,7 +22,8 @@ async function schedule({ week, today: onlyToday, tomorrow }) {
   const range = await client.getWeekRange(term, target);
   const days = (await client.getSchedule(term, target)).filter((d) => !date || d.date === date);
 
-  console.log(JSON.stringify({ term, week: target, ...range, days }, null, 2));
+  const payload = { term, week: target, ...range, days };
+  output.emit(payload, () => format.schedule(payload));
 }
 
 function summarize(semester, courses) {
@@ -57,20 +60,23 @@ async function scores({ semester, all }) {
     }
   }
 
-  console.log(JSON.stringify({ ok: true, semesters: results }, null, 2));
+  const payload = { ok: true, semesters: results };
+  output.emit(payload, () => format.scores(payload));
 }
 
 async function credits() {
   await client.ensureLogin();
   const plans = await client.getCredits();
-  console.log(JSON.stringify({ ok: true, plans }, null, 2));
+  const payload = { ok: true, plans };
+  output.emit(payload, () => format.credits(payload));
 }
 
 async function exams() {
   await client.ensureLogin();
   const { acadYearSemester: term } = await client.getTerm();
   const list = await client.getExams(term);
-  console.log(JSON.stringify({ term, exams: list }, null, 2));
+  const payload = { term, exams: list };
+  output.emit(payload, () => format.exams(payload));
 }
 
 function leaveDays(begin, end) {
@@ -102,7 +108,7 @@ async function leave({ apply, from, to, reason, note, days, file, dryRun, yes })
   ]);
 
   if (!apply && !from && !to && !reason) {
-    console.log(JSON.stringify({ ok: true, summary, records: records.rows }, null, 2));
+    output.emit({ ok: true, summary, records: records.rows });
     return;
   }
 
@@ -176,7 +182,7 @@ async function leave({ apply, from, to, reason, note, days, file, dryRun, yes })
   };
 
   if (dryRun) {
-    console.log(JSON.stringify(output, null, 2));
+    emitLeave(output);
     return;
   }
 
@@ -184,7 +190,7 @@ async function leave({ apply, from, to, reason, note, days, file, dryRun, yes })
   payload.fileName = att.fileName;
   payload.filePath = att.filePath;
   await client.applyLeave(payload);
-  console.log(JSON.stringify({ ...output, submitted: true, fileName: att.fileName, filePath: att.filePath }, null, 2));
+  emitLeave({ ...output, submitted: true, fileName: att.fileName, filePath: att.filePath });
 }
 
 const stripHtml = (html) =>
@@ -207,11 +213,11 @@ async function notice({ id, num }) {
     const html = await client.getNoticeDetail(id);
     const text = stripHtml(html);
     if (!text) throw new Error(`公告 ${id} 没有正文（id 对不对？先用 jwxt notice 看列表）`);
-    console.log(JSON.stringify({ id, text }, null, 2));
+    output.emit({ id, text }, () => `公告 ${id}\n\n${text}`);
     return;
   }
   const data = await client.getNotices(num);
-  console.log(JSON.stringify(data, null, 2));
+  output.emit(data);
 }
 
 const SECTIONS = [
@@ -278,13 +284,13 @@ async function room({ campus, building, room, week, day, sections }) {
     output.sections = sections;
     output.freeRooms = freeRooms(visible, sections, day);
   }
-  console.log(JSON.stringify(output, null, 2));
+  output.emit(output);
 }
 
 async function ta() {
   await client.ensureLogin();
   const res = await client.getAssistantInfo();
-  console.log(JSON.stringify(res, null, 2));
+  output.emit(res);
 }
 
 const normalize = (s) => String(s).replace(/[（(][^）)]*[）)]/g, '').replace(/\s+/g, '').toLowerCase();
@@ -330,13 +336,13 @@ async function course({ name, week }) {
         const hit = timetable.flatMap((d) => d.items).filter((i) => i.name === n);
         return { name: n, teacher: hit[0]?.teacher || null, sessions: hit.length };
       });
-      console.log(JSON.stringify({
+      output.emit({
         ok: true,
         term: term.acadYearSemester,
         query: name,
         ambiguous: true,
         candidates: options,
-      }, null, 2));
+      });
       return;
     }
     courseName = candidates[0] || name;
@@ -421,14 +427,25 @@ async function course({ name, week }) {
       semester: c.buildSchoolSemester,
     }));
   }
-  console.log(JSON.stringify(output, null, 2));
+  output.emit(output);
+}
+
+function emitLeave(payload) {
+  output.emit(payload, () => {
+    const lines = [];
+    lines.push(payload.dryRun ? '预览（没有提交）' : '已提交');
+    lines.push(`${payload.askLeaveTypeName} · ${payload.askLeaveBeginDate} ~ ${payload.askLeaveEndDate} · ${payload.askLeaveDaysCount} 天`);
+    if (payload.attachment) lines.push(`附件  ${payload.attachment.name}`);
+    for (const warning of payload.warnings || []) lines.push(`注意  ${warning}`);
+    return lines.join('\n');
+  });
 }
 
 const HELP = `sysu jwxt schedule              本周课表 · --week N  ·  --today / --tomorrow 只看今天/明天
 sysu jwxt scores               成绩（默认最近有成绩的学期）· --all 全部 · --semester 2025-2
 sysu jwxt credits              毕业学分进度
 sysu jwxt exams                考试安排
-sysu jwxt course LN3015        某门课（课程码或课名；返回大纲、上课、考试与成绩）
+sysu jwxt course LN3015        某门课（课程码或课名）
 sysu jwxt leave                请假记录
 sysu jwxt leave apply --from "2026-10-08 下午" --to "2026-10-09 上午"
                  --reason 事假|病假|丧假 --note "说明" --file 附件
@@ -436,16 +453,13 @@ sysu jwxt leave apply --from "2026-10-08 下午" --to "2026-10-09 上午"
 sysu jwxt notice [id]          教务/院系公告（给 id 看全文）· --num N
 sysu jwxt room [选项]          空闲教室
 sysu jwxt ta                   助教信息
-sysu login                     统一登录（jwxt 与 lms 共用，一次搞定）
-                 --code 1234   企业微信验证码（10 分钟内有效）
 
 空闲教室
   --building <名>   --room <号>   --week N（默认本周）
   --campus <名>     默认南校园
   --day <1-7>       只看某天        --sections 9-11  反过来找这节空着的教室
-  不带 --room 时返回全部教室的占用数据
 
-数据命令默认输出 JSON；--json 只为兼容旧命令保留，不改变输出。
+默认输出可读文本；--json 输出 JSON。
 附件   jpg / jpeg / png / gif / pdf，真提交时必填，交了撤不回来
 会话失效会自动续期；坏了才要 sysu login`;
 

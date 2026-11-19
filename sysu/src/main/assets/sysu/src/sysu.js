@@ -2,6 +2,8 @@
 //
 // 设计：sysu <站点> <命令>。加新站点只要在 SITES 里注册一个模块，
 // 模块导出的 main(argv) 自己处理参数，互不影响。
+const output = require('./output');
+
 const TOP = {
   login: {
     desc: '统一登录：账密 + 企业微信验证码，一次登录所有站点',
@@ -36,9 +38,9 @@ const VERSION = require('../package.json').version;
 
 function usage() {
   const rows = Object.entries(SITES).map(([name, s]) => `  ${(name + '        ').slice(0, 8)}  ${s.desc}`);
-  console.log(`sysu ${VERSION} —— 中山大学校园服务 CLI
+  console.log(`sysu ${VERSION} —— 中山大学校园服务
 
-用法：sysu <命令|站点> [选项]
+用法：sysu <站点|login> <命令> [选项]
 
 全局：
   sysu login            统一登录（账密 + 企微验证码，一次搞定所有站点）
@@ -48,41 +50,28 @@ ${rows.join('\n')}
 
 常用：
   sysu jwxt schedule     本周课表
-  sysu jwxt --help       教务的全部命令
-  sysu lms               我的课程
-  sysu lms todo          作业与待办
-  sysu gym               体育场馆（账户 / 类型 / 时段 / 预约）
-  sysu netpay            校园网服务与网费订单
+  sysu lms courses       我的课程
+  sysu gym slots 乒乓球   空位
+  sysu netpay info       校园网状态与到期日
   sysu sso <地址>        换任意站点的登录态
 
-站点数据命令默认输出 JSON；--json 只为兼容旧命令保留，不改变输出。`);
-}
-
-function errorJson(err) {
-  const raw = err && err.message ? String(err.message) : String(err || '未知错误');
-  const message = raw.replace(/\u001B\[[0-9;]*[A-Za-z]/g, '').trim() || '未知错误';
-  const payload = { ok: false, error: { message } };
-  if (err && err.code != null) payload.error.code = err.code;
-  if (err && err.needMfa) {
-    payload.needMfa = true;
-    if (err.hint) payload.hint = String(err.hint);
-  }
-  console.log(JSON.stringify(payload, null, 2));
-  process.exitCode = 1;
+默认输出可读文本；加 --json 输出 JSON（给脚本或插件内部用）。
+每个站点的全部命令：sysu <站点> --help`);
 }
 
 function dispatch(run, argv) {
   try {
     const out = run(argv);
-    if (out && typeof out.catch === 'function') return out.catch(errorJson);
+    if (out && typeof out.catch === 'function') return out.catch(output.fail);
     return out;
   } catch (err) {
-    errorJson(err);
+    output.fail(err);
     return undefined;
   }
 }
 
 function main(argvIn = []) {
+  output.setJsonMode(argvIn.includes('--json'));
   const argv = argvIn.slice().filter((arg) => arg !== '--json');
   if (!argv.length) return usage();
   if (argv[0] === '--version' || argv[0] === '-v') return console.log(VERSION);
@@ -92,7 +81,9 @@ function main(argvIn = []) {
   if (TOP[name]) return dispatch(TOP[name].main(), argv);
   const site = SITES[name];
   if (!site) {
-    errorJson(Object.assign(new Error(`未知站点：${name}（用 sysu --help 看可用站点）`), { code: 'UNKNOWN_SITE' }));
+    const error = new Error(`未知站点：${name}（用 sysu --help 看可用站点）`);
+    error.code = 'UNKNOWN_SITE';
+    output.fail(error);
     return undefined;
   }
   return dispatch(site.main(), argv);

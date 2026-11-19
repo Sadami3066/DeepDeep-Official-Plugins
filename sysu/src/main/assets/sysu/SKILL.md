@@ -18,7 +18,7 @@ sysu jwxt room                 # 空闲教室  ·  --sections 9-11 找自习室
 sysu jwxt ta                   # 助教信息
 sysu jwxt leave                # 请假记录与审批状态
 
-sysu lms                       # 在线教学平台的课程（ID/名称/进度）
+sysu lms courses               # 在线教学平台的课程（ID/名称/进度）
 sysu lms todo                  # 作业与待办（默认 14 天）· --days 30
 sysu lms course <id>           # 一门课的作业/资料/测验  ·  --urls
 sysu lms files <id>            # 可下载文件清单
@@ -26,11 +26,11 @@ sysu lms get <id>              # 下载全部到 /storage/emulated/0/Download/lm
                                #   --out 目录 · --only 关键词 · --dry-run
 sysu lms whoami                # 当前 LMS 账号
 
-sysu gym                       # 体育场馆：账户 / 类型 / 时段 / 我的预约
+sysu gym info                  # 体育场馆：账户 / 类型 / 时段 / 我的预约
 sysu gym slots 乒乓球            # 空位（默认 1 天，最多 2 天；一次只查一个类型）
 sysu gym mine                  # 我的预约
 
-sysu netpay                    # 校园网服务状态与到期日
+sysu netpay info               # 校园网服务状态与到期日
 sysu netpay orders             # 网费订单
 sysu netpay renew              # 续费：默认 dry-run，--yes 建未付款单
 sysu netpay login [--code N]   # 会话失效且要 MFA 时
@@ -38,7 +38,7 @@ sysu netpay login [--code N]   # 会话失效且要 MFA 时
 sysu sso <站点地址>            # 用统一认证换任意站点的登录态
 ```
 
-全部选项看 `sysu jwxt --help` / `sysu lms --help`。站点数据命令默认输出 JSON；`--json` 只为兼容旧命令保留，不改变输出。
+全部选项看 `sysu jwxt --help` / `sysu lms --help`；`sysu <站点>` 不带命令会打印该站点帮助。命令默认输出可读文本，加 `--json` 输出 JSON。
 
 ## 要记住的
 

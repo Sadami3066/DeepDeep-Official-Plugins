@@ -12,7 +12,7 @@ function main(argvIn = []) {
 
     const argv = argvIn.slice();
 
-  if (argv.includes('--help') || argv.includes('-h')) return console.log(HELP);
+  if (argv.includes('--help') || argv.includes('-h') || !argv.length) return console.log(HELP);
 
   const fail = (msg) => {
     throw new Error(msg);
@@ -21,7 +21,7 @@ function main(argvIn = []) {
   let cmd;
   const at = argv.findIndex((a) => COMMANDS.includes(a));
   if (at >= 0) cmd = argv.splice(at, 1)[0];
-  else fail('请指定 jwxt 子命令，例如：sysu jwxt schedule --week 8');
+  else fail('未知的 jwxt 子命令，用 sysu jwxt --help 看可用命令');
 
   const unknown = argv.find((a) => a.startsWith('-') && ![...BOOL, ...VALUED, '-h', '--help'].includes(a));
   if (unknown) fail(`未知选项：${unknown}`);

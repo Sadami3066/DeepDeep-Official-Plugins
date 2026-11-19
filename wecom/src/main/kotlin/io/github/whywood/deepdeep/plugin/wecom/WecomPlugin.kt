@@ -10,7 +10,6 @@ import io.github.whywood.deepdeep.plugin.api.PluginPage
 import io.github.whywood.deepdeep.plugin.api.PluginSkill
 import io.github.whywood.deepdeep.plugin.api.PluginUiContributions
 import io.github.whywood.deepdeep.plugin.api.PromptSection
-import io.github.whywood.deepdeep.plugin.api.SlotBinding
 import io.github.whywood.deepdeep.plugin.api.assetIcon
 import io.github.whywood.deepdeep.plugin.api.available
 import io.github.whywood.deepdeep.plugin.api.contributions
@@ -25,8 +24,6 @@ import kotlinx.coroutines.withContext
 class WecomPlugin : DeepDeepPlugin {
     @Volatile
     private var lastStatus: WecomStatus? = null
-
-    private val toolBridge = WecomToolBridge()
 
     internal fun updateStatus(status: WecomStatus) {
         lastStatus = status
@@ -58,7 +55,7 @@ class WecomPlugin : DeepDeepPlugin {
     }
 
     override fun contributions(host: PluginHost): Contributions = contributions(
-        hooks = object : PluginHooks by toolBridge.hooks(host) {
+        hooks = object : PluginHooks {
             override suspend fun notificationAction(event: NotificationActionEvent) {
                 if (event.actionId == WecomTexts.ACTION_OPEN_PAGE) host.ui().openPage(PAGE_ID)
             }
@@ -76,7 +73,7 @@ class WecomPlugin : DeepDeepPlugin {
     )
 
     override fun ui(host: PluginHost): PluginUiContributions = object : PluginUiContributions {
-        override val bindings: List<SlotBinding> = wecomChatCardBindings(host)
+        override val bindings = emptyList<Nothing>()
 
         override val pages: List<PluginPage> = listOf(
             pluginPage(
@@ -95,7 +92,7 @@ class WecomPlugin : DeepDeepPlugin {
         buildString {
             append("企业微信插件已连接")
             status.botId?.let { append("（Bot ID：$it）") }
-            appendLine("。命令用法见 deepdeep-wecom 技能；发送、修改、删除前先 --dry-run 预览。")
+            appendLine("。每条 wecom-cli 命令输出 JSON，读取字段作答；先给结论与下一步，不贴原始 JSON。发送、修改、删除前先 --dry-run 预览。")
         }
     } else {
         val label = if (status.installed) "企业微信未连接" else "企业微信 CLI 未安装"
@@ -119,9 +116,13 @@ class WecomPlugin : DeepDeepPlugin {
 
             # 企业微信 CLI
 
-            DeepDeep 已安装官方 `wecom-cli`，在 bash 中直接运行。命令输出 JSON，以退出码和输出字段判断结果；未授权时先提示用户在插件页扫码连接，不要反复重试。
+            DeepDeep 已安装官方 `wecom-cli`，在 bash 中直接运行。每次执行一条普通 CLI 调用，stdout 是 JSON；自己读取字段作答，先给结论与下一步，不要贴原始 JSON。
 
-            高频读取用一条命令完成：`wecom-cli chat groups list`、`wecom-cli chat messages list`、`wecom-cli doc search`、`wecom-cli doc contents get`、`wecom-cli calendar schedules list`、`wecom-cli todo list`、`wecom-cli contact users search`。这些读取成功后模型侧会得到整理过的完整字段；不要接管道、重定向、head/less 或 `--page-count`，也不要拆成多条命令或额外加 echo。
+            高频读取：`wecom-cli chat groups list`、`wecom-cli chat messages list`、`wecom-cli doc search`、`wecom-cli doc contents get`、`wecom-cli calendar schedules list`、`wecom-cli todo list`、`wecom-cli contact users search`。
+
+            - 未授权或登录失效：请用户到插件页重新登录，不要反复重试。
+            - 权限不足：按错误文本说明缺少什么权限，不要绕开。
+            - 其他错误：按 CLI 的错误文本如实说明，不要猜测。
 
             - 先确认命令与参数：`wecom-cli --help`、`wecom-cli <service> --help`；需要文档或 schema 时加 `--doc` / `--schema`。
             - 时间参数格式 `YYYY-MM-DD HH:MM:SS`；chat 只支持最近 7 天，日程默认查询未来 30 天。
@@ -130,7 +131,7 @@ class WecomPlugin : DeepDeepPlugin {
             - 请求体可用命名参数、`--json '<JSON>'` 或 `--set path=value` 组合给出。
             - 发消息前先 `wecom-cli chat groups list` 取本次返回的 `chat_id`；给授权人发消息可用 `wecom-cli identity whoami` 的 ID 作为 chat_id。
             - 发送图片、文件、语音或视频前，先经 `wecom-cli media` 上传拿到 `media_id`。
-            - 拉取更多结果时按返回的 `next_cursor` 继续单条读取；下载文件用 `--output-dir <download-directory>` 落到工作区，再按当前运行支持的交付方式返回文件绝对路径。
+            - 拉取更多结果时按返回的 `next_cursor` 继续查询；下载文件用 `--output-dir <download-directory>` 落到工作区，再按当前运行支持的交付方式返回文件绝对路径。
         """.trimIndent()
     }
 }

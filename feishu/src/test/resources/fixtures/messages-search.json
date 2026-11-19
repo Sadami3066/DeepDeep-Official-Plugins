@@ -21,7 +21,7 @@
         "msg_type": "post",
         "create_time": "2026-11-14 12:00",
         "sender": { "sender_i18n_names": { "zh_cn": "李雷" } },
-        "content": "{\"zh_cn\":{\"title\":\"周报\",\"content\":[[{\"tag\":\"text\",\"text\":\"本周完成卡片桥接\"}]]}}",
+        "content": "{\"zh_cn\":{\"title\":\"周报\",\"content\":[[{\"tag\":\"text\",\"text\":\"本周完成插件联调\"}]]}}",
         "chat_id": "oc_2",
         "chat_name": "产品研发群",
         "chat_type": "group",

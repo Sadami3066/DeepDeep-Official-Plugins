@@ -1,103 +1,25 @@
 # cli-common · CLI 插件共享层
 
-DeepDeep 官方 CLI 类插件共用的内部 Android library 模块：CLI bash 工具桥、聊天卡片数据模型、CLI 更新与安装流程。只在本仓库内使用，不发布 Maven、不进入插件清单；插件 application 模块用 `implementation(project(":cli-common"))` 依赖它，类随插件一起进 `.ddp`。运行时依赖（`plugin-api`、协程、序列化）全部 `compileOnly`，不新增任何第三方依赖。
+DeepDeep 官方 CLI 类插件共用的内部 Android library：CLI 更新/安装流程与少量文本、JSON 工具。只在本仓库内使用，不发布 Maven、不进入插件清单；插件 application 模块用 `implementation(project(":cli-common"))` 依赖它，类随插件一起进 `.ddp`。运行时依赖（`plugin-api`、协程、序列化）全部 `compileOnly`，不新增第三方依赖。
+
+CLI 插件不做卡片、也不解析 bash 命令：模型在 bash 里运行 CLI，直接读 stdout。本模块不参与任何工具结果改写。
 
 ## 文件
 
 | 文件 | 职责 |
 |---|---|
 | `build.gradle.kts` | `com.android.library`（AGP 已在根工程 classpath，不写版本）；compileSdk 36 / minSdk 29 / Java 17；plugin-api、coroutines、serialization 全部 compileOnly，JUnit4 + coroutines-test 仅测试 |
-| `src/main/kotlin/.../cli/CliCommandLine.kt` | 单条命令词法层：引号/转义 tokenize、环境变量前缀、二进制名匹配（含绝对路径）、flag 读取、shell 操作符判定、诊断摘要（隐藏 flag 值与环境变量） |
-| `.../cli/CliJsonEnvelope.kt` | CLI stdout 的 JSON 信封：去 ANSI、跳过 dotenv 行、平衡括号扫描；`find`/`isSuccess` 成功判定（`successField` 可空，null 时第一个平衡 JSON 即成功）、`element()` 取第一个平衡对象或数组（不要求成功字段）、`_notice` 剥离 |
+| `src/main/kotlin/.../cli/CliJsonEnvelope.kt` | CLI stdout 的 JSON 信封：去 ANSI、跳过 dotenv 行、平衡括号扫描；`find`/`isSuccess` 成功判定、`element()` 取第一个平衡对象或数组、`_notice` 剥离 |
 | `.../cli/CliJson.kt` | `JsonObject` 安全取值扩展：`stringValue`/`intValue`/`longValue`/`boolValue`/`objValue`/`arrayValue`/`objectList` |
 | `.../cli/CliText.kt` | 文本清理：ANSI、HTML 标签与实体、单行/多行截断、文档正文清洗 |
-| `.../cli/CliTime.kt` | 时间展示：ISO 时间 → `MM-dd HH:mm`/`yyyy-MM-dd HH:mm`，epoch 秒格式化 |
-| `.../cli/bridge/CliToolBridge.kt` | 通用 bash 工具桥：`beforeToolCall` 记录 callId→命令（有界 64）、`afterToolExecution` 关联/去重/失败隔离/截断恢复（`details.fullOutputPath`）/输出上限 256 KiB/成功信封或通用 payload 提取/观测构造/卡片与 `deepdeep.raw` details 编码 + `resultReplace`；`redactRaw` 配置用于 raw 脱敏；`isError` 观测按错误结果替换；`runFinished`/`sessionClosed` 清理；hook 内异常 fail-open、`CancellationException` 重抛 |
-| `.../cli/card/CliCard.kt` | 通用卡片模型与编解码：header（kind/title/trailing/context/total）、rows（items 或 sections 分组标签，行可带 body/avatar）、summary、footer（note/open_url）、READY/EMPTY/ERROR/LOADING；不裁剪行数，全量交给渲染侧做预览/展开 |
 | `.../cli/update/CliVersions.kt` | `major.minor.patch` 归一化、数值比较、取最新 |
 | `.../cli/update/CliChecksums.kt` | checksums 文本解析（sha256/sha512 长度可配）与摘要匹配 |
 | `.../cli/update/CliRelease.kt` | `CliRelease`（sha256 或 sha512Base64 二选一）与插件提供的 `CliReleasePolicy`（归档名/下载 URL/校验和 URL/摘要长度/`releaseWithSha512`） |
 | `.../cli/update/CliUpdate.kt` | `CliUpdateSource`/`CliUpdateCheck`、24 小时节流、单飞 `CliUpdateCheckController`、HTTP GET 取值 `CliHttp` |
 | `.../cli/update/CliInstall.kt` | 安装/更新状态机：下载（多源重试，进度；有 sha512 时下载后本地流式校验）→ 解包验版本 → 安装验版本 → 完成；失败/取消回滚旧二进制并清理暂存目录 |
-| `src/test/kotlin/...` | 词法、信封（含 element/lenient）、文本、时间、卡片（含 sections/header 扩展）、版本、校验和、版本策略、节流、检查控制器、安装器（含 sha512）与工具桥（含卡片提示/错误观测）单测（69 例） |
+| `src/test/kotlin/...` | 信封、文本、版本、校验和、版本策略、节流、检查控制器与安装器单测 |
 
-## 用法
-
-### CLI 桥
-
-```kotlin
-private val CONFIG: CliBridgeConfig<MyCommand, CliCardModel> = CliBridgeConfig(
-    binaryName = "lark-cli",
-    customType = "feishu.card",
-    logTag = "feishu.bridge",
-    parser = CliCommandParser { raw -> parseCommand(raw) },
-    observer = CliObservationBuilder { host, command, envelope ->
-        buildObservation(host, command, envelope)?.let {
-            CliObservation(summary = it.summary, text = it.text, card = it.card)
-        }
-    },
-    cardEncoder = { model -> CliCardCodec.encode(model) },
-)
-
-internal class MyToolBridge {
-    private val bridge = CliToolBridge(CONFIG)
-
-    fun hooks(host: PluginHost): PluginHooks = bridge.hooks(host)
-
-    fun clear() = bridge.clear()
-}
-```
-
-- 插件只提供 parser、observation builder、card encoder/customType；关联表、去重、输出上限、JSON 信封、卡片 details 与结果替换都在共享层。
-- parser 只认单条无管道/重定向的 CLI 命令；`CliCommandLine.hasShellOperators`/`tokenize`/`envPrefixLength`/`isBinary`/`readFlags` 是公共词法件，命令白名单与 flag 策略留在插件。
-- `beforeToolCall` 命中后记录命令；`afterToolExecution` 只有在结果成功、输出非空且 ≤ 256 KiB、payload 可提取、观测可构造时才 `resultReplace`，其余一律 `resultKeep`。
-- 默认走严格信封（`requireSuccessEnvelope = true` 且 `envelope.successField = "ok"`）：要求 JSON 对象带 `ok: true` 并剥 `_notice`。裸对象/顶层数组等无 `ok` 的 CLI 用 `envelope = CliJsonEnvelope.LENIENT`（`successField = null`）或 `requireSuccessEnvelope = false`，由 `payloadFinder`/`CliJsonEnvelope.element` 取第一个平衡 JSON，业务失败由插件 observer 判定。
-- `CliObservationBuilder` 的 `JsonObject` 版本是 SAM 入口；需要处理顶层数组时实现 `JsonElement` 重载（默认重载会把对象转给 `JsonObject` 版本）。
-- 卡片交付归插件侧：观测有 `card` 时共享层把 `cardEncoder(card)` 写进结果 details 的 `deepdeep.card`，完整原始输出写进 `deepdeep.raw`（`redactRaw` 先脱敏），guidance 写进 `deepdeep.guidance`；随后调 `Cards.deliver(callId, result)` 由插件 SDK 生成模型文本（完整返回、使用说明与 `present` 调用指令）和展示文本（`deepdeep.display`），宿主不再追加卡片 id。`CliObservation.customType` 非空时覆盖配置里的槽位类型（WeCom 一类按命令分槽位的插件用它）。观测 `card = null` 时只替换文本、不带卡片。
-- `CliObservation.isError = true` 时结果按错误返回：不写卡片描述符、不追加 `present` 指令，只保留错误文本与完整返回（失败文案由插件决定）。
-- 需要改写错误结果（例如未授权错误映射成可操作提示）时用 `errorMapper`：
-
-```kotlin
-errorMapper = CliErrorMapper { host, request, command ->
-    runCatching { mapError(host, request, command) }.getOrNull()
-}
-```
-
-- hook 内所有异常都 fail-open：`before` 继续调用，`after` 保留原结果；卡片编码失败只降级为无卡片文本，不影响结果替换。`CancellationException` 不吞。
-- 不在日志里打印命令参数值、JSON 或凭证：诊断摘要只保留 domain/shortcut/flag 名。
-
-### 卡片模型
-
-```kotlin
-val card = CliCardModel(
-    kind = "messages",
-    title = "文档名",
-    trailing = "版本 12",
-    context = "会话：oc_1",
-    total = 3,
-    items = listOf(CliCardItem(title = "标题", subtitle = "来源 · 类型", meta = "09:40", url = "https://…")),
-    summary = "正文摘要",
-    note = "还有 1 条未显示",
-    openUrl = "https://…",
-)
-val grouped = CliCardModel(
-    kind = "schedule",
-    total = 4,
-    sections = listOf(
-        CliCardSection("周一", listOf(CliCardItem(title = "高数"), CliCardItem(title = "英语"))),
-        CliCardSection("周二", listOf(CliCardItem(title = "物理"), CliCardItem(title = "体育"))),
-    ),
-)
-val payload: JsonObject = CliCardCodec.encode(grouped)
-val decoded: CliCardModel? = CliCardCodec.decode(payload, supportedKinds)
-```
-
-- wire 键固定为 `kind`/`state`/`title`/`trailing`/`context`/`total`/`items`/`sections`/`summary`/`open_url`/`note`，行内为 `title`/`subtitle`/`meta`/`badge`/`url`，分组为 `{label, items}`；`title`/`trailing`/`summary`/`sections` 只有非空才写入，旧消息缺省兼容（无 sections 时按 items 平铺）。
-- `items` 是平铺兜底（有 sections 时取各段行合并），`flatItems` 读取平铺行，`dataRowCount` 是实际数据行数；编解码不裁剪行数。行字段为 `title`/`subtitle`/`meta`/`badge`/`url`/`body`/`avatar`。
-- `CliCardModel.isEmpty` 覆盖显式 EMPTY 与无数据行；`decode` 对未知 kind、非法结构返回 null，由插件渲染兜底。
-- 渲染仍由插件用 `:design` 的 Dd 组件完成，共享层只出数据与编码，不参与 Compose。
-
-### CLI 更新与安装
+## CLI 更新与安装
 
 ```kotlin
 private val POLICY = CliReleasePolicy(
@@ -146,28 +68,6 @@ CliInstallRunner(
 - 校验二选一：`CliRelease.sha256` 走宿主 `network().download(expectedSha256=…)`；`CliRelease.sha512Base64` 非空时下载不带 sha256，下载后在本地流式算 SHA-512 与 base64 比对，不匹配删包并按 `downloadFailed` 抛出。npm 等只给 sha512 integrity 的源用 `CliReleasePolicy.releaseWithSha512`。
 - 通用纯逻辑可直接复用：`CliVersions.normalize/compare/isNewer/latest`、`CliChecksums.parse/digestOf/isDigest`、`CliUpdateThrottle.shouldCheck`、`CliHttp.getText/firstText`。
 
-## 迁移方式（WeCom / SYSU）
-
-1. 插件 `build.gradle.kts` 加 `implementation(project(":cli-common"))`，删掉插件内重复的 pending/handled 关联表、JSON 信封与 `resultReplace` 逻辑。
-2. 保留插件自己的命令解析器，用 `CliCommandLine` 替换私有 tokenizer/flag 读取（各插件额外的拒绝规则，如 WeCom 的 `&`、`--`、分页 flag，继续留在 parser）。
-3. 保留插件自己的输出解析与 observation 文案；把最终模型文本包成 `CliObservation(summary, text, card, isError = …)`，`card` 可以是插件自己的 payload 数据类（`CARD` 泛型），`cardEncoder` 负责编码成 `JsonObject`。裸对象/顶层数组命令配置 `envelope = CliJsonEnvelope.LENIENT`（或 `requireSuccessEnvelope = false`），需要处理数组时实现 `CliObservationBuilder` 的 `JsonElement` 重载，业务失败用 `isError = true` 交给桥按错误结果替换。
-4. `customType` 固定在配置里；按命令分槽位的插件（WeCom 的 7 个 `wecom.*` 槽位）在 `CliObservation.customType` 上按 command kind 覆盖。卡片用 `sections` 表达分组（课表按天、考试按日期、场馆按类型），`title`/`trailing`/`summary` 表达文档卡头部与摘要。
-5. 未授权/失败文案改写用 `errorMapper`；SYSU 这类还要对非命中的原始输出脱敏，用 hook 包装：
-
-```kotlin
-val base = bridge.hooks(host)
-object : PluginHooks by base {
-    override suspend fun afterToolExecution(request: ToolExecutionResult): ToolResultDecision {
-        val decision = base.afterToolExecution(request)
-        if (decision.action != ToolResultAction.KEEP) return decision
-        return redactSensitive(request.result.text)?.let { resultReplace(textResult(it)) } ?: decision
-    }
-}
-```
-
-6. 插件自己的行为测试保留；通用算法测试（版本比较、checksums、节流、安装器、信封提取、卡片编解码）放本模块，不重复写在插件里。
-7. 迁移完成后插件单测与 `verifyPlugin` 必须仍然通过，`.ddp` 内应包含 `io.github.whywood.deepdeep.plugin.cli.*` 的类。
-
 ## 构建与测试
 
 ```bash
@@ -178,9 +78,7 @@ cd DeepDeep-Official-Plugins
 
 ## 要点
 
-- 模块是内部共享层：不放插件清单、不做 UI、不引入 Compose，渲染由各插件用 `:design` 组件完成。
+- 模块是内部共享层：不放插件清单、不做 UI、不引入 Compose。
 - 不新增第三方依赖；`plugin-api`/协程/序列化必须保持 `compileOnly`，否则 `.ddp` 会把宿主库重复打包。
-- 卡片 wire 格式是已发布插件的历史消息格式，改字段要同时考虑旧会话解码，只能加字段不能改名。
-- 卡片数据通过结果 details 的 `deepdeep.card` 交给宿主渲染；raw/guidance 只作为 `Cards.deliver` 的输入，不留在最终 details 里；卡片 id 与 `present` 指令由插件 SDK 生成。
-- CLI 只识别单条普通命令，接管道/重定向/多命令一律不接管；不打印参数值、JSON 正文或凭据。
-- 构建：`./scripts/gradlew-locked :cli-common:testDebugUnitTest`；依赖方（飞书）用 `:feishu:testDebugUnitTest :feishu:verifyPlugin` 验证类已进 `.ddp`。
+- 不参与 bash 结果改写：CLI 插件没有卡片、命令桥或 hooks，结果原样交给模型。
+- 插件自己的安装/登录/更新页逻辑与文案留在插件；共享层只出算法与流程。

@@ -1,8 +1,10 @@
 // sysu gym —— 体育场馆预订（gym.sysu.edu.cn）
 const gym = require('../gym');
+const output = require('../output');
+const format = require('../format');
 
-const HELP = `sysu gym                  我的账户 + 校区
-sysu gym types            场馆类型（--campus / --all）
+const HELP = `sysu gym info             我的账户 + 校区 + 场馆类型
+sysu gym types [--campus] 场馆类型（--campus / --all）
 sysu gym venues <类型>     某类型下的场地（--venue 过滤）
 sysu gym slots <类型>      可预约时段（默认 1 天，--days 2 / --date 2026-11-10 / --venue 场地）
 sysu gym mine             我的预约（--days 30）
@@ -13,7 +15,7 @@ sysu gym login [--code N] 换取 token（--force 强制刷新）
 sysu gym token            当前 token 状态
 
 <类型> 可以写名称关键字（如 乒乓球）或完整 id。
-数据命令默认输出 JSON；--json 只为兼容旧命令保留，不改变输出。`;
+默认输出可读文本；--json 输出 JSON。`;
 
 const today = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 const addDays = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
@@ -80,14 +82,18 @@ async function resolveType(input, opts) {
 async function showOverview(opts) {
   const [me, cmap, all] = await Promise.all([gym.me(opts), campusMap(opts), gym.types(opts)]);
   const types = visibleTypes(all, opts);
-  console.log(JSON.stringify({ ok: true, me, campuses: [...cmap.values()], types }, null, 2));
+  const payload = { ok: true, me, campuses: [...cmap.values()], types };
+  output.emit(payload, () => format.gymInfo(payload));
 }
 
 async function showTypes(opts) {
   const [cmap, all] = await Promise.all([campusMap(opts), gym.types(opts)]);
   let rows = visibleTypes(all, opts);
   if (opts.campus) rows = rows.filter((t) => (cmap.get(t.Campus) || '').includes(opts.campus));
-  console.log(JSON.stringify({ ok: true, types: rows }, null, 2));
+  const payload = { ok: true, types: rows };
+  output.emit(payload, () => rows.length
+    ? rows.map((t) => [t.Name, t.Identity, cmap.get(t.Campus) || ''].filter(Boolean).join(' · ')).join('\n')
+    : '没有场馆类型。');
 }
 
 async function showVenues(input, opts) {
@@ -111,7 +117,16 @@ async function showVenues(input, opts) {
     });
   }
   const errors = types.filter((t) => t.error).map((t) => ({ id: t.id, name: t.name, error: t.error }));
-  console.log(JSON.stringify({ ok: types.some((t) => !t.error), types, ...(errors.length ? { errors } : {}) }, null, 2));
+  const payload = { ok: types.some((t) => !t.error), types, ...(errors.length ? { errors } : {}) };
+  output.emit(payload, () => {
+    const lines = [];
+    for (const type of types) {
+      lines.push(type.error ? `${type.name}  查询失败：${type.error}` : `${type.name}`);
+      for (const venue of type.venues || []) lines.push(`  ${venue.shortName || venue.name}${venue.capacity != null ? `  容量 ${venue.capacity}` : ''}`);
+    }
+    for (const error of errors) lines.push(`${error.name}  查询失败：${error.error}`);
+    return lines.join('\n');
+  });
 }
 
 async function showSlots(input, opts) {
@@ -156,12 +171,19 @@ async function showSlots(input, opts) {
   }
 
   const errors = types.filter((t) => t.error).map((t) => ({ id: t.id, name: t.name, error: t.error }));
-  console.log(JSON.stringify({ ok: types.some((t) => !t.error), types, ...(errors.length ? { errors } : {}) }, null, 2));
+  const payload = { ok: types.some((t) => !t.error), types, ...(errors.length ? { errors } : {}) };
+  output.emit(payload, () => format.gymSlots(payload));
 }
 
 async function showMine(opts) {
   const list = await gym.bookings({ days: opts.days }, opts);
-  console.log(JSON.stringify({ ok: true, bookings: list }, null, 2));
+  const payload = { ok: true, bookings: list };
+  output.emit(payload, () => {
+    if (!list.length) return '没有预约。';
+    return list
+      .map((b) => [b.VenueName, b.StartDateTime, b.EndDateTime, b.Identity].filter(Boolean).join(' · '))
+      .join('\n');
+  });
 }
 
 async function run(argvIn = []) {
@@ -186,12 +208,12 @@ async function run(argvIn = []) {
   takeValue('--charge');
   takeFlag('--all');
   takeFlag('--force');
-  if (argv.includes('--help') || argv.includes('-h')) return console.log(HELP);
+  if (argv.includes('--help') || argv.includes('-h') || !argv.length) return console.log(HELP);
 
-  const cmd = argv.shift() || 'overview';
+  const cmd = argv.shift() || 'info';
   if (cmd === 'venues' || cmd === 'slots') takeValue('--venue');
   const arg = argv.find((a) => !a.startsWith('-'));
-  if (cmd === 'overview') return showOverview(opts);
+  if (cmd === 'info' || cmd === 'overview') return showOverview(opts);
   if (cmd === 'types') return showTypes(opts);
   if (cmd === 'venues') return showVenues(arg, opts);
   if (cmd === 'slots') return showSlots(arg, opts);
@@ -229,11 +251,15 @@ async function run(argvIn = []) {
     );
 
     if (!dryRun && Number(r.result?.Code) !== 200) {
-      console.log(JSON.stringify({ ok: false, error: { message: r.result?.Result || '预约失败', raw: r.result } }, null, 2));
-      process.exitCode = 1;
+      const error = new Error(r.result?.Result || '预约失败');
+      error.code = r.result?.Code;
+      output.fail(error);
       return undefined;
     }
-    return console.log(JSON.stringify({ ok: true, dryRun, charge, ...(dryRun ? { payload: r.payload } : { result: r.result }) }, null, 2));
+    const payload = { ok: true, dryRun, charge, ...(dryRun ? { payload: r.payload } : { result: r.result }) };
+    return output.emit(payload, () => (dryRun
+      ? `预览（没有提交）\n${t.Name} · ${v.Name} · ${opts.date} ${opts.start}-${opts.end} · 积分 ${charge}\n确认后加 --yes 提交。`
+      : `已预约\n${t.Name} · ${v.Name} · ${opts.date} ${opts.start}-${opts.end} · 积分 ${charge}`));
   }
   if (cmd === 'cancel') {
     if (!arg) throw new Error('用法：sysu gym cancel <预约号>');
@@ -242,12 +268,13 @@ async function run(argvIn = []) {
     if (!b) throw new Error('没找到这条预约：' + arg);
     const dryRun = !argv.includes('--yes');
     const r = dryRun ? null : await gym.cancel(b.Identity, opts);
-    return console.log(JSON.stringify({
+    const payload = {
       ok: true,
       dryRun,
       booking: { id: b.Identity, bookingId: b.BookingId, venue: b.VenueName, start: b.StartDateTime, end: b.EndDateTime },
       ...(dryRun ? {} : { result: r }),
-    }, null, 2));
+    };
+    return output.emit(payload, () => `${dryRun ? '预览（没有取消）' : '已取消'}\n${b.VenueName} · ${b.StartDateTime} ~ ${b.EndDateTime}${dryRun ? '\n确认后加 --yes 取消。' : ''}`);
   }
   if (cmd === 'login') {
     const before = gym.readToken();
@@ -255,14 +282,16 @@ async function run(argvIn = []) {
     const after = gym.readToken();
     const left = after ? Math.max(0, Math.round((3500 * 1000 - (Date.now() - after.at)) / 60000)) : 0;
     const reused = before?.access_token === token && !opts.force && !opts.code;
-    return console.log(JSON.stringify({ ok: true, valid: true, minutes: left, refreshed: !reused }, null, 2));
+    const payload = { ok: true, valid: true, minutes: left, refreshed: !reused };
+    return output.emit(payload, () => `场馆 token ${payload.refreshed ? '已刷新' : '仍有效'} · 还剩 ${payload.minutes} 分钟`);
   }
   if (cmd === 'token') {
     const t = gym.readToken();
     const left = t ? Math.max(0, Math.round((3500 * 1000 - (Date.now() - t.at)) / 60000)) : 0;
-    return console.log(JSON.stringify({ ok: true, valid: Boolean(t && left > 0), minutes: left }, null, 2));
+    const payload = { ok: true, valid: Boolean(t && left > 0), minutes: left };
+    return output.emit(payload, () => (payload.valid ? `场馆 token 有效 · 还剩 ${payload.minutes} 分钟` : '场馆 token 已失效，执行 sysu gym login 续期'));
   }
-  throw new Error(`未知命令：${cmd}\n\n${HELP}`);
+  throw new Error(`未知命令：${cmd}（用 sysu gym --help 看可用命令）`);
 }
 
 async function main(argvIn = []) {

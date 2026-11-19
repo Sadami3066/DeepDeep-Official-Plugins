@@ -12,9 +12,9 @@ DeepDeep 是一个运行在 Android 上的个人智能体（[应用仓库](https
 
 | 模块 | 插件 | 版本 | 作用 | 适合 |
 |---|---|---|---|---|
-| `feishu` | 飞书 | 2.7.0 | 通过官方 `lark-cli` 读写消息、日历、云文档、云空间、邮箱与任务，读取与写入结果都有卡片 | 日常使用飞书的办公用户 |
-| `wecom` | 企业微信 | 2.6.1 | 通过官方 `wecom-cli` 操作消息、邮件、文档、日程与待办 | 使用企业微信的团队用户 |
-| `sysu` | 中山大学 CLI | 2.7.2 | 在 Linux 环境运行 Node.js 版 `sysu` CLI：课表、成绩、作业、课件、场馆预约、网费与统一认证换票 | 中山大学在校师生 |
+| `feishu` | 飞书 | 2.7.1 | 通过官方 `lark-cli` 读写消息、日历、云文档、云空间、邮箱与任务 | 日常使用飞书的办公用户 |
+| `wecom` | 企业微信 | 2.6.2 | 通过官方 `wecom-cli` 操作消息、邮件、文档、日程与待办 | 使用企业微信的团队用户 |
+| `sysu` | 中山大学 CLI | 2.7.3 | 在 Linux 环境运行 Node.js 版 `sysu` CLI：课表、成绩、作业、课件、场馆预约、网费与统一认证换票；默认人类可读输出，`--json` 给脚本 | 中山大学在校师生 |
 | `wechat` | 微信导出 | 0.5.2 | 同步并解密微信本地数据库，按日期范围导出完整聊天记录，交给 Agent 总结 | 需要完整导出微信记录的用户 |
 | `micloud` | 小米云服务 | 2.7.4 | 登录小米账号后读取笔记、待办、短信、联系人、相册与录音，笔记/待办可写；按真实返回解析 | 使用小米云服务的用户 |
 | `mail` | 邮箱 | 1.6.2 | 用授权码接入 IMAP/SMTP 邮箱：收件箱、会话、写信（含附件）、账户管理，聊天内邮件卡片，并让 Agent 搜信、读信、归档、起草与发送 | 使用 QQ、163、Gmail、iCloud 等标准 IMAP/SMTP 邮箱的用户 |
@@ -25,9 +25,9 @@ DeepDeep 是一个运行在 Android 上的个人智能体（[应用仓库](https
 | `themes` | 主题包 | 1.0.1 | 给宿主提供 8 套浅色/深色主题配色，在设置的外观里一键切换 | 想换个界面气质的用户 |
 | `zanao` | 校园集市 | 1.0.18 | 内置离线 Token 捕捉器与离线签名 CLI，支持浏览、带图发帖、作者资料与历史检索 | 赞噢校园集市用户 |
 
-`cli-common/` 是仓库内部共享模块（CLI bridge、卡片模型、CLI 更新/安装核心），不是插件、不进插件清单、不随市场发布。
+`cli-common/` 是仓库内部共享模块（CLI 更新/安装核心与文本、JSON 工具），不是插件、不进插件清单、不随市场发布。
 
-版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。十二个插件的清单均为 `apiLevel` 6，使用 `plugin-api` 1.4.0 与 `design` 0.11.0 构建，并与 DeepDeep 1.1.0+ 兼容（图片服务要求宿主 1.4.0+），具体最低宿主版本以各模块清单为准。运行时依赖：飞书使用 `lark-cli` 1.0.100，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.5.1；微信导出插件自带 `wechat` CLI，需要 Root 和微信本地数据；高德地图插件通过高德 MCP 提供地点与路线，需要高德 Key；火车票插件直接查询 12306；酒店插件通过官方 `rgh` CLI 与 OAuth 登录（需要 Node.js/npm）；打车插件直接访问滴滴 MCP HTTP API（需要滴滴 Key，插件页配置）；小米云服务没有 CLI，通过插件页内 WebView 登录；邮箱插件不依赖 CLI，用 JVM 网络栈直连 IMAP/SMTP（QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义服务器）；校园集市插件内置离线 Token 捕捉器和 Python CLI，不需要外部 CLI。
+版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。十二个插件的清单均为 `apiLevel` 6，使用 `plugin-api` 1.4.0 与 `design` 0.11.0 构建，并与 DeepDeep 1.1.0+ 兼容（图片服务要求宿主 1.4.0+），具体最低宿主版本以各模块清单为准。运行时依赖：飞书使用 `lark-cli` 1.0.100，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.6.0；微信导出插件自带 `wechat` CLI，需要 Root 和微信本地数据；高德地图插件通过高德 MCP 提供地点与路线，需要高德 Key；火车票插件直接查询 12306；酒店插件通过官方 `rgh` CLI 与 OAuth 登录（需要 Node.js/npm）；打车插件直接访问滴滴 MCP HTTP API（需要滴滴 Key，插件页配置）；小米云服务没有 CLI，通过插件页内 WebView 登录；邮箱插件不依赖 CLI，用 JVM 网络栈直连 IMAP/SMTP（QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义服务器）；校园集市插件内置离线 Token 捕捉器和 Python CLI，不需要外部 CLI。
 
 开发示例：[`mcpui-demo/`](mcpui-demo/README.md) 演示把 MCP 工具结果渲染成插件卡片，不上市场，需要 `plugin-api 1.3.0` / 宿主 1.1.0+。
 

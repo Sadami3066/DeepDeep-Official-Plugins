@@ -2,9 +2,11 @@ package io.github.whywood.deepdeep.plugin.sysu
 
 import io.github.whywood.deepdeep.plugin.cli.CliJsonEnvelope
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 
@@ -15,10 +17,10 @@ internal enum class SysuSite(val key: String) {
     Netpay("netpay"),
     ;
 
-    fun loginCommand(): String = if (this == Jwxt) "sysu login" else "sysu $key login"
+    fun loginCommand(): String = if (this == Jwxt) "sysu login --json" else "sysu $key login --json"
 
     fun loginCodeCommand(code: String): String =
-        if (this == Jwxt) "sysu login --code $code" else "sysu $key login --code $code"
+        if (this == Jwxt) "sysu login --code $code --json" else "sysu $key login --code $code --json"
 
     companion object {
         fun fromKey(value: String?): SysuSite? = entries.firstOrNull { it.key == value }
@@ -108,9 +110,9 @@ internal object SysuCli {
     fun logoutCommand(): String =
         "rm -f $SESSION_PATH $MFA_PATH $LMS_PATH $GYM_PATH $GYM_JAR_PATH $NETPAY_PATH"
 
-    fun loginSendCodeCommand(): String = "sysu login --send-code"
+    fun loginSendCodeCommand(): String = "sysu login --send-code --json"
 
-    fun loginCodeCommand(code: String): String = "sysu login --code $code"
+    fun loginCodeCommand(code: String): String = "sysu login --code $code --json"
 
     fun credentialsContent(netId: String, password: String): String =
         "netid=${netId.trim()}\npassword=${password.trim()}\n"
@@ -195,6 +197,13 @@ internal object SysuCli {
     private val NODE_VERSION = Regex("""v?\d+\.\d+\.\d+""")
     private val SEMVER = Regex("""\b\d+\.\d+\.\d+\b""")
     private val ANSI = Regex("\u001B\\[[0-9;]*[A-Za-z]")
+}
+
+internal fun JsonElement?.scalarText(): String? {
+    val primitive = this as? JsonPrimitive ?: return null
+    val content = primitive.contentOrNull?.trim() ?: return null
+    if (content.isEmpty() || content == "null" || content == "undefined") return null
+    return content
 }
 
 internal data class SysuRawStatus(

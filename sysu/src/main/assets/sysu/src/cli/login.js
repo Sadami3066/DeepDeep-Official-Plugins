@@ -9,6 +9,8 @@ const path = require('node:path');
 const { login } = require('../login');
 const session = require('../session');
 const lms = require('../lms');
+const output = require('../output');
+const format = require('../format');
 
 const MFA_PATH = path.join(os.homedir(), '.config/sysu/jwxt/mfa.json');
 
@@ -18,7 +20,7 @@ sysu login --force        强制重新登录（即使当前会话还活着）
 sysu login --send-code    强制登录并发送验证码（插件页用的就是它）
 
   登录后 jwxt / lms 共用同一份 CAS 票据，不用分别登录。
-  输出 JSON：{ok, needMfa, hint, jwxt, lms, lmsNote}；--json 兼容保留，不改变输出。`;
+  默认输出可读文本；--json 输出 JSON（插件页用）。`;
 
 async function main(argvIn = []) {
   const argv = argvIn.slice();
@@ -47,7 +49,8 @@ async function main(argvIn = []) {
   // 刚发出验证码：mfa.json 还在，等用户把码填回来
   if (fs.existsSync(MFA_PATH)) {
     const hint = '验证码已发到企业微信，10 分钟内执行：sysu login --code <4 位>';
-    console.log(JSON.stringify({ ok: false, needMfa: true, hint }, null, 2));
+    const payload = { ok: false, needMfa: true, hint };
+    output.emit(payload, () => format.loginStatus(payload));
     return;
   }
 
@@ -64,7 +67,8 @@ async function main(argvIn = []) {
     status.lmsNote = err.message;
   }
 
-  console.log(JSON.stringify({ ok: status.jwxt, needMfa: false, already, ...status }, null, 2));
+  const payload = { ok: status.jwxt, needMfa: false, already, ...status };
+  output.emit(payload, () => format.loginStatus(payload));
 }
 
 module.exports = { main, HELP };

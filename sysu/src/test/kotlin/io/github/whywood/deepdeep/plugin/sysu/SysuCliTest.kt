@@ -79,17 +79,17 @@ class SysuCliTest {
     fun loginSequenceCoversAllFourSites() {
         assertEquals(
             listOf(
-                "sysu login --send-code",
-                "sysu lms login",
-                "sysu gym login",
-                "sysu netpay login",
+                "sysu login --send-code --json",
+                "sysu lms login --json",
+                "sysu gym login --json",
+                "sysu netpay login --json",
             ),
             SysuCli.siteLoginSequence(),
         )
-        assertEquals("sysu login --code 1234", SysuSite.Jwxt.loginCodeCommand("1234"))
-        assertEquals("sysu lms login --code 1234", SysuSite.Lms.loginCodeCommand("1234"))
-        assertEquals("sysu gym login --code 1234", SysuSite.Gym.loginCodeCommand("1234"))
-        assertEquals("sysu netpay login --code 1234", SysuSite.Netpay.loginCodeCommand("1234"))
+        assertEquals("sysu login --code 1234 --json", SysuSite.Jwxt.loginCodeCommand("1234"))
+        assertEquals("sysu lms login --code 1234 --json", SysuSite.Lms.loginCodeCommand("1234"))
+        assertEquals("sysu gym login --code 1234 --json", SysuSite.Gym.loginCodeCommand("1234"))
+        assertEquals("sysu netpay login --code 1234 --json", SysuSite.Netpay.loginCodeCommand("1234"))
     }
 
     @Test
@@ -130,12 +130,4 @@ class SysuCliTest {
         assertFalse(SysuCli.loginSucceeded("✓ 登录态正常"))
     }
 
-    @Test
-    fun parsesSiteFromCommandLine() {
-        assertEquals(SysuSite.Jwxt, SysuCommandParser.site("sysu login --send-code"))
-        assertEquals(SysuSite.Lms, SysuCommandParser.site("sysu lms login --code 1234"))
-        assertEquals(SysuSite.Gym, SysuCommandParser.site("sysu gym slots 健身房 --json"))
-        assertEquals(SysuSite.Netpay, SysuCommandParser.site("sysu netpay login"))
-        assertEquals(null, SysuCommandParser.site("lark-cli im +chat-list"))
-    }
 }
