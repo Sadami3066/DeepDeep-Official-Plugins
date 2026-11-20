@@ -1,63 +1,61 @@
-# Super PI Agent 官方插件
+# Super PI Agent Official Plugins
 
-[English](README.en.md) | 简体中文
+English | [简体中文](README.cn.md)
 
-Super PI Agent 官方维护的外部插件源码仓库：把飞书、企业微信、中山大学校园服务、微信记录导出、小米云服务、标准邮箱和校园集市接入 PI，统一打包成带 Ed25519 签名的 `.ddp` 插件包。
+The official external-plugin source repository maintained by the Super PI Agent project. It brings Feishu, WeCom, SYSU campus services, WeChat export, Xiaomi Cloud, standard IMAP/SMTP mailboxes and Campus Market into PI, packaged as Ed25519-signed `.ddp` plugin bundles.
 
-## 概览
+## Overview
 
-Super PI Agent 是一个运行在 Android 上的个人智能体（[应用仓库](https://github.com/Sadami3066/SuperPI-App)）。插件用 Kotlin 实现宿主契约 `plugin-api`，在 App 进程内加载，通过工具、技能、提示词和自绘页面扩展助手能力；插件只从 `.ddp` 安装，每个插件是一个独立的 Android application 模块。
+Super PI Agent is a personal AI agent on Android ([app repository](https://github.com/Sadami3066/SuperPI-App)). Plugins implement the host contract `plugin-api` in Kotlin, load inside the App process, and extend the agent with tools, skills, prompt sections and self-drawn pages. Plugins are installed only from `.ddp` files, and every plugin is a separate Android application module.
 
-本仓库包含十二个官方插件，发布者为 `milous`：
+This repository contains twelve official plugins, published by `milous`:
 
-| 模块 | 插件 | 版本 | 作用 | 适合 |
+| Module | Plugin | Version | What it does | For |
 |---|---|---|---|---|
-| `feishu` | 飞书 | 2.7.1 | 通过官方 `lark-cli` 读写消息、日历、云文档、云空间、邮箱与任务 | 日常使用飞书的办公用户 |
-| `wecom` | 企业微信 | 2.6.2 | 通过官方 `wecom-cli` 操作消息、邮件、文档、日程与待办 | 使用企业微信的团队用户 |
-| `sysu` | 中山大学 CLI | 2.7.3 | 在 Linux 环境运行 Node.js 版 `sysu` CLI：课表、成绩、作业、课件、场馆预约、网费与统一认证换票；默认人类可读输出，`--json` 给脚本 | 中山大学在校师生 |
-| `wechat` | 微信导出 | 0.5.2 | 同步并解密微信本地数据库，按日期范围导出完整聊天记录，交给 Agent 总结 | 需要完整导出微信记录的用户 |
-| `micloud` | 小米云服务 | 2.7.4 | 登录小米账号后读取笔记、待办、短信、联系人、相册与录音，笔记/待办可写；按真实返回解析 | 使用小米云服务的用户 |
-| `mail` | 邮箱 | 1.6.2 | 用授权码接入 IMAP/SMTP 邮箱：收件箱、会话、写信（含附件）、账户管理，聊天内邮件卡片，并让 Agent 搜信、读信、归档、起草与发送 | 使用 QQ、163、Gmail、iCloud 等标准 IMAP/SMTP 邮箱的用户 |
-| `ride` | 滴滴打车 | 1.3.1 | 滴滴车型预估、创建订单、订单与司机位置；支付在滴滴内完成 | 需要打车、比价或查司机状态的通勤/出行用户 |
-| `hotel` | RollingGo酒店 | 1.4.1 | 搜索并筛选 RollingGo 酒店、查看房型与订单、创建待支付订单、取消订单；支付在 RollingGo 完成 | 需要 AI 帮忙找酒店、查房型、预订或取消的用户 |
-| `amap` | 高德地图 | 1.5.3 | 高德 MCP：地点搜索、周边、坐标转地址、驾车/公交/步行/骑行路线与天气，卡片展示；需要高德 Key | 通勤、出行规划与查地点的用户 |
-| `rail` | 12306铁路 | 1.4.0 | 查询 12306 车次、时刻与余票，选好车次后去 12306 完成预订 | 坐高铁/火车出行，先看车次和余票的用户 |
-| `themes` | 主题包 | 1.0.1 | 给宿主提供 8 套浅色/深色主题配色，在设置的外观里一键切换 | 想换个界面气质的用户 |
-| `zanao` | 校园集市 | 1.0.18 | 内置离线 Token 捕捉器与离线签名 CLI，支持浏览、带图发帖、作者资料与历史检索 | 赞噢校园集市用户 |
+| `feishu` | Feishu | 2.7.1 | Read and write messages, calendar, docs, drive, mail and tasks through the official `lark-cli` | Office users who work in Feishu every day |
+| `wecom` | WeCom | 2.6.2 | Operate messages, mail, docs, schedules and to-dos through the official `wecom-cli` | Teams that use WeCom |
+| `sysu` | SYSU CLI | 2.7.3 | Run the Node.js `sysu` CLI inside the Linux environment: timetable, grades, assignments, course files, venue booking, campus network fees and SSO tickets; human-readable output by default, `--json` for scripts | Students and staff at Sun Yat-sen University |
+| `wechat` | WeChat Export | 0.5.2 | Sync and decrypt the local WeChat database, export complete chat records for a date range and let the agent summarize | Users who need a complete WeChat export |
+| `micloud` | Xiaomi Cloud | 2.7.4 | Sign in to a Xiaomi account and read notes, to-dos, SMS, contacts, photos and recordings | Users of Xiaomi Cloud services |
+| `mail` | Mail | 1.6.2 | Connect an IMAP/SMTP mailbox with an authorization code: inbox, conversations, composing with attachments, account management and in-chat mail cards, with agent search, reading, archiving, drafting and sending | Users of standard IMAP/SMTP mailboxes such as QQ, 163, Gmail or iCloud |
+| `ride` | DiDi Ride | 1.3.1 | Didi estimates, order creation, ride status and driver location; payment happens in Didi | Commuters and travellers who need a ride, price comparison or driver status |
+| `hotel` | RollingGo Hotels | 1.4.1 | Search RollingGo hotels, view rooms and orders, create a pending booking; payment happens on RollingGo | Anyone who wants AI help finding, checking or booking hotels |
+| `amap` | Amap Maps | 1.5.3 | Amap MCP for place search, nearby POIs, driving/transit/walking/cycling routes and weather, rendered as cards; requires an Amap key | Commuters and travellers planning routes or looking up places |
+| `rail` | 12306 Railway | 1.4.0 | Search 12306 trains, times and seat availability, then book on 12306 | Anyone travelling by rail who wants train and seat options first |
+| `themes` | Themes | 1.0.1 | Provides eight light and dark colour themes that can be switched from the host appearance settings | Users who want a different visual mood |
+| `zanao` | Campus Market | 1.0.18 | Bundled offline token catcher and offline-signing CLI: browsing, posting with images, author profiles and history search | Zanao campus marketplace users |
 
-`cli-common/` 是仓库内部共享模块（CLI 更新/安装核心与文本、JSON 工具），不是插件、不进插件清单、不随市场发布。
+`cli-common/` is an internal shared module (CLI update/install core plus text and JSON helpers). It is not a plugin, is not listed in manifests, and is not published to the market.
 
-版本以各模块 `src/main/assets/plugin.json` 的 `version` 为准。十二个插件的清单均为 `apiLevel` 6，使用 `plugin-api` 1.2.0–1.4.0 与 `design` 0.11.0 构建，多数插件要求 PI 1.4.3+，具体最低宿主版本以各模块清单为准。运行时依赖：飞书使用 `lark-cli` 1.0.100，企业微信使用 `wecom-cli` 1.3.4，中山大学使用 Node.js 版 `sysu` CLI 3.6.0；微信导出插件自带 `wechat` CLI，需要 Root 和微信本地数据；高德地图插件通过高德 MCP 提供地点与路线，需要高德 Key；火车票插件直接查询 12306；酒店插件通过官方 `rgh` CLI 与 OAuth 登录（需要 Node.js/npm）；打车插件直接访问滴滴 MCP HTTP API（需要滴滴 Key，插件页配置）；小米云服务没有 CLI，通过插件页内 WebView 登录；邮箱插件不依赖 CLI，用 JVM 网络栈直连 IMAP/SMTP（QQ、163、126、腾讯企业邮、阿里云邮箱、Gmail、iCloud、Fastmail、Yahoo、Zoho 与自定义服务器）；校园集市插件内置离线 Token 捕捉器和 Python CLI，不需要外部 CLI。
+Versions follow `version` in each module's `src/main/assets/plugin.json`. All twelve manifests declare `apiLevel` 6 and are built against `plugin-api` 1.2.0–1.4.0 and `design` 0.11.0; most plugins require Super PI Agent 1.4.3+; the exact minimum host version is in each manifest. Runtime dependencies: Feishu uses `lark-cli` 1.0.100, WeCom uses `wecom-cli` 1.3.4, SYSU uses the Node.js `sysu` CLI 3.6.0; WeChat Export bundles its own `wechat` CLI and needs Root plus local WeChat data; Amap Maps uses the Amap MCP for places and routes with an Amap key; Trains queries 12306 directly; Hotels uses the official `rgh` CLI with OAuth (Node.js/npm required); Ride calls the Didi MCP HTTP API directly with a key configured on its plugin page; Xiaomi Cloud has no CLI and signs in through a WebView on its plugin page; the Mail plugin needs no CLI and connects to IMAP/SMTP directly over the JVM network stack (QQ, 163, 126, Tencent Exmail, Alibaba Mail, Gmail, iCloud, Fastmail, Yahoo, Zoho and custom servers); Campus Market bundles its own offline token catcher and Python CLI.
 
-开发示例：[`mcpui-demo/`](mcpui-demo/README.md) 演示把 MCP 工具结果渲染成插件卡片，不上市场，需要 `plugin-api 1.3.0` / 宿主 1.1.0+。
+## What's in the repository
 
-## 仓库里有什么
-
-| 路径 | 说明 |
+| Path | Description |
 |---|---|
-| `feishu/`、`wecom/`、`sysu/`、`wechat/`、`micloud/`、`mail/`、`themes/`、`amap/`、`rail/`、`hotel/`、`ride/`、`zanao/` | 十二个插件模块：Kotlin 源码、`src/main/assets/plugin.json` 清单、图标与页面 |
-| `gradle/plugin-bundle.gradle.kts` | 共享打包脚本，提供 `assemblePlugin`、`signPlugin`、`verifyPlugin` 三个任务 |
-| `settings.gradle.kts` | 模块列表与仓库配置；依赖来自 `https://sadami3066.github.io/SuperPI-Maven` 的 `io.github.sadami3066.superpi:plugin-api`（版本以该仓库最新发布为准，`api()` 传递配套的 `design`）、Google 与 Maven Central |
-| `gradle/wrapper/`、`gradlew` | Gradle 9.8.2 wrapper，无需本机预装 Gradle |
-| `scripts/gradlew-locked` | 串行 Gradle 包装：flock 构建锁、默认单 worker、限制 JVM 内存，避免小内存机器并发构建 OOM |
-| `scripts/check.sh` | 跑共享层与十二个插件的单测，并构建、签名、验签全部插件 |
-| `keys/` | 本机签名密钥目录，密钥文件不入库（`.gitignore` 忽略 `keys/*.pem` 与 `keys/*.pub`） |
+| `feishu/`, `wecom/`, `sysu/`, `wechat/`, `micloud/`, `mail/`, `themes/`, `amap/`, `rail/`, `hotel/`, `ride/`, `zanao/` | The twelve plugin modules: Kotlin sources, `src/main/assets/plugin.json` manifests, icons and pages |
+| `gradle/plugin-bundle.gradle.kts` | Shared packaging script providing the `assemblePlugin`, `signPlugin` and `verifyPlugin` tasks |
+| `settings.gradle.kts` | Module list and repositories; dependencies come from `io.github.sadami3066.superpi:plugin-api` on `https://sadami3066.github.io/SuperPI-Maven` (use the latest release there; `api()` brings in the matching `design`), Google and Maven Central |
+| `gradle/wrapper/`, `gradlew` | Gradle 9.8.2 wrapper; no local Gradle installation needed |
+| `scripts/gradlew-locked` | Serialized Gradle wrapper: flock build lock, single worker by default, capped JVM memory to avoid OOM on small machines |
+| `scripts/check.sh` | Builds, signs and verifies all twelve plugins |
+| `keys/` | Local signing-key directory; key files are not committed (`.gitignore` ignores `keys/*.pem` and `keys/*.pub`) |
 
-各模块编译配置一致：`compileSdk`/`targetSdk` 36、`minSdk` 29、Java 17。仓库只保存源码与打包脚本，不包含私钥，也不托管已签名制品；`.ddp` 产物在构建时生成。
+All modules share the same compile settings: `compileSdk`/`targetSdk` 36, `minSdk` 29, Java 17. The repository stores only sources and packaging scripts — no private keys and no signed artifacts; `.ddp` bundles are produced at build time.
 
-## 快速开始
+## Quick start
 
-以下步骤面向仓库维护者与自行构建的用户。
+The steps below are for repository maintainers and people building from source.
 
-### 环境要求
+### Requirements
 
-- JDK 17 或更高（模块按 Java 17 编译）
-- Android SDK Platform 36 与对应 Build-Tools
-- Git；首次构建需要联网下载 Gradle wrapper 与 Maven 依赖
+- JDK 17 or newer (modules compile against Java 17)
+- Android SDK Platform 36 and matching Build-Tools
+- Git; the first build downloads the Gradle wrapper and Maven dependencies
 
-Android SDK 位置二选一：设置 `ANDROID_HOME`，或在仓库根创建 `local.properties` 并写入 `sdk.dir=/path/to/Android/Sdk`（该文件不入库）。`scripts/check.sh` 会在未设置 `ANDROID_HOME` 时自动读取 `local.properties`。
+Point Android Studio or the command line at the SDK in one of two ways: set `ANDROID_HOME`, or create `local.properties` in the repository root with `sdk.dir=/path/to/Android/Sdk` (the file is not committed). When `ANDROID_HOME` is unset, `scripts/check.sh` reads `local.properties`.
 
-### 放置签名密钥
+### Install the signing keys
 
 ```bash
 mkdir -p keys
@@ -66,10 +64,10 @@ cp /path/to/plugin-signing.pub keys/
 chmod 600 keys/plugin-signing.pem
 ```
 
-- 官方签名密钥不随仓库分发；缺失时 `signPlugin` 直接失败，不会自动生成新密钥。
-- 密钥可放在任意位置，用 Gradle 属性指向不带后缀的路径：`-PpluginSigningKey=/secure/plugin-signing`（脚本会读取同目录下的 `.pem` 与 `.pub`）。
-- 私钥务必离线备份：丢失后无法再用同一发布者身份发布更新，泄露则可以伪造官方更新。
-- 自行构建也可以生成自己的 Ed25519 密钥：
+- The official signing keys are not distributed with the repository. When they are missing, `signPlugin` fails immediately and never generates a new key.
+- Keys can live anywhere; point Gradle at the path without the suffix: `-PpluginSigningKey=/secure/plugin-signing` (the script then reads `.pem` and `.pub` in the same directory).
+- Back up the private key offline: if it is lost you can no longer publish updates as the same publisher, and if it leaks someone can forge official updates.
+- To build for yourself, you can also generate your own Ed25519 key pair:
 
   ```bash
   mkdir -p keys
@@ -77,75 +75,77 @@ chmod 600 keys/plugin-signing.pem
   openssl pkey -in keys/plugin-signing.pem -pubout -out keys/plugin-signing.pub
   ```
 
-  这样签出的 `.ddp` 属于你自己的发布者身份，与下方的官方 `keyId` 无关。
+  Bundles signed this way belong to your own publisher identity and have nothing to do with the official `keyId` below.
 
-### 构建、签名与验签
+### Build, sign and verify
 
 ```bash
-./scripts/check.sh                              # 全部插件：单测 + 构建 + 签名 + 验签
-./scripts/gradlew-locked :feishu:verifyPlugin   # 单个插件，包含构建与签名
-./scripts/gradlew-locked :sysu:assemblePlugin   # 仅重打未签名 .ddp
+./scripts/check.sh                              # all plugins: build + sign + verify
+./scripts/gradlew-locked :feishu:verifyPlugin   # one plugin, includes build and signing
+./scripts/gradlew-locked :sysu:assemblePlugin   # only repack the unsigned .ddp
 ```
 
-任务关系为 `assemblePlugin → signPlugin → verifyPlugin`：
+The task chain is `assemblePlugin → signPlugin → verifyPlugin`:
 
-- `assemblePlugin` 把 debug APK 中的 `classes*.dex`、`assets/**`、`lib/**` 重打成 `<module>/build/plugin/<module>.unsigned.ddp`。
-- `signPlugin` 对规范化后的条目摘要做 Ed25519 签名，生成 `<module>/build/plugin/<module>.ddp`，签名写在 `META-INF/plugin-signature.json`；任务输出会打印 `publisher keyId` 与 `bundle sha256`，市场条目的 `artifact.sha256` 使用该值。
-- `verifyPlugin` 用签名内嵌公钥复算 `keyId` 并对包体验签。
+- `assemblePlugin` repacks `classes*.dex`, `assets/**` and `lib/**` from the debug APK into `<module>/build/plugin/<module>.unsigned.ddp`.
+- `signPlugin` signs the canonical entry digest with Ed25519 and produces `<module>/build/plugin/<module>.ddp`; the signature is stored in `META-INF/plugin-signature.json`. The task prints the `publisher keyId` and `bundle sha256`; market entries use that sha256 as `artifact.sha256`.
+- `verifyPlugin` recomputes the `keyId` from the embedded public key and verifies the bundle.
 
-`scripts/gradlew-locked` 支持用环境变量 `SUPERPI_GRADLE_WORKERS`（默认 1）与 `SUPERPI_GRADLE_JVMARGS` 调整构建参数。
+`scripts/gradlew-locked` accepts `SUPERPI_GRADLE_WORKERS` (default 1) and `SUPERPI_GRADLE_JVMARGS` to tune the build.
 
-### 常见失败
+### Common failures
 
-| 现象 | 原因与处理 |
+| Symptom | Cause and fix |
 |---|---|
-| `missing signing key: ...` | `keys/` 下缺少 `.pem`/`.pub`；从备份恢复，或用 `-PpluginSigningKey` 指向正确路径 |
-| SDK 位置找不到 | 未设置 `ANDROID_HOME` 且没有 `local.properties` 的 `sdk.dir` |
-| `另一个构建正在运行，等待中…` | 已有 Gradle 构建持锁；等待即可（最多 60 分钟），或避免并发构建 |
-| `assets/plugin.json is missing` | 清单必须位于模块的 `src/main/assets/plugin.json` |
-| 验签失败 | 签名后包体被改动，或签名与公钥不匹配；重新执行 `signPlugin` |
+| `missing signing key: ...` | `.pem`/`.pub` missing under `keys/`; restore the backup or point `-PpluginSigningKey` at the right path |
+| SDK location not found | Neither `ANDROID_HOME` nor `sdk.dir` in `local.properties` is set |
+| `另一个构建正在运行，等待中…` (another build is running) | A Gradle build holds the lock; wait (up to 60 minutes) or avoid concurrent builds |
+| `assets/plugin.json is missing` | The manifest must live at the module's `src/main/assets/plugin.json` |
+| Verification fails | The bundle was modified after signing, or the signature and public key do not match; run `signPlugin` again |
 
-## 使用方式
+## Usage
 
-### 从插件市场安装
+### Install from the plugin market
 
-在 PI 的「插件 → 市场」中搜索并安装。市场条目版本与本仓库一致，制品发布在 [SuperPI-Market](https://github.com/Sadami3066/SuperPI-Market) 的 GitHub Releases 中（Release 名形如 `plugins-YYYYMMDD`，资产名形如 `feishu-2.1.0.ddp`），条目记录的 `publisherKeyId` 为官方 `keyId`。
+Search and install from Super PI Agent's "Plugins → Market". Market entry versions match this repository, and artifacts are published in the GitHub Releases of [SuperPI-Market](https://github.com/Sadami3066/SuperPI-Market) (releases are named `plugins-YYYYMMDD`, assets look like `feishu-2.1.0.ddp`). Each entry records the official `keyId` as `publisherKeyId`.
 
-### 手动导入 .ddp
+### Import a .ddp manually
 
-1. 从市场 Release 下载 `.ddp`，或按上文自行构建。
-2. 在 PI 的插件页点击「导入插件」，选择该文件。
-3. 确认页会展示发布者、`keyId`、整包 sha256、体积与插件声明的能力（`capabilities`）；确认后写入信任库并安装启用。
-4. 更新时导入同 `id` 的新版本 `.ddp`：签名必须由同一密钥签出；没有忙碌会话时立即激活，否则保持待重启状态，等会话空闲或下次启动后激活。
+1. Download a `.ddp` from a market release, or build one as described above.
+2. In Super PI Agent, open the Plugins page, tap "Import plugin" and choose the file.
+3. The confirmation screen shows the publisher, `keyId`, whole-bundle sha256, size and declared `capabilities`; after you confirm, the key is pinned in the trust store and the plugin is installed and enabled.
+4. To update, import a newer `.ddp` with the same `id`: it must be signed by the same key. With no busy sessions the update activates immediately; otherwise it stays pending and activates when sessions go idle or the app restarts.
 
-### 官方发布者
+### Official publisher
 
-- 发布者名称：`milous`
-- 官方 `keyId`：
+- Publisher name: `milous`
+- Official `keyId`:
 
   ```
   ed25519:cb08701a59d66606aa5cf461d1c865e3787dbf571ef53b2cd2c3d750a6b53ee2
   ```
 
-市场条目的 `plugin.publisherKeyId` 与包内 `META-INF/plugin-signature.json` 的 `keyId` 都应与上面的值一致；不一致的插件不要安装。更换签名密钥会被视为新的发布者，已安装用户无法直接升级。
+Both `plugin.publisherKeyId` in the market entry and `keyId` in the bundle's `META-INF/plugin-signature.json` must match the value above; do not install bundles that do not. Rotating the signing key creates a new publisher, and installed users cannot upgrade directly.
 
-## 风险
+## Risks
 
-- **与 App 同进程、同权限**：插件在 PI 进程内加载，拥有与 App 相同的 Android 权限和数据访问范围。只安装你信任的发布者签名的插件。
-- **能力范围**：插件在 `plugin.json` 的 `capabilities` 中声明所需能力（本仓库涉及 `files`、`linux`、`network`、`secrets`、`ui`），首次安装的确认页会列出。飞书、企业微信、中山大学插件会在 App 的 Linux 环境里安装并运行 CLI，需要网络与账号凭据；小米云服务插件只申请 `secrets`。
-- **账号凭据**：飞书登录态在 Linux 环境的 `/root/.lark-cli` 与 `/root/.local/share/lark-cli`，企业微信凭据在 `/root/.config/wecom`，中山大学的凭据与登录态（credentials、教务/LMS/场馆/网费会话）在 `/root/.config/sysu`；小米云 cookie 存放在 App 的加密 secrets。卸载插件时宿主会调用插件的清理逻辑（如中山大学插件会删除 `/root/.config/sysu` 和安装目录，飞书、企业微信插件会删除 CLI 与登录目录），但建议在不再使用时退出登录并修改相关密码。
-- **签名密钥**：私钥丢失后无法再以官方发布者身份更新；私钥泄露则可能被用来伪造更新。官方公钥对应固定的 `keyId`，换钥等于换发布者。
-- **第三方服务**：这些插件是个人维护的第三方集成，与飞书、腾讯、小米、中山大学无隶属关系。自动化访问第三方服务可能受其服务条款限制，存在账号受限或封禁的风险；第三方接口变更也可能让功能失效。
-- **来源可信**：只从本仓库或官方市场获取 `.ddp`，不要安装来源不明的插件包。
-- **发布前阶段**：Super PI Agent 与插件契约仍在迭代，接口或行为可能变化。
+- **Same process, same permissions**: plugins load inside the PI process and have the same Android permissions and data access as the App. Only install plugins signed by a publisher you trust.
+- **Capabilities**: plugins declare what they need in `plugin.json` under `capabilities` (this repository uses `files`, `linux`, `network`, `secrets` and `ui`), and the first-install confirmation lists them. The Feishu, WeCom and SYSU plugins install and run CLIs inside the App's Linux environment and need network access and account credentials; Xiaomi Cloud requests only `secrets`.
+- **Account credentials**: Feishu sign-in state lives in `/root/.lark-cli` and `/root/.local/share/lark-cli`, WeCom credentials in `/root/.config/wecom`, and SYSU credentials and sessions (credentials, jwxt/LMS/venue/network sessions) in `/root/.config/sysu`; Xiaomi Cloud stores its cookie in the App's encrypted secrets. Uninstalling a plugin invokes its cleanup logic (for example, the SYSU plugin removes `/root/.config/sysu` and its install directory, while Feishu and WeCom remove their CLIs and sign-in directories), but it is still a good idea to sign out and change passwords once you stop using them.
+- **Signing key**: losing the private key means no more updates as the official publisher; leaking it allows forged updates. The official public key maps to a fixed `keyId`, and a new key means a new publisher.
+- **Third-party services**: these plugins are third-party integrations maintained by an individual and are not affiliated with Feishu, Tencent, Xiaomi or Sun Yat-sen University. Automated access to third-party services may be restricted by their terms of service and risks account limits or bans; API changes can also break features.
+- **Trusted sources**: get `.ddp` files only from this repository or the official market, and never install bundles from unknown sources.
+- **Pre-release stage**: Super PI Agent and the plugin contract are still evolving, so interfaces and behavior may change.
 
-## 权益与许可
+## License
 
-本仓库的源码与文档采用 [Apache-2.0](LICENSE) 许可。插件访问的第三方服务、CLI 及其名称、商标归各自所有者所有，使用第三方服务需遵守对应条款；第三方名称与图标仅用于说明接入对象。
+The source code and documentation in this repository are licensed under [Apache-2.0](LICENSE). Third-party services, CLIs, names and trademarks belong to their respective owners, and use of third-party services is governed by their terms; third-party names and icons are used only to describe what a plugin connects to.
 
-## 声明与反馈
+## Disclaimer and feedback
 
-- 本项目为个人维护的第三方集成，与飞书、腾讯、小米、中山大学及其关联公司无隶属或背书关系。
-- 问题、建议与使用反馈请提交到 [GitHub Issues](https://github.com/Sadami3066/SuperPI-Official-Plugins/issues)。涉及签名私钥、凭据或安全漏洞的内容请不要公开，先通过 GitHub 私下联系维护者。
-- 项目按现状提供，尽力维护，不承诺服务可用性、响应时间或第三方接口的持续可用。
-- 相关仓库：[Super PI Agent 应用](https://github.com/Sadami3066/SuperPI-App) · [SuperPI-Market](https://github.com/Sadami3066/SuperPI-Market) · [SuperPI-Plugins](https://github.com/Sadami3066/SuperPI-Plugins)
+- This is a third-party integration maintained by an individual, with no affiliation or endorsement from Feishu, Tencent, Xiaomi, Sun Yat-sen University or their affiliates.
+- Please report problems, suggestions and feedback via [GitHub Issues](https://github.com/Sadami3066/SuperPI-Official-Plugins/issues). Do not post signing private keys, credentials or security vulnerabilities publicly; contact the maintainer privately on GitHub first.
+- The project is provided as-is and maintained on a best-effort basis, with no guarantee of service availability, response time or continued availability of third-party APIs.
+- Related repositories: [Super PI Agent app](https://github.com/Sadami3066/SuperPI-App) · [SuperPI-Market](https://github.com/Sadami3066/SuperPI-Market) · [SuperPI-Plugins](https://github.com/Sadami3066/SuperPI-Plugins)
+
+Development sample: [`mcpui-demo/`](mcpui-demo/README.md) renders MCP tool results with a plugin card. It is not in the market and requires `plugin-api 1.3.0` / host 1.1.0+.
