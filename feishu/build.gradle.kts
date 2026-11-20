@@ -39,7 +39,7 @@ kotlin {
 
 dependencies {
     implementation(project(":cli-common"))
-    compileOnly("io.github.sadami3066.superpi:plugin-api:2.0.0")
+    compileOnly("io.github.sadami3066.superpi:plugin-api:2.0.1")
     compileOnly("io.github.sadami3066.superpi:design:1.0.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
@@ -47,7 +47,7 @@ dependencies {
     compileOnly("androidx.compose.ui:ui")
     compileOnly("androidx.compose.foundation:foundation")
     compileOnly("androidx.compose.material3:material3")
-    testImplementation("io.github.sadami3066.superpi:plugin-api:2.0.0")
+    testImplementation("io.github.sadami3066.superpi:plugin-api:2.0.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")

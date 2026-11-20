@@ -29,14 +29,14 @@ kotlin {
 }
 
 dependencies {
-    compileOnly("io.github.sadami3066.superpi:plugin-api:2.0.0")
+    compileOnly("io.github.sadami3066.superpi:plugin-api:2.0.1")
     compileOnly("io.github.sadami3066.superpi:design:1.0.0")
     testImplementation(platform("androidx.compose:compose-bom:2026.03.00"))
     testImplementation("androidx.compose.runtime:runtime")
     testImplementation("androidx.compose.ui:ui")
     testImplementation("androidx.compose.foundation:foundation")
     testImplementation("androidx.compose.material3:material3")
-    testImplementation("io.github.sadami3066.superpi:plugin-api:2.0.0")
+    testImplementation("io.github.sadami3066.superpi:plugin-api:2.0.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")

@@ -38,7 +38,7 @@ kotlin {
 }
 
 dependencies {
-    compileOnly("io.github.sadami3066.superpi:plugin-api:2.0.0")
+    compileOnly("io.github.sadami3066.superpi:plugin-api:2.0.1")
 }
 
 apply(from = rootProject.file("gradle/plugin-bundle.gradle.kts"))

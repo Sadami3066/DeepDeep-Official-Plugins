@@ -31,7 +31,7 @@ kotlin {
 }
 
 dependencies {
-    compileOnly("io.github.sadami3066.superpi:plugin-api:2.0.0")
+    compileOnly("io.github.sadami3066.superpi:plugin-api:2.0.1")
     compileOnly("io.github.sadami3066.superpi:design:0.9.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")

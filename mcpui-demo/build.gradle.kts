@@ -38,7 +38,7 @@ kotlin {
 }
 
 dependencies {
-    compileOnly("io.github.sadami3066.superpi:plugin-api:2.0.0")
+    compileOnly("io.github.sadami3066.superpi:plugin-api:2.0.1")
     compileOnly("io.github.sadami3066.superpi:design:1.0.0")
 }
 

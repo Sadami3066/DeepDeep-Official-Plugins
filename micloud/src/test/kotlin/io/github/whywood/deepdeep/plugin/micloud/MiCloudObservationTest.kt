@@ -378,12 +378,12 @@ class MiCloudObservationTest {
 
     private fun PluginToolResult.rawBody(): String? {
         val text = text.orEmpty()
-        val marker = "完整返回（上游原样）：\n"
+        val marker = "Full return (upstream, verbatim):\n"
         val start = text.indexOf(marker)
         if (start < 0) return null
         val rest = text.substring(start + marker.length)
-        val guidance = rest.indexOf("\n\n使用说明：")
-        val card = rest.indexOf("\n\n展示这张卡片")
+        val guidance = rest.indexOf("\n\nUsage:")
+        val card = rest.indexOf("\n\nShow this card:")
         val ends = listOf(guidance, card).filter { it >= 0 }
         val end = ends.minOrNull() ?: -1
         return if (end >= 0) rest.substring(0, end) else rest
@@ -391,11 +391,11 @@ class MiCloudObservationTest {
 
     private fun PluginToolResult.guidance(): String? {
         val text = text.orEmpty()
-        val marker = "使用说明：\n"
+        val marker = "Usage:\n"
         val start = text.indexOf(marker)
         if (start < 0) return null
         val rest = text.substring(start + marker.length)
-        val end = rest.indexOf("\n\n展示这张卡片")
+        val end = rest.indexOf("\n\nShow this card:")
         return if (end >= 0) rest.substring(0, end) else rest
     }
 
